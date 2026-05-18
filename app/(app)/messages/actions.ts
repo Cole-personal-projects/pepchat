@@ -219,7 +219,6 @@ export const deleteMessage = withAuth(
       console.warn('[deleteMessage] Side effect failed', result.sideEffects)
     }
 
-    safeRevalidatePath('/channels')
     return { ok: true }
   }
 )
