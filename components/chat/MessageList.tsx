@@ -1132,7 +1132,7 @@ function attachmentResultLabel(message: MessageSearchResult) {
 }
 
 function savedMessagesKey(userId: string) {
-  return `pepchat:saved-messages:${userId}`
+  return `sidebar:saved-messages:${userId}`
 }
 
 function readSavedMessages(userId: string): Set<string> {
@@ -1156,7 +1156,7 @@ function writeSavedMessages(userId: string, ids: Set<string>) {
 }
 
 function mutedUsersKey(userId: string) {
-  return `pepchat:muted-users:${userId}`
+  return `sidebar:muted-users:${userId}`
 }
 
 function readMutedUsers(userId: string): Set<string> {

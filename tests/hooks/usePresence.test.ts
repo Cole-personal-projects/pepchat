@@ -144,7 +144,7 @@ describe('usePresence realtime migration', () => {
   })
 
   it('preserves localStorage status and setStatus updates state, storage, and the active room', () => {
-    window.localStorage.setItem('pepchat:presence-status', 'dnd')
+    window.localStorage.setItem('sidebar:presence-status', 'dnd')
     const realtime = makeRealtimeMock()
     const { result } = renderHook(() => usePresence('ch-1', currentUser))
 
@@ -152,7 +152,7 @@ describe('usePresence realtime migration', () => {
 
     act(() => result.current.setStatus('away'))
     expect(result.current.status).toBe('away')
-    expect(window.localStorage.getItem('pepchat:presence-status')).toBe('away')
+    expect(window.localStorage.getItem('sidebar:presence-status')).toBe('away')
     expect(realtime.channels[0].track).toHaveBeenCalledWith({
       user_id: 'user-1',
       username: 'alice',

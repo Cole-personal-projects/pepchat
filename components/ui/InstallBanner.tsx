@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { isInstalled } from '@/lib/pwa'
 
-const DISMISSED_KEY = 'pepchat_install_dismissed'
+const DISMISSED_KEY = 'sidebar_install_dismissed'
 
 export default function InstallBanner() {
   const [visible, setVisible] = useState(false)

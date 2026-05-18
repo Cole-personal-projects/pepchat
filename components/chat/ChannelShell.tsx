@@ -198,7 +198,7 @@ export default function ChannelShell({
           channelName={channelName}
           profile={profile}
           allowVideoUpload={userRole ? userRole !== 'noob' : false}
-          draftStorageKey={`pepchat:draft:channel:${channelId}`}
+          draftStorageKey={`sidebar:draft:channel:${channelId}`}
           replyingTo={replyingTo}
           onCancelReply={() => setReplyingTo(null)}
           onTyping={broadcastTyping}
