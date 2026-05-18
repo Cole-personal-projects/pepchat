@@ -19,7 +19,7 @@
     "@emoji-mart/react": "^1.1.1",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.105.4",
-    "dompurify": "^3.4.2",
+    "dompurify": "^3.4.4",
     "emoji-mart": "^5.6.0",
     "marked": "^18.0.3",
     "next": "14.2.35",
@@ -28,7 +28,7 @@
   },
   "devDependencies": {
     "@cloudflare/next-on-pages": "^1.13.16",
-    "@playwright/test": "^1.59.1",
+    "@playwright/test": "^1.60.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
