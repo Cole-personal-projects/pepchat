@@ -77,7 +77,10 @@ describe('message actions — sendMessage notifications', () => {
     const builder = makeBuilder({ data: MESSAGE })
     setupClient(builder)
 
-    await expect(sendMessage('ch-1', 'Hi @bob')).resolves.toEqual({ ok: true })
+    await expect(sendMessage('ch-1', ' Hi @bob ')).resolves.toEqual({
+      ok: true,
+      message: MESSAGE,
+    })
 
     expect(mockEnqueueMentionNotifications).toHaveBeenCalledWith(
       expect.anything(),
@@ -96,17 +99,23 @@ describe('message actions — sendMessage notifications', () => {
     setupClient(builder)
     mockEnqueueMentionNotifications.mockRejectedValue(new Error('notification failed'))
 
-    await expect(sendMessage('ch-1', 'Hi @bob')).resolves.toEqual({ ok: true })
+    await expect(sendMessage('ch-1', 'Hi @bob')).resolves.toEqual({
+      ok: true,
+      message: MESSAGE,
+    })
   })
 
-  it('still returns ok when path revalidation fails after insert', async () => {
+  it('still returns the sent message when path revalidation fails after insert', async () => {
     const builder = makeBuilder({ data: MESSAGE })
     setupClient(builder)
     vi.mocked(revalidatePath).mockImplementation(() => {
       throw new TypeError('Illegal invocation')
     })
 
-    await expect(sendMessage('ch-1', 'Hi @bob')).resolves.toEqual({ ok: true })
+    await expect(sendMessage('ch-1', 'Hi @bob')).resolves.toEqual({
+      ok: true,
+      message: MESSAGE,
+    })
   })
 
   it('returns a typed error when the database rejects the message insert', async () => {

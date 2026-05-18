@@ -90,7 +90,7 @@ export const sendMessage = withAuth(
     }
 
     safeRevalidatePath(`/channels/${channelId}`)
-    return { ok: true }
+    return { ok: true, message: result.data }
   },
   { unauthenticated: () => ({ error: 'Not authenticated.' }) }
 )
@@ -191,7 +191,7 @@ export const editMessage = withAuth(
     }
 
     safeRevalidatePath('/channels')
-    return { ok: true }
+    return { ok: true, message: result.data }
   },
   { unauthenticated: () => ({ error: 'Not authenticated.' }) }
 )
