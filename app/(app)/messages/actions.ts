@@ -90,7 +90,7 @@ export const sendMessage = withAuth(
     }
 
     safeRevalidatePath(`/channels/${channelId}`)
-    return { ok: true, message: result.data }
+    return { ok: true }
   },
   { unauthenticated: () => ({ error: 'Not authenticated.' }) }
 )
