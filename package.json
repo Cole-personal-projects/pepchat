@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "pages:build": "npx @cloudflare/next-on-pages",
-    "pages:deploy": "npm run pages:build && wrangler pages deploy",
+    "pages:deploy": "npm run pages:build && wrangler pages deploy --project-name pepchat-app",
     "pages:preview": "npm run pages:build && wrangler pages dev",
     "test": "vitest run",
     "test:watch": "vitest",
