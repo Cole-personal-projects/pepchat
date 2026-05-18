@@ -30,6 +30,14 @@ interface MessageInputProps {
   sendAction?: (content: string, replyToId: string | null, attachments: Attachment[]) => Promise<{ error: string } | { ok: true; message: MessageWithProfile }>
 }
 
+const SEND_FAILURE_MESSAGE = 'Message failed to send. Please try again.'
+
+type SendResult = { error: string } | { ok: true; message: MessageWithProfile }
+
+function isSendResult(result: unknown): result is SendResult {
+  return typeof result === 'object' && result !== null && ('error' in result || 'ok' in result)
+}
+
 export default function MessageInput({
   channelId,
   groupId,
@@ -133,9 +141,9 @@ export default function MessageInput({
       source: 'klipy',
     }
     startTransition(async () => {
-      const result = sendAction
-        ? await sendAction('', replyingTo?.id ?? null, [gifAttachment])
-        : await sendMessage(channelId, '', replyingTo?.id, [gifAttachment])
+      const result = await sendSafely(() => sendAction
+        ? sendAction('', replyingTo?.id ?? null, [gifAttachment])
+        : sendMessage(channelId, '', replyingTo?.id, [gifAttachment]))
       if ('error' in result) {
         setError(result.error ?? '')
       } else {
@@ -232,9 +240,9 @@ export default function MessageInput({
     if (!hasContent || isPending || hasUploading) return
     setError('')
     startTransition(async () => {
-      const result = sendAction
-        ? await sendAction(trimmed, replyingTo?.id ?? null, attachments)
-        : await sendMessage(channelId, trimmed, replyingTo?.id, attachments)
+      const result = await sendSafely(() => sendAction
+        ? sendAction(trimmed, replyingTo?.id ?? null, attachments)
+        : sendMessage(channelId, trimmed, replyingTo?.id, attachments))
       if ('error' in result) {
         setError(result.error ?? '')
       } else {
@@ -251,6 +259,15 @@ export default function MessageInput({
         onSent?.(result.message)
       }
     })
+  }
+
+  async function sendSafely(send: () => Promise<unknown>): Promise<SendResult> {
+    try {
+      const result = await send()
+      return isSendResult(result) ? result : { error: SEND_FAILURE_MESSAGE }
+    } catch {
+      return { error: SEND_FAILURE_MESSAGE }
+    }
   }
 
   const canSend = (content.trim().length > 0 || attachments.length > 0) && !isPending && !hasUploading

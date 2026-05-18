@@ -191,9 +191,6 @@ export default function AppShell({ profile, children }: AppShellProps) {
             <button type="button" onClick={() => setMobileSidebarOpen(true)} aria-current={!pathname.startsWith('/dm') ? 'page' : undefined}>
               Channels
             </button>
-            <button type="button" onClick={() => setMobileSidebarOpen(true)} aria-current={pathname.startsWith('/dm') ? 'page' : undefined}>
-              DMs
-            </button>
             {userRole === 'admin' ? <a href="/admin/reports">Reports</a> : <a href="/settings/profile">Profile</a>}
           </nav>
         </main>

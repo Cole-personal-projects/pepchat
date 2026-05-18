@@ -157,6 +157,28 @@ describe('AppShell mobile empty-route sidebar fallback', () => {
     expect(getSidebarShell()).toHaveClass('-translate-x-full')
   })
 
+  it('uses a single Channels bottom-nav button for sidebar navigation on DM routes', () => {
+    mockNavigation.pathname = '/dm'
+
+    const { container } = render(
+      <AppShell profile={profile}>
+        <div>DM content</div>
+      </AppShell>
+    )
+
+    const mobileNav = screen.getByRole('navigation', { name: 'Mobile app navigation' })
+    expect(screen.getByRole('button', { name: 'Channels' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'DMs' })).not.toBeInTheDocument()
+    expect(mobileNav).toHaveTextContent('Channels')
+    expect(mobileNav).not.toHaveTextContent('DMs')
+    expect(getMobileBackdrop(container)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Channels' }))
+
+    expect(getMobileBackdrop(container)).toBeInTheDocument()
+    expect(getSidebarShell()).toHaveClass('translate-x-0')
+  })
+
   it('does not immediately reopen after closing the backdrop on the same empty route', () => {
     mockNavigation.pathname = '/channels'
 

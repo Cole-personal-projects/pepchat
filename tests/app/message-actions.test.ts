@@ -101,4 +101,21 @@ describe('message actions — sendMessage notifications', () => {
       message: MESSAGE,
     })
   })
+
+  it('returns a typed error when the database rejects the message insert', async () => {
+    const builder = makeBuilder({ error: { message: 'new row violates row-level security policy' } })
+    setupClient(builder)
+
+    await expect(sendMessage('ch-1', '', null, [{
+      type: 'gif',
+      url: 'https://media.example/cat.gif',
+      name: 'Cat GIF',
+      preview: 'https://media.example/cat-preview.gif',
+      width: 320,
+      height: 180,
+      source: 'klipy',
+    }])).resolves.toEqual({
+      error: 'new row violates row-level security policy',
+    })
+  })
 })
