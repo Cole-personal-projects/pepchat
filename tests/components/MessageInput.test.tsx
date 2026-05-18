@@ -123,6 +123,18 @@ describe('MessageInput draft persistence', () => {
     expect(screen.getByTestId('message-input-textarea')).toHaveValue('')
   })
 
+  it('shows an error instead of crashing when sending returns no result', async () => {
+    const sendAction = vi.fn().mockResolvedValue(undefined)
+    render(<MessageInput {...BASE_PROPS} sendAction={sendAction} />)
+
+    fireEvent.change(screen.getByTestId('message-input-textarea'), {
+      target: { value: 'This should fail gracefully' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(await screen.findByText('Message failed to send. Please try again.')).toBeInTheDocument()
+  })
+
   it('clears a typed draft from the composer', () => {
     render(<MessageInput {...BASE_PROPS} />)
 
