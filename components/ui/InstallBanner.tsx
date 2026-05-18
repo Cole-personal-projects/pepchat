@@ -37,7 +37,7 @@ export default function InstallBanner() {
       }}
     >
       <span style={{ fontSize: 13, color: 'var(--text-muted)', flex: 1 }}>
-        📱 Install PepChat for a better experience
+        📱 Install SideBar for a better experience
       </span>
       <Link
         href="/install"
