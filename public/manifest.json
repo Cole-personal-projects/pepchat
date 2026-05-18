@@ -1,6 +1,6 @@
 {
-  "name": "PepChat",
-  "short_name": "PepChat",
+  "name": "SideBar",
+  "short_name": "SideBar",
   "description": "Your crew, your channels",
   "start_url": "/",
   "display": "standalone",

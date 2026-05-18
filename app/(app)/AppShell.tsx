@@ -40,7 +40,7 @@ export default function AppShell({ profile, children }: AppShellProps) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [promptedFirstGroup, setPromptedFirstGroup] = useState(false)
 
-  // On first load, auto-open the sidebar on mobile when no channel is selected
+  // Auto-open the sidebar on mobile whenever no channel is selected
   // so users aren't stuck on the blank empty state with no navigation.
   useEffect(() => {
     const onEmptyState = pathname === '/channels' || pathname === '/'
@@ -48,7 +48,7 @@ export default function AppShell({ profile, children }: AppShellProps) {
       const t = setTimeout(() => setMobileSidebarOpen(true), 300)
       return () => clearTimeout(t)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pathname])
 
   // Resolve active group from URL
   useEffect(() => {
@@ -190,9 +190,6 @@ export default function AppShell({ profile, children }: AppShellProps) {
           <nav className="mobile-bottom-nav" aria-label="Mobile app navigation">
             <button type="button" onClick={() => setMobileSidebarOpen(true)} aria-current={!pathname.startsWith('/dm') ? 'page' : undefined}>
               Channels
-            </button>
-            <button type="button" onClick={() => setMobileSidebarOpen(true)} aria-current={pathname.startsWith('/dm') ? 'page' : undefined}>
-              DMs
             </button>
             {userRole === 'admin' ? <a href="/admin/reports">Reports</a> : <a href="/settings/profile">Profile</a>}
           </nav>

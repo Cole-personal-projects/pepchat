@@ -194,7 +194,7 @@ export default function DMConversationView({ conversationId }: DMConversationVie
             channelId={conversationId}
             channelName={otherUser.display_name ?? otherUser.username}
             profile={currentUser}
-            draftStorageKey={`pepchat:draft:dm:${conversationId}`}
+            draftStorageKey={`sidebar:draft:dm:${conversationId}`}
             placeholder={`Message ${otherUser.display_name ?? otherUser.username}`}
             onTyping={broadcastTyping}
             sendAction={handleSend}
@@ -229,7 +229,7 @@ export default function DMConversationView({ conversationId }: DMConversationVie
             channelId={conversationId}
             channelName={otherUser.display_name ?? otherUser.username}
             profile={currentUser}
-            draftStorageKey={`pepchat:draft:dm:${conversationId}`}
+            draftStorageKey={`sidebar:draft:dm:${conversationId}`}
             placeholder={`Message ${otherUser.display_name ?? otherUser.username}`}
             onTyping={broadcastTyping}
             sendAction={handleSend}

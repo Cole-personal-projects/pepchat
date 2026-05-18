@@ -23,7 +23,7 @@ function InviteAuthChoice({ code }: { code: string }) {
   return (
     <div className="flex h-full items-center justify-center px-6" style={{ background: 'var(--bg-chat)' }}>
       <div className="w-full max-w-sm rounded-lg border border-[var(--border-soft)] bg-[var(--bg-secondary)] p-5 text-center">
-        <h1 className="text-lg font-bold text-[var(--text-primary)]">You have been invited to PepChat</h1>
+        <h1 className="text-lg font-bold text-[var(--text-primary)]">You have been invited to SideBar</h1>
         <p className="mt-2 text-sm text-[var(--text-muted)]">
           Create an account with this invite or log in to join with an existing account.
         </p>

@@ -447,6 +447,12 @@ a, button, [role="button"], .channel-row, .dm-entry {
   border-left-color: var(--accent);
 }
 
+.admin-nav-back-link {
+  margin-top: auto;
+  color: var(--text-primary);
+  border-color: var(--border-soft);
+}
+
 /* Admin dashboard responsive layout */
 @media (max-width: 640px) {
   .admin-shell {
@@ -479,6 +485,10 @@ a, button, [role="button"], .channel-row, .dm-entry {
     background: transparent;
     border-left-color: transparent;
     border-bottom-color: var(--accent);
+  }
+  .admin-nav-back-link {
+    margin-top: 0;
+    margin-left: auto;
   }
   .admin-shell > main {
     padding: 16px !important;

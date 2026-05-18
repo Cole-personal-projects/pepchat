@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { sendMessage } from '@/app/(app)/messages/actions'
 
-const { mockCreateClient, mockEnqueueMentionNotifications } = vi.hoisted(() => ({
+const { mockCreateClient, mockEnqueueMentionNotifications, mockRevalidatePath } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockEnqueueMentionNotifications: vi.fn(),
+  mockRevalidatePath: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -16,7 +17,7 @@ vi.mock('@/lib/server-notifications', () => ({
 }))
 
 vi.mock('next/cache', () => ({
-  revalidatePath: vi.fn(),
+  revalidatePath: mockRevalidatePath,
   revalidateTag: vi.fn(),
 }))
 
@@ -67,6 +68,7 @@ const MESSAGE = {
 describe('message actions — sendMessage notifications', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockRevalidatePath.mockReset()
     mockEnqueueMentionNotifications.mockResolvedValue(undefined)
   })
 
@@ -76,7 +78,6 @@ describe('message actions — sendMessage notifications', () => {
 
     await expect(sendMessage('ch-1', ' Hi @bob ')).resolves.toEqual({
       ok: true,
-      message: MESSAGE,
     })
 
     expect(mockEnqueueMentionNotifications).toHaveBeenCalledWith(
@@ -98,7 +99,33 @@ describe('message actions — sendMessage notifications', () => {
 
     await expect(sendMessage('ch-1', 'Hi @bob')).resolves.toEqual({
       ok: true,
-      message: MESSAGE,
+    })
+  })
+
+  it('returns a lightweight success result after insert without channel revalidation', async () => {
+    const builder = makeBuilder({ data: MESSAGE })
+    setupClient(builder)
+
+    await expect(sendMessage('ch-1', 'Hi @bob')).resolves.toEqual({
+      ok: true,
+    })
+    expect(mockRevalidatePath).not.toHaveBeenCalledWith('/channels/ch-1')
+  })
+
+  it('returns a typed error when the database rejects the message insert', async () => {
+    const builder = makeBuilder({ error: { message: 'new row violates row-level security policy' } })
+    setupClient(builder)
+
+    await expect(sendMessage('ch-1', '', null, [{
+      type: 'gif',
+      url: 'https://media.example/cat.gif',
+      name: 'Cat GIF',
+      preview: 'https://media.example/cat-preview.gif',
+      width: 320,
+      height: 180,
+      source: 'klipy',
+    }])).resolves.toEqual({
+      error: 'new row violates row-level security policy',
     })
   })
 })

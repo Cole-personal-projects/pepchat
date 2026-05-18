@@ -27,7 +27,15 @@ interface MessageInputProps {
   draftStorageKey?: string
   allowVideoUpload?: boolean
   /** When provided, called instead of the default sendMessage server action. */
-  sendAction?: (content: string, replyToId: string | null, attachments: Attachment[]) => Promise<{ error: string } | { ok: true; message: MessageWithProfile }>
+  sendAction?: (content: string, replyToId: string | null, attachments: Attachment[]) => Promise<{ error: string } | { ok: true; message?: MessageWithProfile }>
+}
+
+const SEND_FAILURE_MESSAGE = 'Message failed to send. Please try again.'
+
+type SendResult = { error: string } | { ok: true; message?: MessageWithProfile }
+
+function isSendResult(result: unknown): result is SendResult {
+  return typeof result === 'object' && result !== null && ('error' in result || 'ok' in result)
 }
 
 export default function MessageInput({
@@ -44,7 +52,7 @@ export default function MessageInput({
   allowVideoUpload = true,
   sendAction,
 }: MessageInputProps) {
-  const draftStorageKey = providedDraftStorageKey ?? `pepchat:draft:${channelId}`
+  const draftStorageKey = providedDraftStorageKey ?? `sidebar:draft:${channelId}`
   const [content, setContent] = useState(() => readDraft(draftStorageKey))
   const [error, setError] = useState('')
   const [isPending, startTransition] = useTransition()
@@ -133,15 +141,16 @@ export default function MessageInput({
       source: 'klipy',
     }
     startTransition(async () => {
-      const result = sendAction
-        ? await sendAction('', replyingTo?.id ?? null, [gifAttachment])
-        : await sendMessage(channelId, '', replyingTo?.id, [gifAttachment])
+      const result = await sendSafely(() => sendAction
+        ? sendAction('', replyingTo?.id ?? null, [gifAttachment])
+        : sendMessage(channelId, '', replyingTo?.id, [gifAttachment]))
       if ('error' in result) {
         setError(result.error ?? '')
       } else {
         textareaRef.current?.focus()
         onCancelReply?.()
-        onSent?.(result.message)
+        const sentMessage = result.message
+        if (sentMessage) onSent?.(sentMessage)
       }
     })
   }
@@ -232,9 +241,9 @@ export default function MessageInput({
     if (!hasContent || isPending || hasUploading) return
     setError('')
     startTransition(async () => {
-      const result = sendAction
-        ? await sendAction(trimmed, replyingTo?.id ?? null, attachments)
-        : await sendMessage(channelId, trimmed, replyingTo?.id, attachments)
+      const result = await sendSafely(() => sendAction
+        ? sendAction(trimmed, replyingTo?.id ?? null, attachments)
+        : sendMessage(channelId, trimmed, replyingTo?.id, attachments))
       if ('error' in result) {
         setError(result.error ?? '')
       } else {
@@ -248,9 +257,19 @@ export default function MessageInput({
           textareaRef.current?.focus()
         }
         onCancelReply?.()
-        onSent?.(result.message)
+        const sentMessage = result.message
+        if (sentMessage) onSent?.(sentMessage)
       }
     })
+  }
+
+  async function sendSafely(send: () => Promise<unknown>): Promise<SendResult> {
+    try {
+      const result = await send()
+      return isSendResult(result) ? result : { error: SEND_FAILURE_MESSAGE }
+    } catch {
+      return { error: SEND_FAILURE_MESSAGE }
+    }
   }
 
   const canSend = (content.trim().length > 0 || attachments.length > 0) && !isPending && !hasUploading

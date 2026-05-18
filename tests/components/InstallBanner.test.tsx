@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const DISMISSED_KEY = 'pepchat_install_dismissed'
+const DISMISSED_KEY = 'sidebar_install_dismissed'
 
 vi.mock('@/lib/pwa', () => ({
   isInstalled: vi.fn(() => false),

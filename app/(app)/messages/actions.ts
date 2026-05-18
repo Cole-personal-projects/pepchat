@@ -6,6 +6,14 @@ import { MESSAGE_SELECT } from '@/lib/queries'
 import { withAuth } from '@/lib/actions/withAuth'
 import { withSideEffects } from '@/lib/actions/sideEffects'
 
+function safeRevalidatePath(path: string) {
+  try {
+    revalidatePath(path)
+  } catch (err) {
+    console.warn('[messages] Failed to revalidate path', path, err)
+  }
+}
+
 type SearchMessagesInput = {
   groupId: string
   query?: string
@@ -21,44 +29,49 @@ export const sendMessage = withAuth(
     if (!trimmed && (!attachments || attachments.length === 0)) return { error: 'Message cannot be empty.' }
     if (trimmed.length > 4000) return { error: 'Message too long (max 4000 characters).' }
 
-    const result = await withSideEffects(ctx.supabase, ctx.user.id, async () => {
-      const { data: message, error } = await ctx.supabase
-        .from('messages')
-        .insert({
-          channel_id:  channelId,
-          user_id:     ctx.user.id,
-          content:     trimmed,
-          reply_to_id: replyToId ?? null,
-          attachments: attachments ?? [],
-        })
-        .select(MESSAGE_SELECT)
-        .single()
+    let result
+    try {
+      result = await withSideEffects(ctx.supabase, ctx.user.id, async () => {
+        const { data: message, error } = await ctx.supabase
+          .from('messages')
+          .insert({
+            channel_id:  channelId,
+            user_id:     ctx.user.id,
+            content:     trimmed,
+            reply_to_id: replyToId ?? null,
+            attachments: attachments ?? [],
+          })
+          .select(MESSAGE_SELECT)
+          .single()
 
-      if (error || !message) throw new Error(error?.message ?? 'Failed to send message.')
-      return message as MessageWithProfile
-    }, {
-      onFailure: 'silent',
-      notifications: [{
-        type: 'mention',
-        payload: {
-          senderId: ctx.user.id,
-          senderName: '', // filled in afterCommit
-          messageId: '',
-          channelId,
-          content: trimmed,
+        if (error || !message) throw new Error(error?.message ?? 'Failed to send message.')
+        return message as MessageWithProfile
+      }, {
+        onFailure: 'silent',
+        notifications: [{
+          type: 'mention',
+          payload: {
+            senderId: ctx.user.id,
+            senderName: '', // filled in afterCommit
+            messageId: '',
+            channelId,
+            content: trimmed,
+          },
+        }],
+        afterCommit(message) {
+          // Patch notification payload with actual message id and resolved name
+          const name = message.profiles.display_name ?? message.profiles.username
+          return (async () => {
+            // Update the notification payload in-place isn't feasible here since
+            // afterCommit runs after side-effects. So we dispatch directly.
+            // The notification was sent with empty senderName/messageId — we'll
+            // use the direct enqueue approach instead.
+          })()
         },
-      }],
-      afterCommit(message) {
-        // Patch notification payload with actual message id and resolved name
-        const name = message.profiles.display_name ?? message.profiles.username
-        return (async () => {
-          // Update the notification payload in-place isn't feasible here since
-          // afterCommit runs after side-effects. So we dispatch directly.
-          // The notification was sent with empty senderName/messageId — we'll
-          // use the direct enqueue approach instead.
-        })()
-      },
-    })
+      })
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : 'Failed to send message.' }
+    }
 
     // Notification fanout — dispatch manually after we have the resolved message
     try {
@@ -76,8 +89,9 @@ export const sendMessage = withAuth(
       // Notification fanout should never block the core message send path.
     }
 
-    revalidatePath(`/channels/${channelId}`)
-    return { ok: true, message: result.data }
+    // Avoid next-on-pages/Cloudflare Server Action response failures after successful writes.
+    // Realtime subscriptions and the channel reload path refresh message state.
+    return { ok: true }
   },
   { unauthenticated: () => ({ error: 'Not authenticated.' }) }
 )
@@ -177,8 +191,8 @@ export const editMessage = withAuth(
       console.warn('[editMessage] Side effect failed', result.sideEffects)
     }
 
-    revalidatePath('/channels')
-    return { ok: true }
+    safeRevalidatePath('/channels')
+    return { ok: true, message: result.data }
   },
   { unauthenticated: () => ({ error: 'Not authenticated.' }) }
 )
@@ -205,7 +219,6 @@ export const deleteMessage = withAuth(
       console.warn('[deleteMessage] Side effect failed', result.sideEffects)
     }
 
-    revalidatePath('/channels')
     return { ok: true }
   }
 )
@@ -271,7 +284,7 @@ export const pinMessage = withAuth(
       },
     })
 
-    revalidatePath(`/channels/${channelId}`)
+    safeRevalidatePath(`/channels/${channelId}`)
     return { ok: true }
   },
   { unauthenticated: () => ({ error: 'Not authenticated.' }) }
@@ -318,7 +331,7 @@ export const unpinMessage = withAuth(
     })
 
     if (result.data) {
-      revalidatePath(`/channels`)
+      safeRevalidatePath(`/channels`)
     }
     return { ok: true }
   },

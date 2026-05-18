@@ -86,6 +86,29 @@ export function useMessages(
       },
       {
         type: 'postgres_changes',
+        filter: { event: 'INSERT', schema: 'public', table: 'messages' },
+        handler: async (payload) => {
+          const inserted = payload.new as { id?: string; channel_id?: string } | null
+          if (!inserted?.id || inserted.channel_id !== channelId) return
+
+          const supabase = createClient()
+          const { data, error } = await supabase
+            .from('messages')
+            .select(MESSAGE_SELECT)
+            .eq('id', inserted.id)
+            .single()
+
+          if (error || !data) return
+          const msg = data as MessageWithProfile
+          if (msg.channel_id !== channelId) return
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === msg.id)) return prev
+            return [...prev, msg]
+          })
+        },
+      },
+      {
+        type: 'postgres_changes',
         filter: { event: 'UPDATE', schema: 'public', table: 'messages' },
         handler: (payload) => {
           if (payload.new.channel_id !== channelId) return

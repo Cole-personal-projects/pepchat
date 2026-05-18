@@ -98,6 +98,20 @@ describe('ChannelShell — message links', () => {
     window.history.replaceState(null, '', '/channels/ch-1')
   })
 
+  it('allows the channel shell to shrink inside the desktop app flex layout', () => {
+    const { container } = render(
+      <ChannelShell
+        channelId="ch-1"
+        channelName="general"
+        initialMessages={[MESSAGE]}
+        profile={PROFILE}
+        userRole="user"
+      />
+    )
+
+    expect(container.firstElementChild).toHaveClass('flex-1', 'min-w-0', 'min-h-0', 'overflow-hidden')
+  })
+
   it('passes the URL hash message id to MessageList for highlighting on mount', async () => {
     window.history.replaceState(null, '', '/channels/ch-1#msg-1')
 
@@ -174,7 +188,7 @@ describe('ChannelShell — message links', () => {
     )
 
     expect(mockMessageInput).toHaveBeenLastCalledWith(
-      expect.objectContaining({ draftStorageKey: 'pepchat:draft:channel:ch-1' })
+      expect.objectContaining({ draftStorageKey: 'sidebar:draft:channel:ch-1' })
     )
   })
 })
