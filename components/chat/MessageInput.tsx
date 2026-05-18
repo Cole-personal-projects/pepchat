@@ -27,12 +27,12 @@ interface MessageInputProps {
   draftStorageKey?: string
   allowVideoUpload?: boolean
   /** When provided, called instead of the default sendMessage server action. */
-  sendAction?: (content: string, replyToId: string | null, attachments: Attachment[]) => Promise<{ error: string } | { ok: true; message: MessageWithProfile }>
+  sendAction?: (content: string, replyToId: string | null, attachments: Attachment[]) => Promise<{ error: string } | { ok: true; message?: MessageWithProfile }>
 }
 
 const SEND_FAILURE_MESSAGE = 'Message failed to send. Please try again.'
 
-type SendResult = { error: string } | { ok: true; message: MessageWithProfile }
+type SendResult = { error: string } | { ok: true; message?: MessageWithProfile }
 
 function isSendResult(result: unknown): result is SendResult {
   return typeof result === 'object' && result !== null && ('error' in result || 'ok' in result)
@@ -149,7 +149,8 @@ export default function MessageInput({
       } else {
         textareaRef.current?.focus()
         onCancelReply?.()
-        onSent?.(result.message)
+        const sentMessage = result.message
+        if (sentMessage) onSent?.(sentMessage)
       }
     })
   }
@@ -256,7 +257,8 @@ export default function MessageInput({
           textareaRef.current?.focus()
         }
         onCancelReply?.()
-        onSent?.(result.message)
+        const sentMessage = result.message
+        if (sentMessage) onSent?.(sentMessage)
       }
     })
   }

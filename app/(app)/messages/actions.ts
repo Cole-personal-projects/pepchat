@@ -6,6 +6,14 @@ import { MESSAGE_SELECT } from '@/lib/queries'
 import { withAuth } from '@/lib/actions/withAuth'
 import { withSideEffects } from '@/lib/actions/sideEffects'
 
+function safeRevalidatePath(path: string) {
+  try {
+    revalidatePath(path)
+  } catch (err) {
+    console.warn('[messages] Failed to revalidate path', path, err)
+  }
+}
+
 type SearchMessagesInput = {
   groupId: string
   query?: string
@@ -81,7 +89,7 @@ export const sendMessage = withAuth(
       // Notification fanout should never block the core message send path.
     }
 
-    revalidatePath(`/channels/${channelId}`)
+    safeRevalidatePath(`/channels/${channelId}`)
     return { ok: true, message: result.data }
   },
   { unauthenticated: () => ({ error: 'Not authenticated.' }) }
@@ -182,8 +190,8 @@ export const editMessage = withAuth(
       console.warn('[editMessage] Side effect failed', result.sideEffects)
     }
 
-    revalidatePath('/channels')
-    return { ok: true }
+    safeRevalidatePath('/channels')
+    return { ok: true, message: result.data }
   },
   { unauthenticated: () => ({ error: 'Not authenticated.' }) }
 )
@@ -210,7 +218,7 @@ export const deleteMessage = withAuth(
       console.warn('[deleteMessage] Side effect failed', result.sideEffects)
     }
 
-    revalidatePath('/channels')
+    safeRevalidatePath('/channels')
     return { ok: true }
   }
 )
@@ -276,7 +284,7 @@ export const pinMessage = withAuth(
       },
     })
 
-    revalidatePath(`/channels/${channelId}`)
+    safeRevalidatePath(`/channels/${channelId}`)
     return { ok: true }
   },
   { unauthenticated: () => ({ error: 'Not authenticated.' }) }
@@ -323,7 +331,7 @@ export const unpinMessage = withAuth(
     })
 
     if (result.data) {
-      revalidatePath(`/channels`)
+      safeRevalidatePath(`/channels`)
     }
     return { ok: true }
   },

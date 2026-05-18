@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { revalidatePath } from 'next/cache'
 import { sendMessage } from '@/app/(app)/messages/actions'
 
-const { mockCreateClient, mockEnqueueMentionNotifications } = vi.hoisted(() => ({
+const { mockCreateClient, mockEnqueueMentionNotifications, mockRevalidatePath } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockEnqueueMentionNotifications: vi.fn(),
+  mockRevalidatePath: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -16,7 +18,7 @@ vi.mock('@/lib/server-notifications', () => ({
 }))
 
 vi.mock('next/cache', () => ({
-  revalidatePath: vi.fn(),
+  revalidatePath: mockRevalidatePath,
   revalidateTag: vi.fn(),
 }))
 
@@ -67,6 +69,7 @@ const MESSAGE = {
 describe('message actions — sendMessage notifications', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockRevalidatePath.mockReset()
     mockEnqueueMentionNotifications.mockResolvedValue(undefined)
   })
 
@@ -95,6 +98,19 @@ describe('message actions — sendMessage notifications', () => {
     const builder = makeBuilder({ data: MESSAGE })
     setupClient(builder)
     mockEnqueueMentionNotifications.mockRejectedValue(new Error('notification failed'))
+
+    await expect(sendMessage('ch-1', 'Hi @bob')).resolves.toEqual({
+      ok: true,
+      message: MESSAGE,
+    })
+  })
+
+  it('still returns the sent message when path revalidation fails after insert', async () => {
+    const builder = makeBuilder({ data: MESSAGE })
+    setupClient(builder)
+    vi.mocked(revalidatePath).mockImplementation(() => {
+      throw new TypeError('Illegal invocation')
+    })
 
     await expect(sendMessage('ch-1', 'Hi @bob')).resolves.toEqual({
       ok: true,
