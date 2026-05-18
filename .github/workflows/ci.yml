@@ -124,4 +124,4 @@ jobs:
 
       - name: deploy-cloudflare-pages-preview
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
-        run: npx wrangler pages deploy .vercel/output/static --project-name=pepchat --branch="${{ github.head_ref }}" --commit-hash="${{ github.sha }}"
+        run: npx wrangler pages deploy .vercel/output/static --project-name=pepchat-app --branch="${{ github.head_ref }}" --commit-hash="${{ github.sha }}"
