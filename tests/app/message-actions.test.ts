@@ -79,7 +79,6 @@ describe('message actions — sendMessage notifications', () => {
 
     await expect(sendMessage('ch-1', ' Hi @bob ')).resolves.toEqual({
       ok: true,
-      message: MESSAGE,
     })
 
     expect(mockEnqueueMentionNotifications).toHaveBeenCalledWith(
@@ -101,7 +100,6 @@ describe('message actions — sendMessage notifications', () => {
 
     await expect(sendMessage('ch-1', 'Hi @bob')).resolves.toEqual({
       ok: true,
-      message: MESSAGE,
     })
   })
 
@@ -114,7 +112,6 @@ describe('message actions — sendMessage notifications', () => {
 
     await expect(sendMessage('ch-1', 'Hi @bob')).resolves.toEqual({
       ok: true,
-      message: MESSAGE,
     })
   })
 
