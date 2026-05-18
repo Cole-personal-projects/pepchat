@@ -19,7 +19,7 @@
     "@emoji-mart/react": "^1.1.1",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.105.4",
-    "dompurify": "^3.4.2",
+    "dompurify": "^3.4.4",
     "emoji-mart": "^5.6.0",
     "marked": "^18.0.3",
     "next": "14.2.35",
