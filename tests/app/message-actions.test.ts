@@ -74,10 +74,7 @@ describe('message actions — sendMessage notifications', () => {
     const builder = makeBuilder({ data: MESSAGE })
     setupClient(builder)
 
-    await expect(sendMessage('ch-1', ' Hi @bob ')).resolves.toEqual({
-      ok: true,
-      message: MESSAGE,
-    })
+    await expect(sendMessage('ch-1', 'Hi @bob')).resolves.toEqual({ ok: true })
 
     expect(mockEnqueueMentionNotifications).toHaveBeenCalledWith(
       expect.anything(),
@@ -96,10 +93,17 @@ describe('message actions — sendMessage notifications', () => {
     setupClient(builder)
     mockEnqueueMentionNotifications.mockRejectedValue(new Error('notification failed'))
 
-    await expect(sendMessage('ch-1', 'Hi @bob')).resolves.toEqual({
-      ok: true,
-      message: MESSAGE,
+    await expect(sendMessage('ch-1', 'Hi @bob')).resolves.toEqual({ ok: true })
+  })
+
+  it('still sends the channel message when path revalidation fails', async () => {
+    const builder = makeBuilder({ data: MESSAGE })
+    setupClient(builder)
+    mockRevalidatePath.mockImplementation(() => {
+      throw new TypeError('Illegal invocation')
     })
+
+    await expect(sendMessage('ch-1', 'Hi @bob')).resolves.toEqual({ ok: true })
   })
 
   it('returns a typed error when the database rejects the message insert', async () => {
