@@ -498,12 +498,16 @@ export default function MessageList({
     setError('')
     setNotice('')
     startTransition(async () => {
-      const action = deleteAction ?? deleteMessage
-      const result = await action(messageId)
-      if ('error' in result) {
-        setError(result.error)
-      } else {
-        onDeleteSuccess?.(messageId)
+      try {
+        const action = deleteAction ?? deleteMessage
+        const result = await action(messageId)
+        if (!result || 'error' in result) {
+          setError(result?.error ?? 'Failed to delete message.')
+        } else {
+          onDeleteSuccess?.(messageId)
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to delete message.')
       }
     })
   }
@@ -512,12 +516,16 @@ export default function MessageList({
     setError('')
     setNotice('')
     startTransition(async () => {
-      const action = deleteAction ?? deleteMessage
-      const result = await action(messageId)
-      if ('error' in result) {
-        setError(result.error)
-      } else {
-        onDeleteSuccess?.(messageId)
+      try {
+        const action = deleteAction ?? deleteMessage
+        const result = await action(messageId)
+        if (!result || 'error' in result) {
+          setError(result?.error ?? 'Failed to delete message.')
+        } else {
+          onDeleteSuccess?.(messageId)
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to delete message.')
       }
     })
   }
