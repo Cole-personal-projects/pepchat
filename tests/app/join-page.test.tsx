@@ -94,7 +94,7 @@ describe('public join route placement', () => {
   it('renders invite-aware auth links for anonymous valid managed invites', async () => {
     await renderJoinPage('valid-code')
 
-    expect(screen.getByText('You have been invited to PepChat')).toBeInTheDocument()
+    expect(screen.getByText('You have been invited to SideBar')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Create account' })).toHaveAttribute(
       'href',
       '/signup?invite=valid-code&next=%2Fjoin%2Fvalid-code',

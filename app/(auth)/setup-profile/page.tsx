@@ -30,7 +30,7 @@ export default function SetupProfilePage() {
     <div className="w-full max-w-md bg-[var(--bg-secondary)] rounded-lg p-8 shadow-xl">
       <h1 className="text-2xl font-bold text-center mb-2">Choose a username</h1>
       <p className="text-[var(--text-muted)] text-center text-sm mb-8">
-        This is how others will see you in PepChat
+        This is how others will see you in SideBar
       </p>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">

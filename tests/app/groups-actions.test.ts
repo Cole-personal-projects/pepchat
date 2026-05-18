@@ -189,7 +189,7 @@ describe('group actions — joinGroup', () => {
     const invite = makeSelectBuilder({ data: { id: 'invite-1', group_id: 'group-1', code: 'managed', max_uses: null, uses_count: 0, expires_at: null, revoked_at: null, created_at: '2026-05-16T00:00:00.000Z', created_by: 'admin-1' } })
     const existing = makeSelectBuilder({ data: null })
     const formData = new FormData()
-    formData.set('invite_code', 'https://pepchat.test/join/managed?x=1')
+    formData.set('invite_code', 'https://sidebar.test/join/managed?x=1')
     const { rpc } = setupClient([invite, existing], { rpcResult: { data: { group_id: 'group-1', joined: true } } })
 
     await expect(joinGroup(formData)).resolves.toEqual({ redirectTo: '/groups/group-1' })

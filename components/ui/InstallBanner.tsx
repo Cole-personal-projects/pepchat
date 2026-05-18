@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { isInstalled } from '@/lib/pwa'
 
-const DISMISSED_KEY = 'pepchat_install_dismissed'
+const DISMISSED_KEY = 'sidebar_install_dismissed'
 
 export default function InstallBanner() {
   const [visible, setVisible] = useState(false)
@@ -37,7 +37,7 @@ export default function InstallBanner() {
       }}
     >
       <span style={{ fontSize: 13, color: 'var(--text-muted)', flex: 1 }}>
-        📱 Install PepChat for a better experience
+        📱 Install SideBar for a better experience
       </span>
       <Link
         href="/install"

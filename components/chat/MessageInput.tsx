@@ -52,7 +52,7 @@ export default function MessageInput({
   allowVideoUpload = true,
   sendAction,
 }: MessageInputProps) {
-  const draftStorageKey = providedDraftStorageKey ?? `pepchat:draft:${channelId}`
+  const draftStorageKey = providedDraftStorageKey ?? `sidebar:draft:${channelId}`
   const [content, setContent] = useState(() => readDraft(draftStorageKey))
   const [error, setError] = useState('')
   const [isPending, startTransition] = useTransition()

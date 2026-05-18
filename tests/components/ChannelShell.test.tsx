@@ -188,7 +188,7 @@ describe('ChannelShell — message links', () => {
     )
 
     expect(mockMessageInput).toHaveBeenLastCalledWith(
-      expect.objectContaining({ draftStorageKey: 'pepchat:draft:channel:ch-1' })
+      expect.objectContaining({ draftStorageKey: 'sidebar:draft:channel:ch-1' })
     )
   })
 })

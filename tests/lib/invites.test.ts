@@ -75,7 +75,7 @@ describe('invite helpers', () => {
   it('normalizes raw codes and join URLs', () => {
     expect(normalizeInviteCode(' invite-123 ')).toBe('invite-123')
     expect(normalizeInviteCode('/join/invite-123')).toBe('invite-123')
-    expect(normalizeInviteCode('https://pepchat.test/join/invite-123?next=/x#hash')).toBe('invite-123')
+    expect(normalizeInviteCode('https://sidebar.test/join/invite-123?next=/x#hash')).toBe('invite-123')
     expect(normalizeInviteCode('/join/invite%20123')).toBe('invite 123')
   })
 

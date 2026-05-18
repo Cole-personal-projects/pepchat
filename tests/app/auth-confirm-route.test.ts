@@ -11,7 +11,7 @@ const mockCreateClient = vi.mocked(createClient)
 const mockHasPendingClaim = vi.mocked(userHasPendingAccountInviteClaim)
 
 function makeRequest(path: string) {
-  return new NextRequest(new URL(path, 'https://pepchat.test'))
+  return new NextRequest(new URL(path, 'https://sidebar.test'))
 }
 
 function setupSupabase({
@@ -56,7 +56,7 @@ describe('/auth/confirm invite gating', () => {
 
     const response = await GET(makeRequest('/auth/confirm?token_hash=hash&type=email&next=/dm/123'))
 
-    expect(response.headers.get('location')).toBe('https://pepchat.test/dm/123')
+    expect(response.headers.get('location')).toBe('https://sidebar.test/dm/123')
     expect(mockHasPendingClaim).not.toHaveBeenCalled()
   })
 
@@ -67,7 +67,7 @@ describe('/auth/confirm invite gating', () => {
     const response = await GET(makeRequest('/auth/confirm?token_hash=hash&type=email&next=/join/abc'))
 
     expect(mockHasPendingClaim).toHaveBeenCalledWith(supabase, 'user-1')
-    expect(response.headers.get('location')).toBe('https://pepchat.test/setup-profile?next=%2Fjoin%2Fabc')
+    expect(response.headers.get('location')).toBe('https://sidebar.test/setup-profile?next=%2Fjoin%2Fabc')
   })
 
   it('signs out claimless profile-less confirmed users and fails closed', async () => {
@@ -77,7 +77,7 @@ describe('/auth/confirm invite gating', () => {
     const response = await GET(makeRequest('/auth/confirm?token_hash=hash&type=email&next=/channels'))
 
     expect(signOut).toHaveBeenCalled()
-    expect(response.headers.get('location')).toBe('https://pepchat.test/login?invite_required=1')
+    expect(response.headers.get('location')).toBe('https://sidebar.test/login?invite_required=1')
   })
 
   it('falls back to /channels for unsafe next paths', async () => {
@@ -85,7 +85,7 @@ describe('/auth/confirm invite gating', () => {
 
     const response = await GET(makeRequest('/auth/confirm?token_hash=hash&type=email&next=//evil.test'))
 
-    expect(response.headers.get('location')).toBe('https://pepchat.test/channels')
+    expect(response.headers.get('location')).toBe('https://sidebar.test/channels')
   })
 
   it('redirects invalid or failed OTP confirmations to login error', async () => {
@@ -93,6 +93,6 @@ describe('/auth/confirm invite gating', () => {
 
     const response = await GET(makeRequest('/auth/confirm?token_hash=hash&type=email'))
 
-    expect(response.headers.get('location')).toBe('https://pepchat.test/login?error=invalid_link')
+    expect(response.headers.get('location')).toBe('https://sidebar.test/login?error=invalid_link')
   })
 })

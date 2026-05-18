@@ -1,4 +1,4 @@
-# PepChat — Architecture Deepening Opportunities (Agent Handoff)
+# SideBar — Architecture Deepening Opportunities (Agent Handoff)
 
 > **Source:** `/improve-codebase-architecture` run against `C:\Users\colebienek\pepchat`
 > **Date:** 2026-05-13
@@ -451,7 +451,7 @@ These are noted in `PROJECT_STATE_LOCAL.md` already; including for completeness.
 | `PresencePanel.jsx` (root) | Dead | Delete |
 | `ProfileCard.jsx` (root) | Dead | Delete |
 | `data.js` (root) | Prototype stub data | Delete |
-| `PepChat Prototype.html` (root) | Initial HTML mock | Move to `docs/history/` or delete |
+| `SideBar Prototype.html` (root) | Initial HTML mock | Move to `docs/history/` or delete |
 | `admin-dashboard-prompt.md` | Prompt scratch | Move to `docs/prompts/` |
 | `group-avatar-prompt.md` | Prompt scratch | Move to `docs/prompts/` |
 | `PEPCHAT_HELP_SYSTEM_DRAFT.md` | Help system draft (largely shipped) | Move to `docs/` or delete |

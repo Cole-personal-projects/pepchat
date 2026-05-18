@@ -205,7 +205,7 @@ describe('DMConversationView — message links', () => {
 
     await waitFor(() => {
       expect(mockMessageInput).toHaveBeenLastCalledWith(
-        expect.objectContaining({ draftStorageKey: `pepchat:draft:dm:${DM_MESSAGE.conversation_id}` })
+        expect.objectContaining({ draftStorageKey: `sidebar:draft:dm:${DM_MESSAGE.conversation_id}` })
       )
     })
   })
