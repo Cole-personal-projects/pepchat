@@ -51,7 +51,7 @@ export function usePresence(
   })
 
   useEffect(() => {
-    const saved = window.localStorage.getItem('pepchat:presence-status')
+    const saved = window.localStorage.getItem('sidebar:presence-status')
     if (saved === 'online' || saved === 'away' || saved === 'dnd') {
       statusRef.current = saved
       setStatusState(saved)
@@ -132,7 +132,7 @@ export function usePresence(
   const setStatus = useCallback((nextStatus: PresenceStatus) => {
     statusRef.current = nextStatus
     setStatusState(nextStatus)
-    window.localStorage.setItem('pepchat:presence-status', nextStatus)
+    window.localStorage.setItem('sidebar:presence-status', nextStatus)
     roomRef.current?.track({
       user_id:    userIdRef.current,
       username:   usernameRef.current,

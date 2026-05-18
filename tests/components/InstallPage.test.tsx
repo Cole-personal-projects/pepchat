@@ -27,7 +27,7 @@ describe('InstallPage', () => {
     vi.mocked(isInstalled).mockReturnValue(true)
     render(<InstallPage />)
     expect(screen.getByTestId('install-success')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /open pepchat/i })).toHaveAttribute('href', '/')
+    expect(screen.getByRole('link', { name: /open sidebar/i })).toHaveAttribute('href', '/')
   })
 
   it('shows install guide when app is not installed', () => {
@@ -79,7 +79,7 @@ describe('InstallPage', () => {
     expect(screen.getByTestId('steps-android')).toHaveTextContent(/chrome/i)
   })
 
-  it('shows PepChat branding', () => {
+  it('shows SideBar branding', () => {
     render(<InstallPage />)
     expect(screen.getByTestId('install-logo')).toBeInTheDocument()
   })

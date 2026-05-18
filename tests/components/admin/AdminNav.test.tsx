@@ -40,4 +40,12 @@ describe('AdminNav', () => {
     expect(document.querySelector('a[href="/admin/reports"]')).toBeTruthy()
     expect(document.querySelector('a[href="/admin/audit"]')).toBeTruthy()
   })
+
+  it('renders a labeled back control to the normal app', () => {
+    render(<AdminNav activeTab="overview" />)
+
+    const backLink = screen.getByRole('link', { name: 'Back to channels' })
+    expect(backLink).toHaveAttribute('href', '/channels')
+    expect(backLink).not.toHaveAttribute('aria-current')
+  })
 })

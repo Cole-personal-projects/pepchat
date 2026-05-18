@@ -15,7 +15,7 @@ const appFont = localFont({
 })
 
 export const metadata: Metadata = {
-  title: 'PepChat',
+  title: 'SideBar',
   description: 'Your crew, your channels',
   manifest: '/manifest.json',
 }

@@ -7,7 +7,7 @@ self.addEventListener('push', event => {
     payload = { body: event.data ? event.data.text() : undefined }
   }
 
-  const title = payload.title || 'PepChat'
+  const title = payload.title || 'SideBar'
   const options = {
     body: payload.body || 'New message',
     icon: '/icon-192.png',

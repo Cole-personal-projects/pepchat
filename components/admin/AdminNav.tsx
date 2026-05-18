@@ -10,6 +10,8 @@ const NAV_ITEMS = [
   { label: 'Audit Log', href: '/admin/audit',    tab: 'audit'    },
 ] as const
 
+const APP_HOME_HREF = '/channels'
+
 interface AdminNavProps {
   activeTab?: string
 }
@@ -34,6 +36,12 @@ export default function AdminNav({ activeTab: activeProp }: AdminNavProps) {
           </a>
         )
       })}
+      <a
+        href={APP_HOME_HREF}
+        className="admin-nav-link admin-nav-back-link"
+      >
+        Back to channels
+      </a>
     </nav>
   )
 }

@@ -150,7 +150,7 @@ export default function ChannelShell({
   }, [broadcastReactionChange, profile.id, profile.username, toggleReactionOptimistic])
 
   return (
-    <div className="flex flex-1 min-h-0 overflow-hidden">
+    <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
       {/* Main column */}
       <div
         className="flex flex-col flex-1 min-w-0 min-h-0"
@@ -198,7 +198,7 @@ export default function ChannelShell({
           channelName={channelName}
           profile={profile}
           allowVideoUpload={userRole ? userRole !== 'noob' : false}
-          draftStorageKey={`pepchat:draft:channel:${channelId}`}
+          draftStorageKey={`sidebar:draft:channel:${channelId}`}
           replyingTo={replyingTo}
           onCancelReply={() => setReplyingTo(null)}
           onTyping={broadcastTyping}

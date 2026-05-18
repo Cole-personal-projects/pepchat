@@ -498,12 +498,16 @@ export default function MessageList({
     setError('')
     setNotice('')
     startTransition(async () => {
-      const action = deleteAction ?? deleteMessage
-      const result = await action(messageId)
-      if ('error' in result) {
-        setError(result.error)
-      } else {
-        onDeleteSuccess?.(messageId)
+      try {
+        const action = deleteAction ?? deleteMessage
+        const result = await action(messageId)
+        if (!result || 'error' in result) {
+          setError(result?.error ?? 'Failed to delete message.')
+        } else {
+          onDeleteSuccess?.(messageId)
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to delete message.')
       }
     })
   }
@@ -512,12 +516,16 @@ export default function MessageList({
     setError('')
     setNotice('')
     startTransition(async () => {
-      const action = deleteAction ?? deleteMessage
-      const result = await action(messageId)
-      if ('error' in result) {
-        setError(result.error)
-      } else {
-        onDeleteSuccess?.(messageId)
+      try {
+        const action = deleteAction ?? deleteMessage
+        const result = await action(messageId)
+        if (!result || 'error' in result) {
+          setError(result?.error ?? 'Failed to delete message.')
+        } else {
+          onDeleteSuccess?.(messageId)
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to delete message.')
       }
     })
   }
@@ -1124,7 +1132,7 @@ function attachmentResultLabel(message: MessageSearchResult) {
 }
 
 function savedMessagesKey(userId: string) {
-  return `pepchat:saved-messages:${userId}`
+  return `sidebar:saved-messages:${userId}`
 }
 
 function readSavedMessages(userId: string): Set<string> {
@@ -1148,7 +1156,7 @@ function writeSavedMessages(userId: string, ids: Set<string>) {
 }
 
 function mutedUsersKey(userId: string) {
-  return `pepchat:muted-users:${userId}`
+  return `sidebar:muted-users:${userId}`
 }
 
 function readMutedUsers(userId: string): Set<string> {
