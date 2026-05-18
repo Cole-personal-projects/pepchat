@@ -14,7 +14,7 @@ vi.mock('next/navigation', () => ({
 const GROUPS: AdminGroup[] = [
   {
     id: 'g1',
-    name: 'PepChat HQ',
+    name: 'SideBar HQ',
     icon_url: null,
     owner_id: 'u1',
     owner_username: 'panicmonkey',
@@ -57,7 +57,7 @@ describe('GroupTable — rendering', () => {
 
   it('shows group name', () => {
     render(<GroupTable {...defaultProps} />)
-    expect(screen.getByText('PepChat HQ')).toBeTruthy()
+    expect(screen.getByText('SideBar HQ')).toBeTruthy()
     expect(screen.getByText('Dev Corner')).toBeTruthy()
   })
 
@@ -87,8 +87,8 @@ describe('GroupTable — rendering', () => {
   it('labels row actions with the group name', () => {
     render(<GroupTable {...defaultProps} />)
 
-    expect(screen.getByRole('link', { name: 'View PepChat HQ' })).toHaveAttribute('href', '/groups/g1')
-    expect(screen.getByRole('button', { name: 'Delete PepChat HQ' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'View SideBar HQ' })).toHaveAttribute('href', '/groups/g1')
+    expect(screen.getByRole('button', { name: 'Delete SideBar HQ' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'View Dev Corner' })).toHaveAttribute('href', '/groups/g2')
     expect(screen.getByRole('button', { name: 'Delete Dev Corner' })).toBeInTheDocument()
   })
@@ -108,7 +108,7 @@ describe('GroupTable — search', () => {
 
     expect(document.querySelectorAll('.group-row')).toHaveLength(1)
     expect(screen.getByText('Dev Corner')).toBeInTheDocument()
-    expect(screen.queryByText('PepChat HQ')).toBeNull()
+    expect(screen.queryByText('SideBar HQ')).toBeNull()
   })
 
   it('filters groups by owner username', () => {
@@ -118,7 +118,7 @@ describe('GroupTable — search', () => {
     fireEvent.change(search, { target: { value: 'panic' } })
 
     expect(document.querySelectorAll('.group-row')).toHaveLength(1)
-    expect(screen.getByText('PepChat HQ')).toBeInTheDocument()
+    expect(screen.getByText('SideBar HQ')).toBeInTheDocument()
     expect(screen.queryByText('Dev Corner')).toBeNull()
   })
 

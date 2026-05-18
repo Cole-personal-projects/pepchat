@@ -3,7 +3,7 @@ import Link from 'next/link'
 const userTasks = [
   {
     title: 'Join or create a group',
-    body: 'Use an invite link or code to join an existing group. If you do not have any groups yet, PepChat opens the group creator so you can start one.',
+    body: 'Use an invite link or code to join an existing group. If you do not have any groups yet, SideBar opens the group creator so you can start one.',
   },
   {
     title: 'Find your channels',
@@ -62,10 +62,10 @@ export default function HelpPage() {
     <main className="h-full overflow-y-auto bg-[var(--bg-primary)] text-[var(--text-primary)]">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-5 pb-24 pt-8 md:px-8 md:pb-8">
         <header className="border-b border-[var(--border-soft)] pb-6">
-          <p className="text-sm font-semibold uppercase tracking-wide text-[var(--accent)]">PepChat Help</p>
-          <h1 className="mt-2 text-3xl font-semibold">Use PepChat without losing your place</h1>
+          <p className="text-sm font-semibold uppercase tracking-wide text-[var(--accent)]">SideBar Help</p>
+          <h1 className="mt-2 text-3xl font-semibold">Use SideBar without losing your place</h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--text-muted)]">
-            PepChat is organized around private groups, channels, direct messages, and lightweight moderation.
+            SideBar is organized around private groups, channels, direct messages, and lightweight moderation.
             This page is a reference you can open when you need it; the app stays out of your way while you chat.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">

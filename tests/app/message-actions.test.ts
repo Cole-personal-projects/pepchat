@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { revalidatePath } from 'next/cache'
 import { sendMessage } from '@/app/(app)/messages/actions'
 
 const { mockCreateClient, mockEnqueueMentionNotifications, mockRevalidatePath } = vi.hoisted(() => ({
@@ -103,16 +102,14 @@ describe('message actions — sendMessage notifications', () => {
     })
   })
 
-  it('still returns the sent message when path revalidation fails after insert', async () => {
+  it('returns a lightweight success result after insert without channel revalidation', async () => {
     const builder = makeBuilder({ data: MESSAGE })
     setupClient(builder)
-    vi.mocked(revalidatePath).mockImplementation(() => {
-      throw new TypeError('Illegal invocation')
-    })
 
     await expect(sendMessage('ch-1', 'Hi @bob')).resolves.toEqual({
       ok: true,
     })
+    expect(mockRevalidatePath).not.toHaveBeenCalledWith('/channels/ch-1')
   })
 
   it('returns a typed error when the database rejects the message insert', async () => {

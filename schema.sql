@@ -1,5 +1,5 @@
 -- ============================================================
--- PepChat schema
+-- SideBar schema
 -- Run on a fresh Supabase project to fully recreate the DB.
 -- ============================================================
 

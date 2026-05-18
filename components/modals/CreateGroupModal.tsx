@@ -79,7 +79,7 @@ export default function CreateGroupModal({ open, onClose, onSuccess, initialTab 
 
       <p className="text-sm text-[var(--text-muted)] mb-4">
         {tab === 'create'
-          ? 'Create your first shared space. PepChat will add a welcome channel for new members and a general channel for regular chat.'
+          ? 'Create your first shared space. SideBar will add a welcome channel for new members and a general channel for regular chat.'
           : 'Paste an invite code or invite link to join an existing group.'}
       </p>
 

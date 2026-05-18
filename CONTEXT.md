@@ -1,6 +1,6 @@
-# PepChat Context
+# SideBar Context
 
-This document defines durable PepChat domain terms. Future architecture PRs that introduce durable domain nouns must update `CONTEXT.md` in the same PR.
+This document defines durable SideBar domain terms. Future architecture PRs that introduce durable domain nouns must update `CONTEXT.md` in the same PR.
 
 ## Domain Glossary
 

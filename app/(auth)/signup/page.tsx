@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/server'
 function ClosedSignup({ message }: { message: string }) {
   return (
     <div className="w-full max-w-md bg-[var(--bg-secondary)] rounded-lg p-8 shadow-xl text-center">
-      <h1 className="text-2xl font-bold mb-2">PepChat is invite-only</h1>
+      <h1 className="text-2xl font-bold mb-2">SideBar is invite-only</h1>
       <p className="text-[var(--text-muted)] text-sm mb-6">{message}</p>
       <Link href="/login" className="text-[var(--accent)] hover:underline text-sm">
         Log in with an existing account
