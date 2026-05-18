@@ -51,7 +51,7 @@ This spec is one small PR plus local workspace cleanup. It must not implement he
      - `PresencePanel.jsx` — 151 lines.
      - `ProfileCard.jsx` — 470 lines.
      - `data.js` — 123 lines.
-     - `PepChat Prototype.html` — 596 lines.
+     - `SideBar Prototype.html` — 596 lines.
      - `admin-dashboard-prompt.md` — 340 lines.
      - `group-avatar-prompt.md` — 220 lines.
      - `PEPCHAT_HELP_SYSTEM_DRAFT.md` — 607 lines.
@@ -145,14 +145,14 @@ Root artifact evidence:
 | `PresencePanel.jsx` | yes, 151 lines | none | Delete local root prototype; authoritative file is `components/chat/PresencePanel.tsx` with tests in `tests/components/PresencePanel.test.tsx`. |
 | `ProfileCard.jsx` | yes, 470 lines | none | Delete local root prototype; authoritative file is `components/profile/ProfileCard.tsx` with tests in `tests/components/ProfileCard.test.tsx`. |
 | `data.js` | yes, 123 lines | no meaningful exact root-file refs; `.gitignore` explicitly ignores `/data.js` | Delete local root stub data. |
-| `PepChat Prototype.html` | yes, 596 lines | none outside `.gitignore` | Delete or move out of the repo workspace for this PR; archival docs require a separate human-requested docs-only PR. |
+| `SideBar Prototype.html` | yes, 596 lines | none outside `.gitignore` | Delete or move out of the repo workspace for this PR; archival docs require a separate human-requested docs-only PR. |
 | `admin-dashboard-prompt.md` | yes, 340 lines | none outside `.gitignore` | Delete or move out of the repo workspace for this PR; archival docs require a separate human-requested docs-only PR. |
 | `group-avatar-prompt.md` | yes, 220 lines | none outside `.gitignore` | Delete or move out of the repo workspace for this PR; archival docs require a separate human-requested docs-only PR. |
 | `PEPCHAT_HELP_SYSTEM_DRAFT.md` | yes, 607 lines | none outside `.gitignore` | Delete or move out of the repo workspace for this PR; archival docs require a separate human-requested docs-only PR. |
 
 Additional evidence:
 
-- `.gitignore` already ignores root `/*.jsx`, `/PEPCHAT_HELP_SYSTEM_DRAFT.md`, `/admin-dashboard-prompt.md`, `/group-avatar-prompt.md`, `/PepChat Prototype.html`, and `/data.js`.
+- `.gitignore` already ignores root `/*.jsx`, `/PEPCHAT_HELP_SYSTEM_DRAFT.md`, `/admin-dashboard-prompt.md`, `/group-avatar-prompt.md`, `/SideBar Prototype.html`, and `/data.js`.
 - `git status --short -- <candidate files>` is empty because these root candidates are ignored/untracked.
 - `git grep -n "createServerClient" -- '*.ts' '*.tsx'` found direct usage only in `lib/supabase/server.ts`, `middleware.ts`, and `tests/middleware.test.ts`.
 - `middleware.ts` currently imports `createServerClient` directly and defines request/response cookie `getAll` / `setAll` inline at lines 7-26.

@@ -21,7 +21,7 @@ type DeliveryCheckStatus = 'idle' | 'checking' | 'ok' | 'missing' | 'error'
 function statusCopy(status: NotificationStatus | null) {
   if (!status) return 'Checking this device...'
   if (!status.supported) return 'Notifications are not supported in this browser.'
-  if (status.requiresInstall) return 'Install PepChat to your home screen before enabling notifications.'
+  if (status.requiresInstall) return 'Install SideBar to your home screen before enabling notifications.'
   if (status.permission === 'granted') return 'Notifications are enabled on this device.'
   if (status.permission === 'denied') return 'Notifications are blocked in browser settings.'
   if (!status.pushSupported) return 'This browser can ask for alerts, but push delivery is not available.'

@@ -111,7 +111,7 @@ describe('NotificationSettingsPanel', () => {
 
     render(<NotificationSettingsPanel />)
 
-    expect(await screen.findByTestId('notification-status')).toHaveTextContent('Install PepChat to your home screen before enabling notifications.')
+    expect(await screen.findByTestId('notification-status')).toHaveTextContent('Install SideBar to your home screen before enabling notifications.')
     expect(screen.getByRole('button', { name: 'Enable notifications' })).toBeDisabled()
   })
 

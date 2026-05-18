@@ -2,9 +2,9 @@
 
 ## Problem
 
-PepChat currently lets anyone visit `/signup`, create a Supabase Auth user with email/password, complete `/setup-profile`, and then enter the authenticated app. Group invites are enforced only when joining a group; they are not a prerequisite for account creation or app entry.
+SideBar currently lets anyone visit `/signup`, create a Supabase Auth user with email/password, complete `/setup-profile`, and then enter the authenticated app. Group invites are enforced only when joining a group; they are not a prerequisite for account creation or app entry.
 
-The app must be invite-only: random users must not be able to complete signup/login/profile setup and reach `/channels`, `/groups`, DMs, settings, or admin routes. A valid invite created by a group admin/owner must be required before a new user can create a usable PepChat account and enter the app.
+The app must be invite-only: random users must not be able to complete signup/login/profile setup and reach `/channels`, `/groups`, DMs, settings, or admin routes. A valid invite created by a group admin/owner must be required before a new user can create a usable SideBar account and enter the app.
 
 Current relevant state:
 
@@ -13,7 +13,7 @@ Current relevant state:
 - `middleware.ts` already redirects unauthenticated protected routes to `/login?next=...` and redirects authenticated users without profiles to `/setup-profile?next=...`.
 - `/join/[code]` currently lives at `app/(app)/join/[code]/page.tsx`, so it is wrapped by `app/(app)/layout.tsx`. That layout redirects anonymous users to `/login` and authenticated users without profiles to `/setup-profile` before the join page can render.
 - Managed group invites live in `group_invites` / `group_invite_uses` with expiration, usage limits, revoke state, creator metadata, and RLS. Legacy `groups.invite_code` still exists.
-- `supabase.auth.signUp` can create an `auth.users` row before PepChat creates a `profiles` row.
+- `supabase.auth.signUp` can create an `auth.users` row before SideBar creates a `profiles` row.
 - `schema.sql` currently has a `profiles` insert RLS policy named `Users can insert their own profile` (`with check (id = auth.uid())`). That policy is incompatible with invite-only account entry because any raw Supabase Auth user can insert `profiles(id = auth.uid())` through authenticated client APIs and bypass the app-level setup action.
 
 ## Non-goals
@@ -44,7 +44,7 @@ Current relevant state:
 
 3. Login
    - Existing users with profiles can log in normally and do not need a fresh invite.
-   - A user who has an Auth session but no PepChat profile can proceed only if there is a valid pending account-invite claim for their Auth user.
+   - A user who has an Auth session but no SideBar profile can proceed only if there is a valid pending account-invite claim for their Auth user.
    - If a profile-less Auth user logs in without a pending valid invite claim, sign them out or keep them on login with: `An invite is required to finish account setup.` Do not redirect them into `/setup-profile`.
 
 4. Profile setup and first app entry
@@ -59,16 +59,16 @@ Current relevant state:
 
 ## Technical approach
 
-### 1. Treat `auth.users` as not sufficient for PepChat membership
+### 1. Treat `auth.users` as not sufficient for SideBar membership
 
 Use a layered guardrail:
 
 - Server-side signup validation must reject calls without a valid managed invite before calling `supabase.auth.signUp`.
 - Profile creation must require a pending invite claim tied to the authenticated `auth.users.id`.
 - Middleware must treat `user && !profile && !validInviteClaim` as not allowed to enter auth setup or protected app routes.
-- Production rollout should disable or otherwise monitor public Supabase Auth signup where possible, but the app must still be safe if a raw Supabase Auth user exists. Such a user cannot create a PepChat profile or reach the app without a valid claim.
+- Production rollout should disable or otherwise monitor public Supabase Auth signup where possible, but the app must still be safe if a raw Supabase Auth user exists. Such a user cannot create a SideBar profile or reach the app without a valid claim.
 
-This accepts that a direct Supabase Auth API call may still create an `auth.users` row if project-level public signup remains enabled. That row is not a usable PepChat account until it has a validated invite claim and profile.
+This accepts that a direct Supabase Auth API call may still create an `auth.users` row if project-level public signup remains enabled. That row is not a usable SideBar account until it has a validated invite claim and profile.
 
 ### 2. Add an account invite claim model
 
@@ -136,7 +136,7 @@ This closes the race where two users could pass `inviteIsUsable` against the sam
 
 ### 4. Replace direct `profiles` insert access with RPC-only first-account setup
 
-The database must enforce the invite-only account gate even when a user bypasses PepChat app actions and uses Supabase client APIs directly.
+The database must enforce the invite-only account gate even when a user bypasses SideBar app actions and uses Supabase client APIs directly.
 
 Add a migration that removes the existing direct authenticated insert path for profiles:
 
@@ -196,7 +196,7 @@ Use `inviteLookupClient(supabase)` / service-role-backed lookup server-side wher
   - Read `invite` from query string or derive it from `next=/join/<code>`.
   - Without a server-validated valid invite, render invite-only closed state and link to login; do not render the signup form.
   - Include a hidden `invite` input when rendering the signup form.
-  - Update copy from `Join PepChat today` to invite-only copy such as `Create your account with this invite`.
+  - Update copy from `Join SideBar today` to invite-only copy such as `Create your account with this invite`.
 
 - `app/(auth)/actions.ts::signup`
   - Require `invite` form field.

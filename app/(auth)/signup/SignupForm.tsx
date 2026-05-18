@@ -57,7 +57,7 @@ export default function SignupForm({ invite, nextPath: initialNextPath }: Signup
     <div className="w-full max-w-md bg-[var(--bg-secondary)] rounded-lg p-8 shadow-xl">
       <h1 className="text-2xl font-bold text-center mb-2">Create your account with this invite</h1>
       <p className="text-[var(--text-muted)] text-center text-sm mb-8">
-        PepChat accounts require an invite from a group admin.
+        SideBar accounts require an invite from a group admin.
       </p>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">

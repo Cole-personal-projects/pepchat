@@ -59,7 +59,7 @@ export default async function ChannelPage({
   const initialMessages = ((messages ?? []).reverse()) as MessageWithProfile[]
 
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-1 min-w-0 min-h-0 flex-col overflow-hidden">
       <ChannelShell
         channelId={params.channelId}
         groupId={channel.group_id}

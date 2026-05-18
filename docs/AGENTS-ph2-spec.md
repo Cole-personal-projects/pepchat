@@ -39,7 +39,7 @@ We also finish migrating the remaining server actions to the `withAuth` wrapper 
 
 ### The Problem
 
-Every mutation action in PepChat must (in theory) do three things:
+Every mutation action in SideBar must (in theory) do three things:
 
 1. **Mutate** the primary data (insert message, change role, update channel topic, etc.)
 2. **Audit** the change into the `audit_log` table (who did what, when, on which target)
