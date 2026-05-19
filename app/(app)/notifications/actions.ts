@@ -10,6 +10,7 @@ import { withAuth } from '@/lib/actions/withAuth'
 
 type PreferencesResult =
   | { error: string }
+  | { unavailable: true; message: string }
   | { ok: true; preferences: NotificationPreferences }
 
 type SubscriptionResult = { error: string } | { ok: true }
@@ -17,6 +18,17 @@ type SubscriptionResult = { error: string } | { ok: true }
 type EventsResult =
   | { error: string }
   | { ok: true; events: NotificationEvent[]; unreadCount: number }
+
+const PREFERENCES_UNAVAILABLE_MESSAGE = 'Notification delivery settings are temporarily unavailable.'
+
+function isMissingNotificationPreferencesTable(error: { code?: string; message?: string } | null | undefined) {
+  if (!error) return false
+  return (
+    error.code === 'PGRST205' ||
+    error.code === '42P01' ||
+    (/notification_preferences/i.test(error.message ?? '') && /schema cache|does not exist|relation/i.test(error.message ?? ''))
+  )
+}
 
 function defaultPreferences(userId: string): NotificationPreferences {
   const now = new Date().toISOString()
@@ -46,6 +58,10 @@ export const getNotificationPreferences = withAuth(
       .eq('user_id', user.id)
       .single()
 
+    if (isMissingNotificationPreferencesTable(error)) {
+      return { unavailable: true, message: PREFERENCES_UNAVAILABLE_MESSAGE }
+    }
+
     if (error && error.code !== 'PGRST116') {
       return { error: error.message }
     }
@@ -72,6 +88,10 @@ export const updateNotificationPreferences = withAuth(
       )
       .select('*')
       .single()
+
+    if (isMissingNotificationPreferencesTable(error)) {
+      return { error: PREFERENCES_UNAVAILABLE_MESSAGE }
+    }
 
     if (error || !data) {
       return { error: error?.message ?? "Couldn't save notification preferences." }

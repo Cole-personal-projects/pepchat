@@ -200,6 +200,22 @@ describe('NotificationSettingsPanel', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Load failed')
   })
 
+  it('shows unavailable delivery settings without surfacing schema-cache errors', async () => {
+    mockGetNotificationStatus.mockReturnValue(ENABLED_STATUS)
+    mockGetNotificationPreferences.mockResolvedValue({
+      unavailable: true,
+      message: 'Notification delivery settings are temporarily unavailable.',
+    })
+
+    render(<NotificationSettingsPanel />)
+
+    expect(await screen.findByTestId('notification-preferences-unavailable')).toHaveTextContent(
+      'Notification delivery settings are temporarily unavailable.'
+    )
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByText(/schema cache/i)).not.toBeInTheDocument()
+  })
+
   it('surfaces preference update failures', async () => {
     const user = userEvent.setup()
     mockGetNotificationStatus.mockReturnValue(ENABLED_STATUS)
