@@ -207,6 +207,20 @@ describe('notification actions — getNotificationPreferences', () => {
     })
   })
 
+  it('reports notification preferences as unavailable when the table is missing from PostgREST schema cache', async () => {
+    setupClient(makeSelectBuilder({
+      error: {
+        message: "Could not find the table 'public.notification_preferences' in the schema cache",
+        code: 'PGRST205',
+      },
+    }))
+
+    await expect(getNotificationPreferences()).resolves.toEqual({
+      unavailable: true,
+      message: 'Notification delivery settings are temporarily unavailable.',
+    })
+  })
+
   it('surfaces select errors', async () => {
     setupClient(makeSelectBuilder({ error: { message: 'Read failed' } }))
 
