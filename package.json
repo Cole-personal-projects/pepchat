@@ -1,5 +1,5 @@
 {
-  "name": "pepchat-scaffold",
+  "name": "sidebar-app",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "pages:build": "npx @cloudflare/next-on-pages",
-    "pages:deploy": "npm run pages:build && wrangler pages deploy",
+    "pages:deploy": "npm run pages:build && wrangler pages deploy --project-name pepchat-app",
     "pages:preview": "npm run pages:build && wrangler pages dev",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -19,7 +19,7 @@
     "@emoji-mart/react": "^1.1.1",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.105.4",
-    "dompurify": "^3.4.2",
+    "dompurify": "^3.4.4",
     "emoji-mart": "^5.6.0",
     "marked": "^18.0.3",
     "next": "14.2.35",
@@ -28,7 +28,7 @@
   },
   "devDependencies": {
     "@cloudflare/next-on-pages": "^1.13.16",
-    "@playwright/test": "^1.59.1",
+    "@playwright/test": "^1.60.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -46,6 +46,6 @@
     "tailwindcss": "^3.4.1",
     "typescript": "^5",
     "vitest": "^2.1.9",
-    "wrangler": "^4.90.0"
+    "wrangler": "^4.92.0"
   }
 }

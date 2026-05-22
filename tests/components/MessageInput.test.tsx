@@ -71,7 +71,7 @@ describe('MessageInput draft persistence', () => {
   })
 
   it('loads a saved draft for the current channel', () => {
-    window.localStorage.setItem('pepchat:draft:channel-1', 'Saved channel draft')
+    window.localStorage.setItem('sidebar:draft:channel-1', 'Saved channel draft')
 
     render(<MessageInput {...BASE_PROPS} />)
 
@@ -93,18 +93,18 @@ describe('MessageInput draft persistence', () => {
       target: { value: 'Remember this thought' },
     })
 
-    expect(window.localStorage.getItem('pepchat:draft:channel-1')).toBe('Remember this thought')
+    expect(window.localStorage.getItem('sidebar:draft:channel-1')).toBe('Remember this thought')
   })
 
   it('uses a provided draft storage key', () => {
-    render(<MessageInput {...BASE_PROPS} draftStorageKey="pepchat:draft:channel:channel-1" />)
+    render(<MessageInput {...BASE_PROPS} draftStorageKey="sidebar:draft:channel:channel-1" />)
 
     fireEvent.change(screen.getByTestId('message-input-textarea'), {
       target: { value: 'Scoped draft' },
     })
 
-    expect(window.localStorage.getItem('pepchat:draft:channel:channel-1')).toBe('Scoped draft')
-    expect(window.localStorage.getItem('pepchat:draft:channel-1')).toBeNull()
+    expect(window.localStorage.getItem('sidebar:draft:channel:channel-1')).toBe('Scoped draft')
+    expect(window.localStorage.getItem('sidebar:draft:channel-1')).toBeNull()
   })
 
   it('clears the draft after a successful send', async () => {
@@ -118,7 +118,7 @@ describe('MessageInput draft persistence', () => {
 
     await waitFor(() => {
       expect(sendAction).toHaveBeenCalledWith('Ship this message', null, [])
-      expect(window.localStorage.getItem('pepchat:draft:channel-1')).toBeNull()
+      expect(window.localStorage.getItem('sidebar:draft:channel-1')).toBeNull()
     })
     expect(screen.getByTestId('message-input-textarea')).toHaveValue('')
   })
@@ -143,12 +143,12 @@ describe('MessageInput draft persistence', () => {
       target: { value: 'Do not send this' },
     })
 
-    expect(window.localStorage.getItem('pepchat:draft:channel-1')).toBe('Do not send this')
+    expect(window.localStorage.getItem('sidebar:draft:channel-1')).toBe('Do not send this')
 
     fireEvent.click(screen.getByTestId('message-input-clear-draft'))
 
     expect(textarea).toHaveValue('')
-    expect(window.localStorage.getItem('pepchat:draft:channel-1')).toBeNull()
+    expect(window.localStorage.getItem('sidebar:draft:channel-1')).toBeNull()
     expect(screen.queryByTestId('message-input-clear-draft')).not.toBeInTheDocument()
     expect(textarea).toHaveFocus()
   })

@@ -274,6 +274,28 @@ describe('MessageList — delete success', () => {
     await waitFor(() => expect(screen.getByText('Delete failed')).toBeInTheDocument())
     expect(onDeleteSuccess).not.toHaveBeenCalled()
   })
+
+  it('shows an error instead of crashing when delete returns no result', async () => {
+    const deleteAction = vi.fn().mockResolvedValue(undefined)
+    const onDeleteSuccess = vi.fn()
+    render(<MessageList {...BASE_PROPS} deleteAction={deleteAction} onDeleteSuccess={onDeleteSuccess} />)
+
+    fireEvent.click(screen.getByTestId('delete-btn-msg-1'))
+
+    await waitFor(() => expect(screen.getByText('Failed to delete message.')).toBeInTheDocument())
+    expect(onDeleteSuccess).not.toHaveBeenCalled()
+  })
+
+  it('shows an error instead of crashing when delete throws', async () => {
+    const deleteAction = vi.fn().mockRejectedValue(new Error('Delete request failed'))
+    const onDeleteSuccess = vi.fn()
+    render(<MessageList {...BASE_PROPS} deleteAction={deleteAction} onDeleteSuccess={onDeleteSuccess} />)
+
+    fireEvent.click(screen.getByTestId('delete-btn-msg-1'))
+
+    await waitFor(() => expect(screen.getByText('Delete request failed')).toBeInTheDocument())
+    expect(onDeleteSuccess).not.toHaveBeenCalled()
+  })
 })
 
 const SYS_MSG: MessageWithProfile = {

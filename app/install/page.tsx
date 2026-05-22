@@ -56,10 +56,10 @@ function IOSSteps() {
         Scroll down in the share sheet and tap <strong>Add to Home Screen</strong>.
       </Step>
       <Step n={4} title='Tap "Add" to confirm'>
-        You'll see a preview with the name PepChat. Tap <strong>Add</strong> in the top-right corner.
+        You'll see a preview with the name SideBar. Tap <strong>Add</strong> in the top-right corner.
       </Step>
       <Step n={5} title="Launch from your home screen">
-        The PepChat icon will appear on your home screen. Tap it to open the app fullscreen.
+        The SideBar icon will appear on your home screen. Tap it to open the app fullscreen.
       </Step>
       <div style={{
         marginTop: 4,
@@ -89,7 +89,7 @@ function AndroidSteps({ onInstall, canInstall }: { onInstall: () => void; canIns
           marginBottom: 4,
         }}>
           <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', marginBottom: 4 }}>
-            Install PepChat
+            Install SideBar
           </p>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
             Add to your home screen instantly
@@ -125,7 +125,7 @@ function AndroidSteps({ onInstall, canInstall }: { onInstall: () => void; canIns
         Confirm in the dialog that appears.
       </Step>
       <Step n={5} title="Launch from your home screen">
-        Find PepChat in your app drawer or home screen. It opens fullscreen like a native app.
+        Find SideBar in your app drawer or home screen. It opens fullscreen like a native app.
       </Step>
       <div style={{
         marginTop: 4,
@@ -189,10 +189,10 @@ export default function InstallPage() {
         <div data-testid="install-success" style={{ textAlign: 'center', maxWidth: 400 }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>✓</div>
           <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8, color: 'var(--text-primary)' }}>
-            PepChat is installed!
+            SideBar is installed!
           </h1>
           <p style={{ fontSize: 15, color: 'var(--text-muted)', marginBottom: 28 }}>
-            You're already running PepChat as an app.
+            You're already running SideBar as an app.
           </p>
           <Link
             href="/"
@@ -207,7 +207,7 @@ export default function InstallPage() {
               textDecoration: 'none',
             }}
           >
-            Open PepChat →
+            Open SideBar →
           </Link>
         </div>
       </div>
@@ -228,8 +228,8 @@ export default function InstallPage() {
         {/* Logo */}
         <div data-testid="install-logo" style={{ textAlign: 'center', marginBottom: 32 }}>
           <p style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-0.5px' }}>
-            <span style={{ color: 'var(--accent)' }}>pep</span>
-            <span style={{ color: 'var(--text-primary)' }}>chat</span>
+            <span style={{ color: 'var(--accent)' }}>Side</span>
+            <span style={{ color: 'var(--text-primary)' }}>Bar</span>
           </p>
           <p style={{ fontSize: 13, color: 'var(--text-faint)', marginTop: 4 }}>
             your crew, your channels
@@ -238,10 +238,10 @@ export default function InstallPage() {
 
         <div data-testid="install-guide">
           <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
-            Install PepChat
+            Install SideBar
           </h1>
           <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 24 }}>
-            Add PepChat to your home screen for the best experience.
+            Add SideBar to your home screen for the best experience.
           </p>
 
           {/* Tabs */}

@@ -21,7 +21,7 @@ type DeliveryCheckStatus = 'idle' | 'checking' | 'ok' | 'missing' | 'error'
 function statusCopy(status: NotificationStatus | null) {
   if (!status) return 'Checking this device...'
   if (!status.supported) return 'Notifications are not supported in this browser.'
-  if (status.requiresInstall) return 'Install PepChat to your home screen before enabling notifications.'
+  if (status.requiresInstall) return 'Install SideBar to your home screen before enabling notifications.'
   if (status.permission === 'granted') return 'Notifications are enabled on this device.'
   if (status.permission === 'denied') return 'Notifications are blocked in browser settings.'
   if (!status.pushSupported) return 'This browser can ask for alerts, but push delivery is not available.'
@@ -31,6 +31,7 @@ function statusCopy(status: NotificationStatus | null) {
 export default function NotificationSettingsPanel() {
   const [status, setStatus] = useState<NotificationStatus | null>(null)
   const [preferences, setPreferences] = useState<NotificationPreferences | null>(null)
+  const [preferencesUnavailable, setPreferencesUnavailable] = useState('')
   const [error, setError] = useState('')
   const [deviceStatus, setDeviceStatus] = useState<DeviceStatus>('idle')
   const [deliveryCheck, setDeliveryCheck] = useState<DeliveryCheckStatus>('idle')
@@ -49,7 +50,10 @@ export default function NotificationSettingsPanel() {
       if (ignore) return
       if ('error' in result) {
         setError(result.error)
+      } else if ('unavailable' in result) {
+        setPreferencesUnavailable(result.message)
       } else {
+        setPreferencesUnavailable('')
         setPreferences(result.preferences)
       }
     })
@@ -124,7 +128,10 @@ export default function NotificationSettingsPanel() {
     const result = await updateNotificationPreferences({ [key]: value })
     if ('error' in result) {
       setError(result.error)
+    } else if ('unavailable' in result) {
+      setPreferencesUnavailable(result.message)
     } else {
+      setPreferencesUnavailable('')
       setPreferences(result.preferences)
     }
     setSavingKey(null)
@@ -171,7 +178,13 @@ export default function NotificationSettingsPanel() {
         </fieldset>
       )}
 
-      {status?.permission === 'granted' && !preferences && (
+      {status?.permission === 'granted' && preferencesUnavailable && (
+        <p className="text-xs text-[var(--text-muted)]" data-testid="notification-preferences-unavailable">
+          {preferencesUnavailable}
+        </p>
+      )}
+
+      {status?.permission === 'granted' && !preferences && !preferencesUnavailable && (
         <p className="text-xs text-[var(--text-muted)]" data-testid="notification-preferences-loading">
           Loading notification delivery settings...
         </p>

@@ -17,7 +17,16 @@ type TestChannel = {
   bindings: BindingCall[]
 }
 
-function makeRealtimeMock() {
+function makeMessageFetch(message: MessageWithProfile | null) {
+  const builder: any = {
+    select: vi.fn(() => builder),
+    eq: vi.fn(() => builder),
+    single: vi.fn().mockResolvedValue(message ? { data: message, error: null } : { data: null, error: { message: 'not found' } }),
+  }
+  return builder
+}
+
+function makeRealtimeMock(messageFetch: unknown = makeMessageFetch(null)) {
   const channels: TestChannel[] = []
   const removeChannel = vi.fn().mockResolvedValue({ error: null })
   const channel = vi.fn((topic: string) => {
@@ -36,8 +45,8 @@ function makeRealtimeMock() {
     channels.push(ch)
     return ch
   })
-  mockCreateClient.mockReturnValue({ channel, removeChannel, from: vi.fn() })
-  return { channel, channels, removeChannel }
+  mockCreateClient.mockReturnValue({ channel, removeChannel, from: vi.fn(() => messageFetch) })
+  return { channel, channels, removeChannel, messageFetch }
 }
 
 const baseMessage: MessageWithProfile = {
@@ -75,6 +84,7 @@ describe('useMessages realtime migration', () => {
       { type: 'broadcast', filter: { event: 'new_message' } },
       { type: 'broadcast', filter: { event: 'reaction_added' } },
       { type: 'broadcast', filter: { event: 'reaction_removed' } },
+      { type: 'postgres_changes', filter: { event: 'INSERT', schema: 'public', table: 'messages' } },
       { type: 'postgres_changes', filter: { event: 'UPDATE', schema: 'public', table: 'messages' } },
       { type: 'postgres_changes', filter: { event: 'DELETE', schema: 'public', table: 'messages' } },
     ])
@@ -91,6 +101,19 @@ describe('useMessages realtime migration', () => {
 
     act(() => realtime.channels[0].bindings[0].handler({ payload: { message: newMessage } }))
     expect(result.current.messages.map((m) => m.id)).toEqual(['msg-1', 'msg-2'])
+  })
+
+  it('appends a full message when a postgres INSERT arrives', async () => {
+    const insertedMessage = { ...baseMessage, id: 'msg-2', user_id: 'user-2', content: 'inserted' }
+    const messageFetch = makeMessageFetch(insertedMessage)
+    const realtime = makeRealtimeMock(messageFetch)
+    const { result } = renderHook(() => useMessages('ch-1', [baseMessage], 'user-1'))
+    const insertBinding = realtime.channels[0].bindings.find((binding) => binding.type === 'postgres_changes' && binding.filter.event === 'INSERT')!
+
+    await act(async () => insertBinding.handler({ new: { id: 'msg-2', channel_id: 'ch-1' } }))
+
+    expect(result.current.messages.map((m) => m.id)).toEqual(['msg-1', 'msg-2'])
+    expect(messageFetch.eq).toHaveBeenCalledWith('id', 'msg-2')
   })
 
   it('applies reaction add/remove broadcasts without duplicating reactions', () => {
@@ -110,14 +133,16 @@ describe('useMessages realtime migration', () => {
   it('guards UPDATE by channel and removes messages on DELETE', () => {
     const realtime = makeRealtimeMock()
     const { result } = renderHook(() => useMessages('ch-1', [baseMessage], 'user-1'))
+    const updateBinding = realtime.channels[0].bindings.find((binding) => binding.type === 'postgres_changes' && binding.filter.event === 'UPDATE')!
+    const deleteBinding = realtime.channels[0].bindings.find((binding) => binding.type === 'postgres_changes' && binding.filter.event === 'DELETE')!
 
-    act(() => realtime.channels[0].bindings[3].handler({ new: { id: 'msg-1', channel_id: 'ch-2', content: 'ignored', edited_at: 'later', pinned_at: 'pin' } }))
+    act(() => updateBinding.handler({ new: { id: 'msg-1', channel_id: 'ch-2', content: 'ignored', edited_at: 'later', pinned_at: 'pin' } }))
     expect(result.current.messages[0].content).toBe('hello')
 
-    act(() => realtime.channels[0].bindings[3].handler({ new: { id: 'msg-1', channel_id: 'ch-1', content: 'updated', edited_at: 'later', pinned_at: 'pin' } }))
+    act(() => updateBinding.handler({ new: { id: 'msg-1', channel_id: 'ch-1', content: 'updated', edited_at: 'later', pinned_at: 'pin' } }))
     expect(result.current.messages[0]).toMatchObject({ content: 'updated', edited_at: 'later', pinned_at: 'pin' })
 
-    act(() => realtime.channels[0].bindings[4].handler({ old: { id: 'msg-1' } }))
+    act(() => deleteBinding.handler({ old: { id: 'msg-1' } }))
     expect(result.current.messages).toEqual([])
   })
 

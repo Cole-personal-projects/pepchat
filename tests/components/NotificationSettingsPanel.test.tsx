@@ -111,7 +111,7 @@ describe('NotificationSettingsPanel', () => {
 
     render(<NotificationSettingsPanel />)
 
-    expect(await screen.findByTestId('notification-status')).toHaveTextContent('Install PepChat to your home screen before enabling notifications.')
+    expect(await screen.findByTestId('notification-status')).toHaveTextContent('Install SideBar to your home screen before enabling notifications.')
     expect(screen.getByRole('button', { name: 'Enable notifications' })).toBeDisabled()
   })
 
@@ -198,6 +198,22 @@ describe('NotificationSettingsPanel', () => {
     render(<NotificationSettingsPanel />)
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Load failed')
+  })
+
+  it('shows unavailable delivery settings without surfacing schema-cache errors', async () => {
+    mockGetNotificationStatus.mockReturnValue(ENABLED_STATUS)
+    mockGetNotificationPreferences.mockResolvedValue({
+      unavailable: true,
+      message: 'Notification delivery settings are temporarily unavailable.',
+    })
+
+    render(<NotificationSettingsPanel />)
+
+    expect(await screen.findByTestId('notification-preferences-unavailable')).toHaveTextContent(
+      'Notification delivery settings are temporarily unavailable.'
+    )
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByText(/schema cache/i)).not.toBeInTheDocument()
   })
 
   it('surfaces preference update failures', async () => {

@@ -12,7 +12,7 @@ vi.mock('@supabase/ssr', () => ({
 }))
 
 function makeRequest(path: string) {
-  return new NextRequest(new URL(path, 'https://pepchat.test'))
+  return new NextRequest(new URL(path, 'https://sidebar.test'))
 }
 
 function makeProfileBuilder(profile: unknown) {
@@ -59,7 +59,7 @@ describe('middleware invite-only gate', () => {
 
     const response = await middleware(makeRequest('/channels/abc'))
 
-    expect(response.headers.get('location')).toBe('https://pepchat.test/login?next=%2Fchannels%2Fabc')
+    expect(response.headers.get('location')).toBe('https://sidebar.test/login?next=%2Fchannels%2Fabc')
   })
 
   it('redirects authenticated users without profiles and pending claims to setup with current path', async () => {
@@ -69,7 +69,7 @@ describe('middleware invite-only gate', () => {
 
     expect(rpc).toHaveBeenCalledWith('user_has_pending_account_invite_claim', { p_auth_user_id: 'user-1' })
     expect(response.headers.get('location')).toBe(
-      'https://pepchat.test/setup-profile?next=%2Fchannels%3Fdm%3Dconversation-1',
+      'https://sidebar.test/setup-profile?next=%2Fchannels%3Fdm%3Dconversation-1',
     )
   })
 
@@ -79,7 +79,7 @@ describe('middleware invite-only gate', () => {
     const response = await middleware(makeRequest('/setup-profile'))
 
     expect(signOut).toHaveBeenCalled()
-    expect(response.headers.get('location')).toBe('https://pepchat.test/login?invite_required=1')
+    expect(response.headers.get('location')).toBe('https://sidebar.test/login?invite_required=1')
   })
 
   it('sends authenticated login visitors with profiles to a safe next path', async () => {
@@ -87,7 +87,7 @@ describe('middleware invite-only gate', () => {
 
     const response = await middleware(makeRequest('/login?next=/join/invite-123'))
 
-    expect(response.headers.get('location')).toBe('https://pepchat.test/join/invite-123')
+    expect(response.headers.get('location')).toBe('https://sidebar.test/join/invite-123')
   })
 
   it('preserves query strings on safe next paths', async () => {
@@ -95,7 +95,7 @@ describe('middleware invite-only gate', () => {
 
     const response = await middleware(makeRequest('/login?next=/channels?dm=conversation-1'))
 
-    expect(response.headers.get('location')).toBe('https://pepchat.test/channels?dm=conversation-1')
+    expect(response.headers.get('location')).toBe('https://sidebar.test/channels?dm=conversation-1')
   })
 
   it.each(['//evil.example', '/join\\evil'])('ignores unsafe next paths for authenticated login visitors: %s', async next => {
@@ -103,7 +103,7 @@ describe('middleware invite-only gate', () => {
 
     const response = await middleware(makeRequest(`/login?next=${encodeURIComponent(next)}`))
 
-    expect(response.headers.get('location')).toBe('https://pepchat.test/channels')
+    expect(response.headers.get('location')).toBe('https://sidebar.test/channels')
   })
 })
 

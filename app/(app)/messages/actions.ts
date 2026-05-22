@@ -89,7 +89,8 @@ export const sendMessage = withAuth(
       // Notification fanout should never block the core message send path.
     }
 
-    safeRevalidatePath(`/channels/${channelId}`)
+    // Avoid next-on-pages/Cloudflare Server Action response failures after successful writes.
+    // Realtime subscriptions and the channel reload path refresh message state.
     return { ok: true }
   },
   { unauthenticated: () => ({ error: 'Not authenticated.' }) }
@@ -218,7 +219,6 @@ export const deleteMessage = withAuth(
       console.warn('[deleteMessage] Side effect failed', result.sideEffects)
     }
 
-    safeRevalidatePath('/channels')
     return { ok: true }
   }
 )
