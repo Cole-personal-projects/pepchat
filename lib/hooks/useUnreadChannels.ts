@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useRealtimeChannel } from '@/lib/realtime/useRealtimeChannel'
 
 interface UnreadState {
   unreadChannelIds: Set<string>
@@ -93,22 +94,28 @@ export function useUnreadChannels(
     setUnreadCountsByChannelId(unreadCounts)
   }, [userId])
 
-  // Subscription + re-fetch on reconnect. Re-runs only when userId changes.
+  // Re-fetch on mount and when the tab regains focus — catches events missed while hidden.
   useEffect(() => {
     if (!userId) return
 
     fetchUnread()
-
-    // Re-fetch when the tab regains focus — catches events missed while hidden.
     window.addEventListener('focus', fetchUnread)
 
-    const supabase = createClient()
-    const sub = supabase
-      .channel(`unread-${userId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages' },
-        (payload) => {
+    return () => {
+      window.removeEventListener('focus', fetchUnread)
+    }
+  }, [userId, fetchUnread])
+
+  // Subscription + re-fetch on reconnect. Re-runs only when userId changes.
+  useRealtimeChannel({
+    topic: `unread-${userId}`,
+    enabled: Boolean(userId),
+    deps: [userId, fetchUnread],
+    bindings: [
+      {
+        type: 'postgres_changes',
+        filter: { event: 'INSERT', schema: 'public', table: 'messages' },
+        handler: (payload) => {
           const { channel_id, user_id } = payload.new as { channel_id: string; user_id: string }
           if (user_id === userId) return
           if (channel_id === activeChannelIdRef.current) return
@@ -118,12 +125,12 @@ export function useUnreadChannels(
             next.set(channel_id, (next.get(channel_id) ?? 0) + 1)
             return next
           })
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'channel_read_state' },
-        (payload) => {
+        },
+      },
+      {
+        type: 'postgres_changes',
+        filter: { event: '*', schema: 'public', table: 'channel_read_state' },
+        handler: (payload) => {
           const { channel_id } = payload.new as { channel_id: string }
           setUnreadChannelIds(prev => {
             if (!prev.has(channel_id)) return prev
@@ -137,18 +144,14 @@ export function useUnreadChannels(
             next.delete(channel_id)
             return next
           })
-        }
-      )
-      // Re-fetch on every successful (re)connection so missed events are caught.
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') fetchUnread()
-      })
-
-    return () => {
-      window.removeEventListener('focus', fetchUnread)
-      supabase.removeChannel(sub)
-    }
-  }, [userId, fetchUnread])
+        },
+      },
+    ],
+    // Re-fetch on every successful (re)connection so missed events are caught.
+    onStatus: (status) => {
+      if (status === 'SUBSCRIBED') fetchUnread()
+    },
+  })
 
   const unreadGroupIds = useMemo(() => {
     const groups = new Set<string>()

@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useRealtimeChannel } from '@/lib/realtime/useRealtimeChannel'
 import type { GroupMember, Profile } from '@/lib/types'
 
 /**
@@ -31,42 +32,44 @@ export function useMembersList(groupId: string): {
 	const [members, setMembers] = useState<MemberWithProfile[]>([])
 	const [loading, setLoading] = useState(true)
 
-	// Persist supabase client to avoid recreating the channel
-	const supabaseRef = useRef(createClient())
+	const fetchMembers = useCallback(async () => {
+		if (!groupId) return
+		const supabase = createClient()
+		const { data } = await supabase
+			.from('group_members')
+			.select('*, profiles(username, avatar_url)')
+			.eq('group_id', groupId)
+			.order('role')
+
+		setMembers((prev) => {
+			const next = data as MemberWithProfile[]
+			return membersEqual(prev, next) ? prev : next
+		})
+		setLoading(false)
+	}, [groupId])
 
 	useEffect(() => {
 		if (!groupId) return
-
-		async function fetchMembers() {
-			const { data } = await supabaseRef.current
-				.from('group_members')
-				.select('*, profiles(username, avatar_url)')
-				.eq('group_id', groupId)
-				.order('role')
-
-			setMembers((prev) => {
-				const next = data as MemberWithProfile[]
-				return membersEqual(prev, next) ? prev : next
-			})
-			setLoading(false)
-		}
-
 		fetchMembers()
+	}, [groupId, fetchMembers])
 
-		const sub = supabaseRef.current
-			.channel(`members-${groupId}`)
-			.on('postgres_changes', {
-				event: '*',
-				schema: 'public',
-				table: 'group_members',
-				filter: `group_id=eq.${groupId}`,
-			}, fetchMembers)
-			.subscribe()
-
-		return () => {
-			supabaseRef.current.removeChannel(sub)
-		}
-	}, [groupId])
+	useRealtimeChannel({
+		topic: `members-${groupId}`,
+		enabled: Boolean(groupId),
+		deps: [groupId, fetchMembers],
+		bindings: [
+			{
+				type: 'postgres_changes',
+				filter: {
+					event: '*',
+					schema: 'public',
+					table: 'group_members',
+					filter: `group_id=eq.${groupId}`,
+				},
+				handler: fetchMembers,
+			},
+		],
+	})
 
 	return { members, loading }
 }
