@@ -42,12 +42,13 @@ export function useRealtimeChannel(config: UseRealtimeChannelConfig): UseRealtim
       ? supabase.channel(config.topic, config.options)
       : supabase.channel(config.topic)
 
+    let boundChannel = channel
     for (const binding of config.bindings) {
-      ;(channel.on as any)(binding.type, binding.filter, binding.handler)
+      boundChannel = (boundChannel.on as any)(binding.type, binding.filter, binding.handler)
     }
 
     channelRef.current = channel
-    channel.subscribe((nextStatus) => {
+    boundChannel.subscribe((nextStatus) => {
       setStatus(nextStatus)
       void config.onStatus?.(nextStatus, channel)
     })

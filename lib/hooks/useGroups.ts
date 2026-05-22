@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useRealtimeChannel } from '@/lib/realtime/useRealtimeChannel'
 import type { Group } from '@/lib/types'
 
 /**
@@ -37,38 +38,37 @@ export function useGroups() {
 
   useEffect(() => {
     fetchGroups()
+  }, [fetchGroups])
 
-    const supabase = createClient()
+  // Re-fetch when membership changes (join/leave)
+  useRealtimeChannel({
+    topic: 'group-membership',
+    deps: [fetchGroups],
+    bindings: [
+      {
+        type: 'postgres_changes',
+        filter: { event: '*', schema: 'public', table: 'group_members' },
+        handler: fetchGroups,
+      },
+    ],
+  })
 
-    // Re-fetch when membership changes (join/leave)
-    const membershipSub = supabase
-      .channel('group-membership')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'group_members' },
-        fetchGroups
-      )
-      .subscribe()
-
-    // Update icon_url (and other group fields) in real time
-    const groupsSub = supabase
-      .channel('group-updates')
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'groups' },
-        (payload) => {
+  // Update icon_url (and other group fields) in real time
+  useRealtimeChannel({
+    topic: 'group-updates',
+    deps: [],
+    bindings: [
+      {
+        type: 'postgres_changes',
+        filter: { event: 'UPDATE', schema: 'public', table: 'groups' },
+        handler: (payload) => {
           setGroups(prev =>
             prev.map(g => g.id === payload.new.id ? { ...g, ...(payload.new as Group) } : g)
           )
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(membershipSub)
-      supabase.removeChannel(groupsSub)
-    }
-  }, [fetchGroups])
+        },
+      },
+    ],
+  })
 
   return { groups, loading, refetch: fetchGroups }
 }

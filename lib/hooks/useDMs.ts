@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useRealtimeChannel } from '@/lib/realtime/useRealtimeChannel'
 import type { DMConversation, DirectMessageWithProfile, MessageWithProfile, Profile } from '@/lib/types'
 
 const PAGE_SIZE = 50
@@ -86,16 +87,17 @@ export function useDMConversations(userId: string): UseDMConversationsReturn {
   useEffect(() => {
     if (!userId) return
     fetchAll()
-
-    const supabase = createClient()
-    const sub = supabase
-      .channel(`dm-conversations-${userId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'dm_conversations' }, fetchAll)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'direct_messages' }, fetchAll)
-      .subscribe()
-
-    return () => { supabase.removeChannel(sub) }
   }, [userId, fetchAll])
+
+  useRealtimeChannel({
+    topic: `dm-conversations-${userId}`,
+    enabled: Boolean(userId),
+    deps: [userId, fetchAll],
+    bindings: [
+      { type: 'postgres_changes', filter: { event: '*', schema: 'public', table: 'dm_conversations' }, handler: fetchAll },
+      { type: 'postgres_changes', filter: { event: '*', schema: 'public', table: 'direct_messages' }, handler: fetchAll },
+    ],
+  })
 
   const totalUnread = conversations.reduce((sum, c) => sum + c.unread_count, 0)
 
@@ -148,13 +150,20 @@ export function useDMMessages(conversationId: string): UseDMMessagesReturn {
 
     fetchInitial()
 
-    const sub = supabase
-      .channel(`dm-messages-${conversationId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'direct_messages', filter: `conversation_id=eq.${conversationId}` },
-        async (payload) => {
+    return () => { cancelled = true }
+  }, [conversationId])
+
+  useRealtimeChannel({
+    topic: `dm-messages-${conversationId}`,
+    enabled: Boolean(conversationId),
+    deps: [conversationId],
+    bindings: [
+      {
+        type: 'postgres_changes',
+        filter: { event: 'INSERT', schema: 'public', table: 'direct_messages', filter: `conversation_id=eq.${conversationId}` },
+        handler: async (payload) => {
           // Fetch full message with profile
+          const supabase = createClient()
           const { data: full } = await supabase
             .from('direct_messages')
             .select(DM_MSG_SELECT)
@@ -167,30 +176,28 @@ export function useDMMessages(conversationId: string): UseDMMessagesReturn {
               return [...prev, mapped]
             })
           }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'direct_messages', filter: `conversation_id=eq.${conversationId}` },
-        (payload) => {
+        },
+      },
+      {
+        type: 'postgres_changes',
+        filter: { event: 'UPDATE', schema: 'public', table: 'direct_messages', filter: `conversation_id=eq.${conversationId}` },
+        handler: (payload) => {
           setMessages(prev => prev.map(m =>
             m.id === payload.new.id
               ? { ...m, content: payload.new.content as string, edited_at: payload.new.edited_at as string | null }
               : m
           ))
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'direct_messages', filter: `conversation_id=eq.${conversationId}` },
-        (payload) => {
+        },
+      },
+      {
+        type: 'postgres_changes',
+        filter: { event: 'DELETE', schema: 'public', table: 'direct_messages', filter: `conversation_id=eq.${conversationId}` },
+        handler: (payload) => {
           setMessages(prev => prev.filter(m => m.id !== payload.old.id))
-        }
-      )
-      .subscribe()
-
-    return () => { cancelled = true; supabase.removeChannel(sub) }
-  }, [conversationId])
+        },
+      },
+    ],
+  })
 
   const loadMore = useCallback(async () => {
     if (loadingRef.current || !hasMoreRef.current) return

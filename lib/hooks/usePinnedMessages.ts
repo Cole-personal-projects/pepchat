@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useRealtimeChannel } from '@/lib/realtime/useRealtimeChannel'
 import type { PinnedMessage } from '@/lib/types'
 
 const PINNED_SELECT = `
@@ -33,30 +34,32 @@ export function usePinnedMessages(channelId: string): UsePinnedMessagesReturn {
 
   useEffect(() => {
     refetch()
+  }, [refetch])
 
-    const room = supabase
-      .channel(`pinned-${channelId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'pinned_messages' },
-        ({ new: row }) => {
+  useRealtimeChannel({
+    topic: `pinned-${channelId}`,
+    enabled: Boolean(channelId),
+    deps: [channelId, refetch],
+    bindings: [
+      {
+        type: 'postgres_changes',
+        filter: { event: 'INSERT', schema: 'public', table: 'pinned_messages' },
+        handler: ({ new: row }) => {
           // No server-side filter (requires REPLICA IDENTITY FULL); filter client-side
           if ((row as any).channel_id !== channelId) return
           // Refetch to get the full record with message + profile joins
           refetch()
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'pinned_messages' },
-        ({ old: row }) => {
+        },
+      },
+      {
+        type: 'postgres_changes',
+        filter: { event: 'DELETE', schema: 'public', table: 'pinned_messages' },
+        handler: ({ old: row }) => {
           setPinnedMessages(prev => prev.filter(p => p.id !== (row as any).id))
-        }
-      )
-      .subscribe()
-
-    return () => { supabase.removeChannel(room) }
-  }, [channelId, supabase, refetch])
+        },
+      },
+    ],
+  })
 
   return { pinnedMessages, pinnedCount: pinnedMessages.length, refetch }
 }
