@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import ReactDOM from 'react-dom'
 import dynamic from 'next/dynamic'
+import { useMessageActions } from '@/components/chat/MessageActionsContext'
 import type { MessageWithProfile } from '@/lib/types'
 
 const EmojiPickerPopover = dynamic(
@@ -20,14 +21,9 @@ export interface MessageModalProps {
   canPin: boolean
   allowReactions: boolean
   allowReplies: boolean
-  onClose: () => void
-  onStartEdit: (msg: MessageWithProfile) => void
-  onDelete: (msgId: string) => void
-  onPin?: (msgId: string) => void
-  onReply: (msg: MessageWithProfile) => void
-  onEmojiSelect: (msgId: string, emoji: string) => void
-  onMarkUnread?: (msg: MessageWithProfile) => void
-  onReport?: (msgId: string) => void
+  canMarkUnread?: boolean
+  canReport?: boolean
+  closeModal: () => void
   messageLinkBasePath?: string
 }
 
@@ -39,16 +35,12 @@ export default function MessageModal({
   canPin,
   allowReactions,
   allowReplies,
-  onClose,
-  onStartEdit,
-  onDelete,
-  onPin,
-  onReply,
-  onEmojiSelect,
-  onMarkUnread,
-  onReport,
+  canMarkUnread = false,
+  canReport = false,
+  closeModal,
   messageLinkBasePath = '/channels',
 }: MessageModalProps) {
+  const actions = useMessageActions()
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [showFullPicker, setShowFullPicker] = useState(false)
 
@@ -57,7 +49,7 @@ export default function MessageModal({
   const canDelete = isOwn || canDeleteAny
 
   function handleBackdropClick(e: React.MouseEvent) {
-    if (e.target === e.currentTarget) onClose()
+    if (e.target === e.currentTarget) closeModal()
   }
 
   function handleDelete() {
@@ -65,9 +57,9 @@ export default function MessageModal({
       setConfirmingDelete(true)
       return
     }
-    onDelete(msg!.id)
+    actions.delete(msg!.id)
     setConfirmingDelete(false)
-    onClose()
+    closeModal()
   }
 
   function handleCancelDelete() {
@@ -76,7 +68,7 @@ export default function MessageModal({
 
   function handleCopyLink() {
     navigator.clipboard?.writeText(`${window.location.origin}${messageLinkBasePath}/${msg!.channel_id}#${msg!.id}`)
-    onClose()
+    closeModal()
   }
 
   const content = (
@@ -146,7 +138,7 @@ export default function MessageModal({
               <button
                 key={emoji}
                 data-testid={`quick-react-${emoji}`}
-                onClick={() => { onEmojiSelect(msg.id, emoji); onClose() }}
+                onClick={() => { actions.react(msg.id, emoji); closeModal() }}
                 style={{
                   fontSize: 24,
                   background: 'var(--bg-tertiary)',
@@ -192,14 +184,14 @@ export default function MessageModal({
             <ActionRow
               testId="modal-action-reply"
               label="Reply"
-              onClick={() => { onReply(msg); onClose() }}
+              onClick={() => { actions.reply(msg.id); closeModal() }}
             />
           )}
 
           <ActionRow
             testId="modal-action-copy"
             label="Copy Text"
-            onClick={() => { navigator.clipboard?.writeText(msg.content); onClose() }}
+            onClick={() => { navigator.clipboard?.writeText(msg.content); closeModal() }}
           />
 
           <ActionRow
@@ -212,7 +204,7 @@ export default function MessageModal({
             <ActionRow
               testId="modal-action-edit"
               label="Edit Message"
-              onClick={() => { onStartEdit(msg); onClose() }}
+              onClick={() => { actions.startEdit(msg.id); closeModal() }}
             />
           )}
 
@@ -220,23 +212,23 @@ export default function MessageModal({
             <ActionRow
               testId="modal-action-pin"
               label="Pin Message"
-              onClick={() => { onPin?.(msg.id); onClose() }}
+              onClick={() => { actions.pin(msg.id); closeModal() }}
             />
           )}
 
-          {onMarkUnread && (
+          {canMarkUnread && (
             <ActionRow
               testId="modal-action-mark-unread"
               label="Mark Unread"
-              onClick={() => { onMarkUnread(msg); onClose() }}
+              onClick={() => { actions.markUnread(msg.id); closeModal() }}
             />
           )}
 
-          {onReport && (
+          {canReport && (
             <ActionRow
               testId="modal-action-report"
               label="Report Message"
-              onClick={() => { onReport(msg.id); onClose() }}
+              onClick={() => { actions.report(msg.id); closeModal() }}
             />
           )}
 
@@ -320,9 +312,9 @@ export default function MessageModal({
           >
             <EmojiPickerPopover
               onSelect={emoji => {
-                onEmojiSelect(msg!.id, emoji)
+                actions.react(msg!.id, emoji)
                 setShowFullPicker(false)
-                onClose()
+                closeModal()
               }}
               onClose={() => setShowFullPicker(false)}
             />

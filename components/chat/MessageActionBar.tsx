@@ -1,6 +1,7 @@
 'use client'
 
 import ReactionPicker from '@/components/chat/ReactionPicker'
+import { useMessageActions } from '@/components/chat/MessageActionsContext'
 import type { MessageWithProfile } from '@/lib/types'
 
 export interface MessageActionBarProps {
@@ -13,15 +14,7 @@ export interface MessageActionBarProps {
   atReactionLimit: boolean
   currentUserId?: string
   pickerOpenFor: string | null
-  onPickerToggle: (msgId: string) => void
-  onPickerClose: () => void
-  onEmojiSelect: (msgId: string, emoji: string) => void
-  onReply: (msg: MessageWithProfile) => void
-  onStartEdit: (msg: MessageWithProfile) => void
-  onDelete: (msgId: string) => void
-  onPin?: (msgId: string) => void
   isSaved?: boolean
-  onToggleSaved?: (msg: MessageWithProfile) => void
 }
 
 export default function MessageActionBar({
@@ -34,16 +27,9 @@ export default function MessageActionBar({
   atReactionLimit,
   currentUserId = '',
   pickerOpenFor,
-  onPickerToggle,
-  onPickerClose,
-  onEmojiSelect,
-  onReply,
-  onStartEdit,
-  onDelete,
-  onPin,
   isSaved = false,
-  onToggleSaved,
 }: MessageActionBarProps) {
+  const actions = useMessageActions()
   const canDelete = isOwn || canDeleteAny
 
   return (
@@ -65,7 +51,7 @@ export default function MessageActionBar({
         <div style={{ position: 'relative' }}>
           <button
             data-testid="action-react"
-            onClick={() => onPickerToggle(msg.id)}
+            onClick={() => actions.togglePicker(msg.id)}
             title={atReactionLimit ? 'Max 20 emoji per message' : 'Add reaction'}
             disabled={atReactionLimit && !(msg.reactions ?? []).some(r => r.user_id === currentUserId)}
             className="icon-btn disabled:opacity-30 disabled:cursor-default"
@@ -77,8 +63,8 @@ export default function MessageActionBar({
           </button>
           {pickerOpenFor === msg.id && (
             <ReactionPicker
-              onSelect={emoji => onEmojiSelect(msg.id, emoji)}
-              onClose={onPickerClose}
+              onSelect={emoji => actions.react(msg.id, emoji)}
+              onClose={actions.closePicker}
             />
           )}
         </div>
@@ -87,7 +73,7 @@ export default function MessageActionBar({
       {allowReplies && (
         <button
           data-testid="action-reply"
-          onClick={() => onReply(msg)}
+          onClick={() => actions.reply(msg.id)}
           title="Reply"
           className="icon-btn"
           style={{ padding: 6 }}
@@ -101,7 +87,7 @@ export default function MessageActionBar({
       {isOwn && (
         <button
           data-testid="action-edit"
-          onClick={e => { e.stopPropagation(); onStartEdit(msg) }}
+          onClick={e => { e.stopPropagation(); actions.startEdit(msg.id) }}
           title="Edit"
           className="icon-btn"
           style={{ padding: 6 }}
@@ -115,7 +101,7 @@ export default function MessageActionBar({
       {canPin && (
         <button
           data-testid="action-pin"
-          onClick={() => onPin?.(msg.id)}
+          onClick={() => actions.pin(msg.id)}
           title="Pin message"
           className="icon-btn"
           style={{ padding: 6 }}
@@ -127,24 +113,22 @@ export default function MessageActionBar({
         </button>
       )}
 
-      {onToggleSaved && (
-        <button
-          data-testid="action-save"
-          onClick={() => onToggleSaved(msg)}
-          title={isSaved ? 'Remove saved message' : 'Save message'}
-          className="icon-btn"
-          style={{ padding: 6, color: isSaved ? 'var(--accent)' : undefined }}
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill={isSaved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" />
-          </svg>
-        </button>
-      )}
+      <button
+        data-testid="action-save"
+        onClick={() => actions.toggleSaved(msg.id)}
+        title={isSaved ? 'Remove saved message' : 'Save message'}
+        className="icon-btn"
+        style={{ padding: 6, color: isSaved ? 'var(--accent)' : undefined }}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill={isSaved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" />
+        </svg>
+      </button>
 
       {canDelete && (
         <button
           data-testid="action-delete"
-          onClick={() => onDelete(msg.id)}
+          onClick={() => { if (confirm('Delete this message?')) actions.delete(msg.id) }}
           title="Delete"
           className="icon-btn hover:text-[var(--danger)] hover:bg-[var(--danger)]/10"
           style={{ padding: 6 }}

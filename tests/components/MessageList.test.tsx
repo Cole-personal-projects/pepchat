@@ -4,41 +4,46 @@ import MessageList from '@/components/chat/MessageList'
 import type { MessageWithProfile } from '@/lib/types'
 
 // Minimal Message mock — emits the same edit events as the real component
-vi.mock('@/components/chat/Message', () => ({
-  default: ({ msg, editingId, editContent, onStartEdit, onSubmitEdit, onCancelEdit, onEditContentChange, onDelete, onOpenActions, onOpenContextMenu, onJumpToMessage }: any) => {
-    const isEditing = editingId === msg.id
-    return (
-      <div data-testid={`msg-${msg.id}`}>
-        <span data-testid={`content-${msg.id}`}>{msg.content}</span>
-        {msg.replied_to && (
-          <button data-testid={`reply-quote-${msg.id}`} onClick={() => onJumpToMessage?.(msg.replied_to.id)}>
-            Reply to {msg.replied_to.content}
-          </button>
-        )}
-        {isEditing ? (
-          <div>
-            <textarea
-              data-testid="edit-textarea"
-              value={editContent}
-              onChange={e => onEditContentChange(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSubmitEdit(msg.id) }
-                if (e.key === 'Escape') onCancelEdit()
-              }}
-            />
-          </div>
-        ) : (
-          <>
-            <button data-testid={`edit-btn-${msg.id}`} onClick={() => onStartEdit(msg)}>Edit</button>
-            <button data-testid={`delete-btn-${msg.id}`} onClick={() => onDelete(msg.id)}>Delete</button>
-            <button data-testid={`actions-btn-${msg.id}`} onClick={() => onOpenActions?.(msg)}>Actions</button>
-            <button data-testid={`context-btn-${msg.id}`} onClick={() => onOpenContextMenu?.(msg, 100, 100)}>Context</button>
-          </>
-        )}
-      </div>
-    )
-  },
-}))
+vi.mock('@/components/chat/Message', async () => {
+  const { useMessageActions } = await import('@/components/chat/MessageActionsContext')
+
+  return {
+    default: ({ msg, editingId, editContent }: any) => {
+      const actions = useMessageActions()
+      const isEditing = editingId === msg.id
+      return (
+        <div data-testid={`msg-${msg.id}`} data-message-id={msg.id}>
+          <span data-testid={`content-${msg.id}`}>{msg.content}</span>
+          {msg.replied_to && (
+            <button data-testid={`reply-quote-${msg.id}`} onClick={() => actions.jumpToMessage(msg.replied_to.id)}>
+              Reply to {msg.replied_to.content}
+            </button>
+          )}
+          {isEditing ? (
+            <div>
+              <textarea
+                data-testid="edit-textarea"
+                value={editContent}
+                onChange={e => actions.changeEditContent(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); actions.submitEdit(msg.id, editContent) }
+                  if (e.key === 'Escape') actions.cancelEdit()
+                }}
+              />
+            </div>
+          ) : (
+            <>
+              <button data-testid={`edit-btn-${msg.id}`} onClick={() => actions.startEdit(msg.id)}>Edit</button>
+              <button data-testid={`delete-btn-${msg.id}`} onClick={() => actions.delete(msg.id)}>Delete</button>
+              <button data-testid={`actions-btn-${msg.id}`} onClick={() => actions.openActions(msg.id)}>Actions</button>
+              <button data-testid={`context-btn-${msg.id}`} onClick={(event) => actions.openContextMenu(msg.id, event)}>Context</button>
+            </>
+          )}
+        </div>
+      )
+    },
+  }
+})
 
 vi.mock('@/components/chat/SystemMessage', () => ({
   default: ({ msg, onOpenPinnedPanel }: any) => (

@@ -1,11 +1,13 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render as rtlRender, screen, fireEvent } from '@testing-library/react'
 import MessageModal from '@/components/chat/MessageModal'
+import { ChannelMessageActionsProvider, type MessageActions } from '@/components/chat/MessageActionsContext'
 import type { MessageWithProfile } from '@/lib/types'
+import type React from 'react'
 
 vi.mock('next/dynamic', () => ({
   default: (_fn: unknown, _opts?: unknown) => {
-    const MockPicker = ({ onSelect }: { onSelect: (emoji: string) => void; onClose: () => void }) => (
+    const MockPicker = ({ onSelect }: { onSelect: (emoji: string) => void; closeModal: () => void }) => (
       <button data-testid="mock-full-picker-emoji" onClick={() => onSelect('🔥')}>🔥</button>
     )
     MockPicker.displayName = 'MockEmojiPickerPopover'
@@ -26,6 +28,27 @@ const MSG: MessageWithProfile = {
   reactions: [],
 }
 
+const BASE_ACTIONS: MessageActions = {
+  startEdit: vi.fn(),
+  cancelEdit: vi.fn(),
+  changeEditContent: vi.fn(),
+  submitEdit: vi.fn(),
+  delete: vi.fn(),
+  react: vi.fn(),
+  reply: vi.fn(),
+  jumpToMessage: vi.fn(),
+  pin: vi.fn(),
+  toggleSaved: vi.fn(),
+  openProfile: vi.fn(),
+  openActions: vi.fn(),
+  openContextMenu: vi.fn(),
+  togglePicker: vi.fn(),
+  closePicker: vi.fn(),
+  markUnread: vi.fn(),
+  report: vi.fn(),
+  muteUser: vi.fn(),
+}
+
 const BASE = {
   open: true,
   msg: MSG,
@@ -34,12 +57,15 @@ const BASE = {
   canPin: false,
   allowReactions: true,
   allowReplies: true,
-  onClose: vi.fn(),
-  onStartEdit: vi.fn(),
-  onDelete: vi.fn(),
-  onPin: vi.fn(),
-  onReply: vi.fn(),
-  onEmojiSelect: vi.fn(),
+  closeModal: vi.fn(),
+}
+
+function render(ui: React.ReactElement, actions: Partial<MessageActions> = {}) {
+  return rtlRender(
+    <ChannelMessageActionsProvider value={{ ...BASE_ACTIONS, ...actions }}>
+      {ui}
+    </ChannelMessageActionsProvider>,
+  )
 }
 
 describe('MessageModal — rendering', () => {
@@ -77,7 +103,7 @@ describe('MessageModal — quick reactions', () => {
 
   it('calls onEmojiSelect with msgId and emoji when quick reaction clicked', () => {
     const onEmojiSelect = vi.fn()
-    render(<MessageModal {...BASE} onEmojiSelect={onEmojiSelect} />)
+    render(<MessageModal {...BASE} />, { react: onEmojiSelect })
     const firstBtn = screen.getAllByTestId(/^quick-react-/)[0]
     fireEvent.click(firstBtn)
     expect(onEmojiSelect).toHaveBeenCalledWith('msg-1', expect.any(String))
@@ -85,7 +111,7 @@ describe('MessageModal — quick reactions', () => {
 
   it('calls onClose after quick reaction selected', () => {
     const onClose = vi.fn()
-    render(<MessageModal {...BASE} onClose={onClose} />)
+    render(<MessageModal {...BASE} closeModal={onClose} />)
     fireEvent.click(screen.getAllByTestId(/^quick-react-/)[0])
     expect(onClose).toHaveBeenCalled()
   })
@@ -148,7 +174,7 @@ describe('MessageModal — action rows', () => {
   })
 
   it('renders Mark Unread action when onMarkUnread is provided', () => {
-    render(<MessageModal {...BASE} onMarkUnread={vi.fn()} />)
+    render(<MessageModal {...BASE} canMarkUnread />)
     expect(screen.getByTestId('modal-action-mark-unread')).toBeInTheDocument()
   })
 
@@ -162,25 +188,25 @@ describe('MessageModal — callbacks', () => {
   it('calls onReply and onClose when Reply clicked', () => {
     const onReply = vi.fn()
     const onClose = vi.fn()
-    render(<MessageModal {...BASE} onReply={onReply} onClose={onClose} />)
+    render(<MessageModal {...BASE} closeModal={onClose} />, { reply: onReply })
     fireEvent.click(screen.getByTestId('modal-action-reply'))
-    expect(onReply).toHaveBeenCalledWith(MSG)
+    expect(onReply).toHaveBeenCalledWith('msg-1')
     expect(onClose).toHaveBeenCalled()
   })
 
   it('calls onStartEdit and onClose when Edit clicked', () => {
     const onStartEdit = vi.fn()
     const onClose = vi.fn()
-    render(<MessageModal {...BASE} isOwn={true} onStartEdit={onStartEdit} onClose={onClose} />)
+    render(<MessageModal {...BASE} isOwn={true} closeModal={onClose} />, { startEdit: onStartEdit })
     fireEvent.click(screen.getByTestId('modal-action-edit'))
-    expect(onStartEdit).toHaveBeenCalledWith(MSG)
+    expect(onStartEdit).toHaveBeenCalledWith('msg-1')
     expect(onClose).toHaveBeenCalled()
   })
 
   it('calls onPin and onClose when Pin clicked', () => {
     const onPin = vi.fn()
     const onClose = vi.fn()
-    render(<MessageModal {...BASE} canPin={true} onPin={onPin} onClose={onClose} />)
+    render(<MessageModal {...BASE} canPin={true} closeModal={onClose} />, { pin: onPin })
     fireEvent.click(screen.getByTestId('modal-action-pin'))
     expect(onPin).toHaveBeenCalledWith('msg-1')
     expect(onClose).toHaveBeenCalled()
@@ -191,7 +217,7 @@ describe('MessageModal — callbacks', () => {
     const onClose = vi.fn()
     Object.assign(navigator, { clipboard: { writeText } })
 
-    render(<MessageModal {...BASE} onClose={onClose} />)
+    render(<MessageModal {...BASE} closeModal={onClose} />)
 
     fireEvent.click(screen.getByTestId('modal-action-copy-link'))
 
@@ -213,17 +239,17 @@ describe('MessageModal — callbacks', () => {
   it('calls onMarkUnread and onClose when Mark Unread clicked', () => {
     const onMarkUnread = vi.fn()
     const onClose = vi.fn()
-    render(<MessageModal {...BASE} onMarkUnread={onMarkUnread} onClose={onClose} />)
+    render(<MessageModal {...BASE} canMarkUnread closeModal={onClose} />, { markUnread: onMarkUnread })
 
     fireEvent.click(screen.getByTestId('modal-action-mark-unread'))
 
-    expect(onMarkUnread).toHaveBeenCalledWith(MSG)
+    expect(onMarkUnread).toHaveBeenCalledWith('msg-1')
     expect(onClose).toHaveBeenCalled()
   })
 
   it('calls onClose when backdrop clicked', () => {
     const onClose = vi.fn()
-    render(<MessageModal {...BASE} onClose={onClose} />)
+    render(<MessageModal {...BASE} closeModal={onClose} />)
     fireEvent.click(screen.getByTestId('modal-backdrop'))
     expect(onClose).toHaveBeenCalled()
   })
@@ -239,7 +265,7 @@ describe('MessageModal — delete confirmation', () => {
   it('calls onDelete and onClose when deletion confirmed', () => {
     const onDelete = vi.fn()
     const onClose = vi.fn()
-    render(<MessageModal {...BASE} isOwn={true} onDelete={onDelete} onClose={onClose} />)
+    render(<MessageModal {...BASE} isOwn={true} closeModal={onClose} />, { delete: onDelete })
     fireEvent.click(screen.getByTestId('modal-action-delete'))
     fireEvent.click(screen.getByTestId('modal-delete-confirm'))
     expect(onDelete).toHaveBeenCalledWith('msg-1')
@@ -248,7 +274,7 @@ describe('MessageModal — delete confirmation', () => {
 
   it('does not call onDelete when deletion cancelled', () => {
     const onDelete = vi.fn()
-    render(<MessageModal {...BASE} isOwn={true} onDelete={onDelete} />)
+    render(<MessageModal {...BASE} isOwn={true} />, { delete: onDelete })
     fireEvent.click(screen.getByTestId('modal-action-delete'))
     fireEvent.click(screen.getByTestId('modal-delete-cancel'))
     expect(onDelete).not.toHaveBeenCalled()
@@ -282,7 +308,7 @@ describe('MessageModal — full emoji picker', () => {
 
   it('selecting emoji from full picker calls onEmojiSelect', () => {
     const onEmojiSelect = vi.fn()
-    render(<MessageModal {...BASE} onEmojiSelect={onEmojiSelect} />)
+    render(<MessageModal {...BASE} />, { react: onEmojiSelect })
     fireEvent.click(screen.getByTestId('quick-react-more'))
     fireEvent.click(screen.getByTestId('mock-full-picker-emoji'))
     expect(onEmojiSelect).toHaveBeenCalledWith('msg-1', '🔥')
@@ -290,7 +316,7 @@ describe('MessageModal — full emoji picker', () => {
 
   it('selecting emoji from full picker closes modal', () => {
     const onClose = vi.fn()
-    render(<MessageModal {...BASE} onClose={onClose} />)
+    render(<MessageModal {...BASE} closeModal={onClose} />)
     fireEvent.click(screen.getByTestId('quick-react-more'))
     fireEvent.click(screen.getByTestId('mock-full-picker-emoji'))
     expect(onClose).toHaveBeenCalled()
@@ -299,7 +325,7 @@ describe('MessageModal — full emoji picker', () => {
 
 describe('MessageModal — report', () => {
   it('shows Report Message action when onReport is provided', () => {
-    render(<MessageModal {...BASE} onReport={vi.fn()} />)
+    render(<MessageModal {...BASE} canReport />)
     expect(screen.getByTestId('modal-action-report')).toBeInTheDocument()
   })
 
@@ -311,7 +337,7 @@ describe('MessageModal — report', () => {
   it('calls onReport with message id and onClose when Report clicked', () => {
     const onReport = vi.fn()
     const onClose = vi.fn()
-    render(<MessageModal {...BASE} onReport={onReport} onClose={onClose} />)
+    render(<MessageModal {...BASE} canReport closeModal={onClose} />, { report: onReport })
     fireEvent.click(screen.getByTestId('modal-action-report'))
     expect(onReport).toHaveBeenCalledWith('msg-1')
     expect(onClose).toHaveBeenCalled()
