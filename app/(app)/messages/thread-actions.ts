@@ -18,6 +18,10 @@ type FetchThreadRepliesInput = {
   limit?: number
 }
 
+type FetchThreadRootInput = {
+  rootId: string
+}
+
 type ThreadRootRow = {
   id: string
   channel_id: string
@@ -139,6 +143,25 @@ export const sendThreadReply = withAuth(
     }
 
     return { ok: true, message: result.data }
+  },
+  { unauthenticated: () => ({ error: 'Not authenticated.' }) }
+)
+
+export const fetchThreadRoot = withAuth(
+  async (ctx, input: FetchThreadRootInput) => {
+    const rootId = input.rootId?.trim()
+    if (!rootId) return { error: 'Missing thread root.' }
+
+    const { data: root, error } = await ctx.supabase
+      .from('messages')
+      .select(THREAD_MESSAGE_SELECT)
+      .eq('id', rootId)
+      .is('thread_root_id', null)
+      .maybeSingle()
+
+    if (error) return { error: error.message }
+    if (!root) return { error: 'Thread root not found.' }
+    return { ok: true, message: root as MessageWithProfile }
   },
   { unauthenticated: () => ({ error: 'Not authenticated.' }) }
 )

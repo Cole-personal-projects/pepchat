@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { fetchThreadReplies, markThreadRead } from '@/app/(app)/messages/thread-actions'
 import Message from '@/components/chat/Message'
+import { ChannelMessageActionsProvider, type MessageActions } from '@/components/chat/MessageActionsContext'
 import MessageInput from '@/components/chat/MessageInput'
 import { useThreadMessages } from '@/lib/hooks/useThreadMessages'
 import type { MessageWithProfile, Profile } from '@/lib/types'
@@ -113,8 +114,30 @@ export default function ThreadPanel({
     showThreadChip: false,
   }
 
+  const threadMessageActions = useMemo<MessageActions>(() => ({
+    startEdit: () => {},
+    cancelEdit: () => {},
+    changeEditContent: () => {},
+    submitEdit: async () => {},
+    delete: async () => {},
+    react: async () => {},
+    reply: () => {},
+    openThread: () => {},
+    jumpToMessage: () => {},
+    pin: async () => {},
+    toggleSaved: () => {},
+    openProfile: () => {},
+    openActions: () => {},
+    openContextMenu: () => {},
+    togglePicker: () => {},
+    closePicker: () => {},
+    markUnread: () => {},
+    report: () => {},
+    muteUser: () => {},
+  }), [])
+
   return (
-    <>
+    <ChannelMessageActionsProvider value={threadMessageActions}>
       <div
         data-testid="thread-panel-backdrop"
         className="fixed inset-0 z-40 bg-black/50 lg:hidden modal-backdrop-enter"
@@ -240,6 +263,6 @@ export default function ThreadPanel({
           />
         </div>
       </aside>
-    </>
+    </ChannelMessageActionsProvider>
   )
 }

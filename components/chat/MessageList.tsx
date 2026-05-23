@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import dynamic from 'next/dynamic'
 import { editMessage, deleteMessage, searchMessages } from '@/app/(app)/messages/actions'
+import { fetchThreadRoot } from '@/app/(app)/messages/thread-actions'
 import { reportMessage } from '@/app/admin/actions'
 import Message from '@/components/chat/Message'
 import MessageModal from '@/components/chat/MessageModal'
@@ -152,6 +153,7 @@ export default function MessageList({
   const [localLastReadAt, setLocalLastReadAt] = useState(initialLastReadAt)
   const [reportedMessageIds, setReportedMessageIds] = useState(() => new Set<string>())
   const [openThreadRootId, setOpenThreadRootId] = useState<string | null>(null)
+  const [loadedThreadRoot, setLoadedThreadRoot] = useState<MessageWithProfile | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -516,6 +518,31 @@ export default function MessageList({
     return messages.find(m => m.id === messageId) ?? null
   }
 
+  useEffect(() => {
+    if (!openThreadRootId) {
+      setLoadedThreadRoot(null)
+      return
+    }
+    if (findMessageById(openThreadRootId)) {
+      setLoadedThreadRoot(null)
+      return
+    }
+
+    let cancelled = false
+    fetchThreadRoot({ rootId: openThreadRootId }).then(result => {
+      if (cancelled) return
+      if ('ok' in result && result.ok) {
+        setLoadedThreadRoot(result.message)
+        return
+      }
+      setLoadedThreadRoot(null)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [messages, openThreadRootId])
+
   function startEdit(msg: MessageWithProfile) {
     setEditingId(msg.id)
     setEditContent(msg.content)
@@ -712,7 +739,10 @@ export default function MessageList({
             : `${activeSearchResults.length} ${activeSearchResults.length === 1 ? 'result' : 'results'}`
       )
     : ''
-  const openThreadRoot = openThreadRootId ? findMessageById(openThreadRootId) : null
+  const visibleOpenThreadRoot = openThreadRootId ? findMessageById(openThreadRootId) : null
+  const openThreadRoot = openThreadRootId
+    ? visibleOpenThreadRoot ?? (loadedThreadRoot?.id === openThreadRootId ? loadedThreadRoot : null)
+    : null
   return (
     <ChannelMessageActionsProvider value={messageActions}>
       <div style={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column', background: 'var(--bg-chat)' }}>
