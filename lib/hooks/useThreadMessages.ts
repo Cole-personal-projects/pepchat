@@ -1,13 +1,21 @@
 'use client'
 
 import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react'
+import { MESSAGE_SELECT } from '@/lib/queries'
 import { useRealtimeChannel } from '@/lib/realtime/useRealtimeChannel'
+import { createClient } from '@/lib/supabase/client'
 import type { MessageWithProfile } from '@/lib/types'
 
 type ThreadActivityPayload = {
   rootId: string
   replyCount: number
   lastReplyAt: string
+}
+
+type NewThreadReplyPayload = {
+  messageId?: string
+  rootId?: string
+  channelId?: string
 }
 
 const EMPTY_REPLIES: MessageWithProfile[] = []
@@ -51,9 +59,21 @@ export function useThreadMessages(
       {
         type: 'broadcast',
         filter: { event: 'new_thread_reply' },
-        handler: ({ payload }) => {
-          const reply = payload?.message as MessageWithProfile | undefined
-          if (!reply || reply.thread_root_id !== rootId) return
+        handler: async ({ payload }) => {
+          const replyPayload = payload as NewThreadReplyPayload | undefined
+          if (!replyPayload?.messageId || replyPayload.rootId !== rootId) return
+
+          const supabase = createClient()
+          const { data, error } = await supabase
+            .from('messages')
+            .select(MESSAGE_SELECT)
+            .eq('id', replyPayload.messageId)
+            .eq('thread_root_id', rootId)
+            .single()
+
+          if (error || !data) return
+          const reply = data as MessageWithProfile
+          if (reply.thread_root_id !== rootId) return
           addReply(reply)
         },
       },
@@ -98,6 +118,7 @@ export function useThreadMessages(
   const { channelRef: activityChannelRef } = useRealtimeChannel({
     topic: `messages-${channelId ?? 'idle'}`,
     enabled: Boolean(channelId && rootId),
+    options: { config: { private: true } },
     deps: [channelId, rootId],
     bindings: [],
   })
@@ -106,7 +127,7 @@ export function useThreadMessages(
     threadChannelRef.current?.send({
       type: 'broadcast',
       event: 'new_thread_reply',
-      payload: { message: reply },
+      payload: { messageId: reply.id, rootId: reply.thread_root_id, channelId: reply.channel_id },
     })
   }, [])
 

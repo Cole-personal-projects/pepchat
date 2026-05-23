@@ -25,4 +25,15 @@ describe('Threads V1 migration safety', () => {
     expect(migration).toContain('SECURITY DEFINER\nSET search_path = public, auth')
     expect(migration).toContain('SECURITY DEFINER\nSET search_path = public')
   })
+
+  it('protects private realtime broadcasts with the same channel visibility checks as message RLS', () => {
+    expect(migration).toContain('CREATE OR REPLACE FUNCTION can_read_channel_messages(p_channel_id uuid)')
+    expect(migration).toContain('CREATE OR REPLACE FUNCTION can_read_thread_messages(p_thread_root_id uuid)')
+    expect(migration).toContain('ON realtime.messages')
+    expect(migration).toContain('FOR SELECT TO authenticated')
+    expect(migration).toContain('FOR INSERT TO authenticated')
+    expect(migration).toContain("realtime.topic() ~ '^messages-[0-9a-fA-F-]{36}$'")
+    expect(migration).toContain("realtime.topic() ~ '^thread-[0-9a-fA-F-]{36}$'")
+    expect(migration).toContain('public.can_read_channel_messages')
+  })
 })

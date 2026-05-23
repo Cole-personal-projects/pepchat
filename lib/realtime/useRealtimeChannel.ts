@@ -26,6 +26,19 @@ export type UseRealtimeChannelResult = {
   status: RealtimeStatus | null
 }
 
+function withRealtimeAuthorization(options: RealtimeChannelOptions | undefined, usesBroadcast: boolean): RealtimeChannelOptions | undefined {
+  if (options?.config?.private !== undefined) return options
+  if (!usesBroadcast) return options
+
+  return {
+    ...options,
+    config: {
+      ...options?.config,
+      private: true,
+    },
+  }
+}
+
 export function useRealtimeChannel(config: UseRealtimeChannelConfig): UseRealtimeChannelResult {
   const channelRef = useRef<RealtimeChannel | null>(null)
   const [status, setStatus] = useState<RealtimeStatus | null>(null)
@@ -38,8 +51,12 @@ export function useRealtimeChannel(config: UseRealtimeChannelConfig): UseRealtim
     }
 
     const supabase = createClient()
-    const channel = config.options
-      ? supabase.channel(config.topic, config.options)
+    const channelOptions = withRealtimeAuthorization(
+      config.options,
+      config.bindings.some(binding => binding.type === 'broadcast'),
+    )
+    const channel = channelOptions
+      ? supabase.channel(config.topic, channelOptions)
       : supabase.channel(config.topic)
 
     let boundChannel = channel
