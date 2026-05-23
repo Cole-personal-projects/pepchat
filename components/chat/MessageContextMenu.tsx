@@ -161,6 +161,12 @@ export default function MessageContextMenu({
             </MenuItem>
           )}
 
+          {allowReplies && !message.thread_root_id && (
+            <MenuItem label="Reply in Thread" onClick={() => { actions.openThread(message.id); closeMenu() }}>
+              <ThreadIcon />
+            </MenuItem>
+          )}
+
           <MenuItem label={copyToast ? 'Copied!' : 'Copy Text'} onClick={handleCopyText}>
             <ClipboardIcon />
           </MenuItem>
@@ -333,6 +339,9 @@ function MenuItem({
 
 function ReplyIcon() {
   return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M9 17l-5-5 5-5M4 12h11a5 5 0 0 1 0 10h-2" /></svg>
+}
+function ThreadIcon() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" /></svg>
 }
 function ClipboardIcon() {
   return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="9" y="2" width="6" height="4" rx="1" /><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" /></svg>

@@ -10,6 +10,7 @@ export type MessageActions = {
   delete: (messageId: string) => Promise<void>
   react: (messageId: string, emoji: string) => Promise<void>
   reply: (messageId: string) => void
+  openThread: (messageId: string) => void
   jumpToMessage: (messageId: string) => void
   pin: (messageId: string) => Promise<void>
   toggleSaved: (messageId: string) => void

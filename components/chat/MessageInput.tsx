@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { sendMessage } from '@/app/(app)/messages/actions'
+import { sendThreadReply } from '@/app/(app)/messages/thread-actions'
 import { useImageUpload } from '@/lib/hooks/useImageUpload'
 import { useMentionCandidates } from '@/lib/hooks/useMentionCandidates'
 import type { MessageWithProfile, Profile, GifAttachment, Attachment } from '@/lib/types'
@@ -26,6 +27,8 @@ interface MessageInputProps {
   placeholder?: string
   draftStorageKey?: string
   allowVideoUpload?: boolean
+  mode?: 'channel' | 'thread'
+  threadRootId?: string
   /** When provided, called instead of the default sendMessage server action. */
   sendAction?: (content: string, replyToId: string | null, attachments: Attachment[]) => Promise<{ error: string } | { ok: true; message?: MessageWithProfile }>
 }
@@ -50,6 +53,8 @@ export default function MessageInput({
   placeholder,
   draftStorageKey: providedDraftStorageKey,
   allowVideoUpload = true,
+  mode = 'channel',
+  threadRootId,
   sendAction,
 }: MessageInputProps) {
   const draftStorageKey = providedDraftStorageKey ?? `sidebar:draft:${channelId}`
@@ -141,9 +146,7 @@ export default function MessageInput({
       source: 'klipy',
     }
     startTransition(async () => {
-      const result = await sendSafely(() => sendAction
-        ? sendAction('', replyingTo?.id ?? null, [gifAttachment])
-        : sendMessage(channelId, '', replyingTo?.id, [gifAttachment]))
+      const result = await sendSafely(() => sendCurrentMessage('', [gifAttachment]))
       if ('error' in result) {
         setError(result.error ?? '')
       } else {
@@ -241,9 +244,7 @@ export default function MessageInput({
     if (!hasContent || isPending || hasUploading) return
     setError('')
     startTransition(async () => {
-      const result = await sendSafely(() => sendAction
-        ? sendAction(trimmed, replyingTo?.id ?? null, attachments)
-        : sendMessage(channelId, trimmed, replyingTo?.id, attachments))
+      const result = await sendSafely(() => sendCurrentMessage(trimmed, attachments))
       if ('error' in result) {
         setError(result.error ?? '')
       } else {
@@ -272,10 +273,19 @@ export default function MessageInput({
     }
   }
 
+  function sendCurrentMessage(messageContent: string, messageAttachments: Attachment[]) {
+    if (sendAction) return sendAction(messageContent, replyingTo?.id ?? null, messageAttachments)
+    if (mode === 'thread') {
+      if (!threadRootId) return Promise.resolve({ error: 'Missing thread root.' })
+      return sendThreadReply({ rootId: threadRootId, content: messageContent, attachments: messageAttachments })
+    }
+    return sendMessage(channelId, messageContent, replyingTo?.id, messageAttachments)
+  }
+
   const canSend = (content.trim().length > 0 || attachments.length > 0) && !isPending && !hasUploading
   const inputPlaceholder = replyingTo
     ? `Reply to @${replyingTo.profiles?.username}…`
-    : (placeholder ?? `Message #${channelName}`)
+    : (placeholder ?? (mode === 'thread' ? 'Reply…' : `Message #${channelName}`))
   const activeMention = findActiveMention(content)
   const activeMentionSuggestions = activeMention
     ? mentionUsers

@@ -70,6 +70,7 @@ export default function ChannelShell({
 
   const [replyingTo, setReplyingTo] = useState<MessageWithProfile | null>(null)
   const [pinnedPanelOpen, setPinnedPanelOpen] = useState(false)
+  const [threadPanelOpen, setThreadPanelOpen] = useState(false)
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null)
 
   const canPin = userRole ? PERMISSIONS.canPinMessages(userRole) : false
@@ -121,6 +122,7 @@ export default function ChannelShell({
 
   const handleJump = useCallback((messageId: string) => {
     setPinnedPanelOpen(false)
+    setThreadPanelOpen(false)
     setHighlightedMessageId(messageId)
     // Reset after animation so the same message can be jumped to again
     setTimeout(() => setHighlightedMessageId(null), 1700)
@@ -160,7 +162,7 @@ export default function ChannelShell({
           channelName={channelName}
           channelTopic={channelTopic}
           pinnedCount={pinnedCount}
-          pinnedPanelOpen={pinnedPanelOpen}
+          pinnedPanelOpen={pinnedPanelOpen && !threadPanelOpen}
           onTogglePinnedPanel={() => setPinnedPanelOpen(o => !o)}
         />
         <MessageList
@@ -169,6 +171,7 @@ export default function ChannelShell({
           loadingMore={loadingMore}
           currentUserId={userId ?? profile.id}
           currentUsername={profile.username}
+          profile={profile}
           groupId={groupId}
           channelId={channelId}
           channelName={channelName}
@@ -181,6 +184,7 @@ export default function ChannelShell({
           onEditSuccess={updateMessageContent}
           onDeleteSuccess={removeMessage}
           onOpenPinnedPanel={() => setPinnedPanelOpen(true)}
+          onThreadPanelOpenChange={setThreadPanelOpen}
           highlightedMessageId={highlightedMessageId}
           messagesReadyForHashFallback={true}
           initialLastReadAt={initialLastReadAt}
@@ -211,11 +215,13 @@ export default function ChannelShell({
       </div>
 
       {/* Right panel: online members */}
-      <PresencePanel onlineUsers={onlineUsers} currentStatus={status} onStatusChange={setStatus} />
+      {!threadPanelOpen && !pinnedPanelOpen && (
+        <PresencePanel onlineUsers={onlineUsers} currentStatus={status} onStatusChange={setStatus} />
+      )}
 
       {/* Right panel: pinned messages */}
       <PinnedMessagesPanel
-        open={pinnedPanelOpen}
+        open={pinnedPanelOpen && !threadPanelOpen}
         pinnedMessages={pinnedMessages}
         canPin={canPin}
         onClose={() => setPinnedPanelOpen(false)}

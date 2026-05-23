@@ -188,6 +188,14 @@ export default function MessageModal({
             />
           )}
 
+          {allowReplies && !msg.thread_root_id && (
+            <ActionRow
+              testId="modal-action-reply-thread"
+              label="Reply in Thread"
+              onClick={() => { actions.openThread(msg.id); closeModal() }}
+            />
+          )}
+
           <ActionRow
             testId="modal-action-copy"
             label="Copy Text"
