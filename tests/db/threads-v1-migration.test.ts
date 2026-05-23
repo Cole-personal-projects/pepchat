@@ -60,4 +60,18 @@ describe('Threads V1 migration safety', () => {
     expect(mirrorMigration).toContain("SET content = '[deleted]', edited_at = now()")
     expect(mirrorMigration).not.toContain('deleted_at')
   })
+
+  it('tombstones source-reply mirrors before the FK can clear mirrored_from_thread_id', () => {
+    expect(migration).toContain('mirrored_from_thread_id uuid REFERENCES messages(id) ON DELETE SET NULL')
+    expect(mirrorMigration).toContain('BEFORE UPDATE OF content OR DELETE ON public.messages')
+    expect(mirrorMigration).toContain('mirror.mirrored_from_thread_id = OLD.id')
+
+    const syncTriggerIndex = mirrorMigration.indexOf('CREATE TRIGGER trg_sync_thread_mirror')
+    const beforeDeleteIndex = mirrorMigration.indexOf('BEFORE UPDATE OF content OR DELETE ON public.messages')
+    const functionIndex = mirrorMigration.indexOf("SET content = '[deleted]', edited_at = now()")
+
+    expect(syncTriggerIndex).toBeGreaterThan(-1)
+    expect(beforeDeleteIndex).toBeGreaterThan(syncTriggerIndex)
+    expect(functionIndex).toBeGreaterThan(-1)
+  })
 })

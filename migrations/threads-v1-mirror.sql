@@ -67,9 +67,9 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  -- Only source thread replies drive mirrors. Mirror rows themselves have
-  -- thread_root_id IS NULL and mirrored_from_thread_id IS NOT NULL, so they
-  -- cannot recursively trigger source->mirror sync.
+  -- Run before PostgreSQL's ON DELETE SET NULL FK action on mirror rows can
+  -- clear mirrored_from_thread_id. The delete branch must still be able to
+  -- match mirror.mirrored_from_thread_id = OLD.id to tombstone stale content.
   IF TG_OP = 'UPDATE' THEN
     IF NEW.thread_root_id IS NOT NULL
        AND NEW.mirrored_from_thread_id IS NULL
@@ -101,7 +101,7 @@ $$;
 
 DROP TRIGGER IF EXISTS trg_sync_thread_mirror ON public.messages;
 CREATE TRIGGER trg_sync_thread_mirror
-  AFTER UPDATE OF content OR DELETE ON public.messages
+  BEFORE UPDATE OF content OR DELETE ON public.messages
   FOR EACH ROW
   EXECUTE FUNCTION public.sync_thread_mirror();
 
