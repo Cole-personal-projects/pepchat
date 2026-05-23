@@ -24,10 +24,69 @@ CREATE TABLE IF NOT EXISTS thread_read_state (
 );
 ALTER TABLE thread_read_state ENABLE ROW LEVEL SECURITY;
 
+CREATE OR REPLACE FUNCTION validate_thread_reply_invariants()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+DECLARE
+  root_channel_id uuid;
+  root_thread_root_id uuid;
+BEGIN
+  IF NEW.thread_root_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  IF NEW.user_id IS DISTINCT FROM auth.uid() THEN
+    RAISE EXCEPTION 'Thread replies must be authored by the authenticated user.';
+  END IF;
+
+  SELECT m.channel_id, m.thread_root_id
+    INTO root_channel_id, root_thread_root_id
+    FROM public.messages m
+    WHERE m.id = NEW.thread_root_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Thread root not found.';
+  END IF;
+
+  IF root_thread_root_id IS NOT NULL THEN
+    RAISE EXCEPTION 'Cannot reply to a thread reply.';
+  END IF;
+
+  IF root_channel_id IS DISTINCT FROM NEW.channel_id THEN
+    RAISE EXCEPTION 'Thread replies must stay in the root channel.';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+      FROM public.channels c
+      WHERE c.id = NEW.channel_id
+        AND c.group_id = ANY(SELECT public.get_user_group_ids())
+        AND (
+          public.get_user_role_in_group(c.group_id) <> 'noob'
+          OR c.noob_access = true
+          OR c.name = 'welcome'
+        )
+  ) THEN
+    RAISE EXCEPTION 'Not authorized to reply in this thread.';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_validate_thread_reply_invariants ON messages;
+CREATE TRIGGER trg_validate_thread_reply_invariants
+  BEFORE INSERT OR UPDATE OF channel_id, user_id, thread_root_id ON messages
+  FOR EACH ROW EXECUTE FUNCTION validate_thread_reply_invariants();
+
 CREATE OR REPLACE FUNCTION maintain_thread_counters()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 BEGIN
   IF TG_OP = 'INSERT' AND NEW.thread_root_id IS NOT NULL THEN

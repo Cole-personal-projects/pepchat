@@ -1,3 +1,5 @@
+DROP TRIGGER IF EXISTS trg_validate_thread_reply_invariants ON messages;
+DROP FUNCTION IF EXISTS validate_thread_reply_invariants();
 DROP TRIGGER IF EXISTS trg_maintain_thread_counters ON messages;
 DROP FUNCTION IF EXISTS maintain_thread_counters();
 DROP POLICY IF EXISTS thread_read_state_select_own ON thread_read_state;

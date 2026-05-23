@@ -135,6 +135,15 @@ describe('server notification helpers', () => {
         { id: 'user-a', username: 'alice', display_name: 'Alice' },
       ],
     })
+    const channelBuilder = makeBuilder({
+      data: { id: 'ch-1', group_id: 'group-1', noob_access: false, name: 'general' },
+    })
+    const membershipBuilder = makeBuilder({
+      data: [
+        { user_id: 'user-b', role: 'user' },
+        { user_id: 'user-c', role: 'user' },
+      ],
+    })
     const preferenceBuilder = makeBuilder({
       data: [
         { user_id: 'user-b', mentions: true },
@@ -142,7 +151,13 @@ describe('server notification helpers', () => {
       ],
     })
     const eventBuilder = makeBuilder()
-    const supabase = setupClient([profileBuilder, preferenceBuilder, eventBuilder])
+    const supabase = setupClient([
+      profileBuilder,
+      channelBuilder,
+      membershipBuilder,
+      preferenceBuilder,
+      eventBuilder,
+    ])
 
     await enqueueMentionNotifications(supabase as any, {
       senderId: 'user-a',
@@ -153,6 +168,9 @@ describe('server notification helpers', () => {
     })
 
     expect(profileBuilder.in).toHaveBeenCalledWith('username', ['bob', 'carol', 'alice'])
+    expect(channelBuilder.eq).toHaveBeenCalledWith('id', 'ch-1')
+    expect(membershipBuilder.eq).toHaveBeenCalledWith('group_id', 'group-1')
+    expect(membershipBuilder.in).toHaveBeenCalledWith('user_id', ['user-b', 'user-c'])
     expect(preferenceBuilder.in).toHaveBeenCalledWith('user_id', ['user-b', 'user-c'])
     expect(eventBuilder.insert).toHaveBeenCalledWith([
       {
@@ -167,6 +185,52 @@ describe('server notification helpers', () => {
         body: 'Hi @bob and @carol and @alice',
         url: '/channels/ch-1#msg-1',
       },
+    ])
+  })
+
+  it('filters mention recipients that cannot read the channel before body/url fanout', async () => {
+    const profileBuilder = makeBuilder({
+      data: [
+        { id: 'user-b', username: 'bob', display_name: 'Bob' },
+        { id: 'user-c', username: 'carol', display_name: 'Carol' },
+      ],
+    })
+    const channelBuilder = makeBuilder({
+      data: { id: 'ch-1', group_id: 'group-1', noob_access: false, name: 'private' },
+    })
+    const membershipBuilder = makeBuilder({
+      data: [
+        { user_id: 'user-b', role: 'noob' },
+        { user_id: 'user-c', role: 'user' },
+      ],
+    })
+    const preferenceBuilder = makeBuilder({ data: [{ user_id: 'user-c', mentions: true }] })
+    const eventBuilder = makeBuilder()
+    const supabase = setupClient([
+      profileBuilder,
+      channelBuilder,
+      membershipBuilder,
+      preferenceBuilder,
+      eventBuilder,
+    ])
+
+    await enqueueMentionNotifications(supabase as any, {
+      senderId: 'user-a',
+      senderName: 'Alice',
+      messageId: 'thread-reply-1',
+      channelId: 'ch-1',
+      content: 'Private thread note for @bob and @carol',
+    })
+
+    expect(preferenceBuilder.in).toHaveBeenCalledWith('user_id', ['user-c'])
+    expect(eventBuilder.insert).toHaveBeenCalledTimes(1)
+    const insertedRows = (eventBuilder.insert as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(insertedRows).toEqual([
+      expect.objectContaining({
+        user_id: 'user-c',
+        body: 'Private thread note for @bob and @carol',
+        url: '/channels/ch-1#thread-reply-1',
+      }),
     ])
   })
 
