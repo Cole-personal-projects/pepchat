@@ -76,6 +76,7 @@ export function useUnreadChannels(
       .from('messages')
       .select('channel_id, created_at')
       .neq('user_id', userId)
+      .is('thread_root_id', null)
       .gte('created_at', thirtyDaysAgo)
 
     // 4 — Compute unread channel IDs

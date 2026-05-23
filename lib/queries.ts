@@ -6,5 +6,7 @@
 export const MESSAGE_SELECT =
   '*, profiles(username, avatar_url, display_name, username_color), replied_to:reply_to_id(id, content, user_id, profiles(username, avatar_url, display_name)), reactions:message_reactions(id, message_id, user_id, emoji, created_at, profiles(username))'
 
+export const THREAD_MESSAGE_SELECT = MESSAGE_SELECT
+
 export const DM_SELECT =
   '*, sender:profiles!sender_id(id, username, avatar_url, display_name, username_color, banner_color, badge, pronouns, bio, location, website, member_since, updated_at, created_at)'

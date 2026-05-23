@@ -10,7 +10,8 @@ const mockUpsert = vi.fn().mockResolvedValue({ error: null })
 const mockMaybeSingle = vi.fn().mockResolvedValue({ data: { created_at: '2024-01-01T12:00:00.000Z' }, error: null })
 const mockLimit = vi.fn(() => ({ maybeSingle: mockMaybeSingle }))
 const mockOrder = vi.fn(() => ({ limit: mockLimit }))
-const mockEqMessages = vi.fn(() => ({ order: mockOrder }))
+const mockIsMessages = vi.fn(() => ({ order: mockOrder }))
+const mockEqMessages = vi.fn(() => ({ is: mockIsMessages }))
 const mockSelectMessages = vi.fn(() => ({ eq: mockEqMessages }))
 const mockFrom = vi.fn((table: string) => {
   if (table === 'messages') return { select: mockSelectMessages }
@@ -90,6 +91,7 @@ describe('markChannelUnread', () => {
     expect(mockFrom).toHaveBeenCalledWith('messages')
     expect(mockSelectMessages).toHaveBeenCalledWith('created_at')
     expect(mockEqMessages).toHaveBeenCalledWith('channel_id', 'ch-1')
+    expect(mockIsMessages).toHaveBeenCalledWith('thread_root_id', null)
     expect(mockOrder).toHaveBeenCalledWith('created_at', { ascending: false })
     expect(mockLimit).toHaveBeenCalledWith(1)
     expect(mockUpsert).toHaveBeenCalledWith(

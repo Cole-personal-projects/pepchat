@@ -103,6 +103,10 @@ export interface Message {
   user_id: string
   content: string
   reply_to_id: string | null
+  thread_root_id?: string | null
+  thread_reply_count?: number
+  thread_last_reply_at?: string | null
+  mirrored_from_thread_id?: string | null
   edited_at: string | null
   pinned_at?: string | null
   is_system?: boolean
@@ -121,6 +125,13 @@ export type MessageWithProfile = Message & {
   profiles: Pick<Profile, 'username' | 'avatar_url' | 'display_name'>
   replied_to?: QuotedMessage | null
   reactions?: Reaction[]
+}
+
+export interface ThreadSummary {
+  rootId: string
+  replyCount: number
+  lastReplyAt: string
+  lastReplyAuthorIds: string[]
 }
 
 export type MessageSearchResult = MessageWithProfile & {
@@ -219,7 +230,7 @@ export interface NotificationSubscriptionInput {
   user_agent?: string | null
 }
 
-export type NotificationEventType = 'dm_message' | 'mention' | 'group_message'
+export type NotificationEventType = 'dm_message' | 'mention' | 'group_message' | 'thread_reply'
 
 export interface NotificationEvent {
   id: string

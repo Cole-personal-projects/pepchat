@@ -124,6 +124,7 @@ export const searchMessages = withAuth(
       .from('messages')
       .select(`${MESSAGE_SELECT}, channels!inner(id, name, group_id)`)
       .eq('channels.group_id', groupId)
+      .is('thread_root_id', null)
       .eq('is_system', false)
       .order('created_at', { ascending: false })
       .limit(limit)

@@ -41,6 +41,7 @@ export async function markChannelUnread(channelId: string, userId: string): Prom
     .from('messages')
     .select('created_at')
     .eq('channel_id', channelId)
+    .is('thread_root_id', null)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
