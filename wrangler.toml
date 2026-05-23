@@ -1,3 +1,5 @@
+# Legacy Cloudflare Pages project name; preserved because the slug is immutable
+# and the sidebarchat.net custom domain is bound to it. Not user-visible.
 name = "pepchat-app"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
