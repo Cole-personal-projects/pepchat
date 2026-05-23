@@ -47,7 +47,7 @@ function IOSSteps() {
   return (
     <div data-testid="steps-ios" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <Step n={1} title="Open in Safari">
-        Navigate to <strong>pepchat.cc</strong> in Safari. Chrome and Firefox on iOS cannot install PWAs — Safari only.
+        Navigate to <strong>sidebarchat.net</strong> in Safari. Chrome and Firefox on iOS cannot install PWAs — Safari only.
       </Step>
       <Step n={2} title="Tap the Share button">
         Tap the Share icon <ShareIcon /> at the bottom of Safari (square with arrow pointing up).
@@ -113,7 +113,7 @@ function AndroidSteps({ onInstall, canInstall }: { onInstall: () => void; canIns
         </div>
       )}
       <Step n={1} title="Open in Chrome">
-        Navigate to <strong>pepchat.cc</strong> in Chrome, Edge, or Samsung Internet.
+        Navigate to <strong>sidebarchat.net</strong> in Chrome, Edge, or Samsung Internet.
       </Step>
       <Step n={2} title="Look for the install banner">
         Chrome may show an "Add to Home Screen" banner automatically. Tap it to install.

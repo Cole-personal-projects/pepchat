@@ -45,11 +45,8 @@ PROJECT_STATE_LOCAL.md
 
 # Local design/spec/prototype artifacts (kept outside git)
 /*.jsx
-/PEPCHAT_HELP_SYSTEM_DRAFT.md
 /admin-dashboard-prompt.md
 /group-avatar-prompt.md
-/pepchat_status.md
-/PepChat Prototype.html
 
 # Local scratch artifacts — ignore for now
 /.tmp_research/
