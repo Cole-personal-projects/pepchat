@@ -111,6 +111,69 @@ CREATE TRIGGER trg_maintain_thread_counters
   AFTER INSERT OR DELETE ON messages
   FOR EACH ROW EXECUTE FUNCTION maintain_thread_counters();
 
+CREATE OR REPLACE FUNCTION can_read_channel_messages(p_channel_id uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public, auth
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+      FROM public.channels c
+      WHERE c.id = p_channel_id
+        AND c.group_id = ANY(SELECT public.get_user_group_ids())
+        AND (
+          public.get_user_role_in_group(c.group_id) <> 'noob'
+          OR c.noob_access = true
+          OR c.name = 'welcome'
+        )
+  )
+$$;
+
+CREATE OR REPLACE FUNCTION can_read_thread_messages(p_thread_root_id uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public, auth
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+      FROM public.messages m
+      WHERE m.id = p_thread_root_id
+        AND public.can_read_channel_messages(m.channel_id)
+  )
+$$;
+
+DROP POLICY IF EXISTS "Members can receive authorized message realtime broadcasts" ON realtime.messages;
+CREATE POLICY "Members can receive authorized message realtime broadcasts"
+  ON realtime.messages
+  FOR SELECT TO authenticated
+  USING (
+    CASE
+      WHEN realtime.topic() ~ '^messages-[0-9a-fA-F-]{36}$'
+        THEN public.can_read_channel_messages(substring(realtime.topic() from 10)::uuid)
+      WHEN realtime.topic() ~ '^thread-[0-9a-fA-F-]{36}$'
+        THEN public.can_read_thread_messages(substring(realtime.topic() from 8)::uuid)
+      ELSE false
+    END
+  );
+
+DROP POLICY IF EXISTS "Members can send authorized message realtime broadcasts" ON realtime.messages;
+CREATE POLICY "Members can send authorized message realtime broadcasts"
+  ON realtime.messages
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    CASE
+      WHEN realtime.topic() ~ '^messages-[0-9a-fA-F-]{36}$'
+        THEN public.can_read_channel_messages(substring(realtime.topic() from 10)::uuid)
+      WHEN realtime.topic() ~ '^thread-[0-9a-fA-F-]{36}$'
+        THEN public.can_read_thread_messages(substring(realtime.topic() from 8)::uuid)
+      ELSE false
+    END
+  );
+
 ALTER TABLE notification_events DROP CONSTRAINT IF EXISTS notification_events_type_check;
 ALTER TABLE notification_events
   ADD CONSTRAINT notification_events_type_check

@@ -76,13 +76,14 @@ beforeEach(() => {
 })
 
 describe('useMessages realtime migration', () => {
-  it('subscribes to the exact message topic and registers the five bindings in order', () => {
+  it('subscribes to the exact message topic and registers the seven bindings in order', () => {
     const realtime = makeRealtimeMock()
     renderHook(() => useMessages('ch-1', [baseMessage], 'user-1'))
 
     expect(realtime.channels[0].topic).toBe('messages-ch-1')
     expect(realtime.channels[0].bindings.map(({ type, filter }) => ({ type, filter }))).toEqual([
       { type: 'broadcast', filter: { event: 'new_message' } },
+      { type: 'broadcast', filter: { event: 'thread_activity' } },
       { type: 'broadcast', filter: { event: 'reaction_added' } },
       { type: 'broadcast', filter: { event: 'reaction_removed' } },
       { type: 'postgres_changes', filter: { event: 'INSERT', schema: 'public', table: 'messages' } },
@@ -122,13 +123,13 @@ describe('useMessages realtime migration', () => {
     const realtime = makeRealtimeMock()
     const { result } = renderHook(() => useMessages('ch-1', [baseMessage], 'user-1'))
 
-    act(() => realtime.channels[0].bindings[1].handler({ payload: { messageId: 'msg-1', reaction } }))
+    act(() => realtime.channels[0].bindings[2].handler({ payload: { messageId: 'msg-1', reaction } }))
     expect(result.current.messages[0].reactions).toEqual([reaction])
 
-    act(() => realtime.channels[0].bindings[1].handler({ payload: { messageId: 'msg-1', reaction: { ...reaction, id: 'reaction-2' } } }))
+    act(() => realtime.channels[0].bindings[2].handler({ payload: { messageId: 'msg-1', reaction: { ...reaction, id: 'reaction-2' } } }))
     expect(result.current.messages[0].reactions).toHaveLength(1)
 
-    act(() => realtime.channels[0].bindings[2].handler({ payload: { messageId: 'msg-1', userId: 'user-2', emoji: '👍' } }))
+    act(() => realtime.channels[0].bindings[3].handler({ payload: { messageId: 'msg-1', userId: 'user-2', emoji: '👍' } }))
     expect(result.current.messages[0].reactions).toEqual([])
   })
 

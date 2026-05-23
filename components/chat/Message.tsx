@@ -259,6 +259,7 @@ export default function Message({
             rootId={msg.id}
             replyCount={msg.thread_reply_count ?? 0}
             lastReplyAt={msg.thread_last_reply_at}
+            currentUserId={currentUserId}
             onOpen={actions.openThread}
           />
         )}

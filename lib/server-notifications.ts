@@ -20,6 +20,17 @@ type MentionNotificationInput = {
   messageId: string
   channelId: string
   content: string
+  urlBuilder?: (args: { channelId: string; messageId: string }) => string
+}
+
+type ThreadReplyNotificationInput = {
+  threadRootId: string
+  newReplyId: string
+  newReplyAuthorId: string
+  newReplyAuthorName: string
+  channelId: string
+  content: string
+  attachments?: Attachment[] | null
 }
 
 type MentionProfile = {
@@ -128,6 +139,10 @@ async function allowsDMNotifications(
   return preferences?.dm_messages ?? true
 }
 
+export function buildThreadReplyUrl(channelId: string, rootId: string, messageId: string): string {
+  return `/channels/${channelId}?thread=${rootId}#${messageId}`
+}
+
 export async function enqueueDirectMessageNotification(
   supabase: SupabaseClient,
   input: DirectMessageNotificationInput
@@ -195,7 +210,56 @@ export async function enqueueMentionNotifications(
       channel_id: input.channelId,
       title: `${input.senderName} mentioned you`,
       body: notificationBody(input.content),
-      url: `/channels/${input.channelId}#${input.messageId}`,
+      url: input.urlBuilder
+        ? input.urlBuilder({ channelId: input.channelId, messageId: input.messageId })
+        : `/channels/${input.channelId}#${input.messageId}`,
+    }))
+
+  if (rows.length === 0) return
+
+  await supabase
+    .from('notification_events')
+    .insert(rows)
+}
+
+export async function enqueueThreadReplyNotifications(
+  supabase: SupabaseClient,
+  input: ThreadReplyNotificationInput
+): Promise<void> {
+  const { data: root } = await supabase
+    .from('messages')
+    .select('user_id')
+    .eq('id', input.threadRootId)
+    .maybeSingle()
+
+  const rootAuthorId = (root as { user_id?: string } | null)?.user_id
+  const recipients = new Set<string>()
+  if (rootAuthorId && rootAuthorId !== input.newReplyAuthorId) recipients.add(rootAuthorId)
+
+  const { data: participantRows } = await supabase
+    .from('messages')
+    .select('user_id')
+    .eq('thread_root_id', input.threadRootId)
+
+  for (const row of (participantRows ?? []) as Array<{ user_id?: string | null }>) {
+    if (row.user_id && row.user_id !== input.newReplyAuthorId) recipients.add(row.user_id)
+  }
+
+  const recipientIds = Array.from(recipients)
+  if (recipientIds.length === 0) return
+
+  const rows = recipientIds
+    .map(userId => ({
+      user_id: userId,
+      actor_id: input.newReplyAuthorId,
+      type: 'thread_reply',
+      source_table: 'messages',
+      source_id: input.newReplyId,
+      conversation_id: null,
+      channel_id: input.channelId,
+      title: `${input.newReplyAuthorName} replied in a thread`,
+      body: notificationBody(input.content, input.attachments),
+      url: buildThreadReplyUrl(input.channelId, input.threadRootId, input.newReplyId),
     }))
 
   if (rows.length === 0) return
@@ -220,6 +284,10 @@ export async function dispatchNotification(
 
     case 'dm_message':
       await enqueueDirectMessageNotification(supabase, draft.payload as DirectMessageNotificationInput)
+      break
+
+    case 'thread_reply':
+      await enqueueThreadReplyNotifications(supabase, draft.payload as ThreadReplyNotificationInput)
       break
 
     default:

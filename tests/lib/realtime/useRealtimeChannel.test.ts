@@ -115,7 +115,7 @@ describe('useRealtimeChannel', () => {
     )
 
     const channel = realtime.channels[0]
-    expect(realtime.channel).toHaveBeenCalledWith('messages-ch-1')
+    expect(realtime.channel).toHaveBeenCalledWith('messages-ch-1', { config: { private: true } })
     expect(channel.bindings.map(({ type, filter }) => ({ type, filter }))).toEqual([
       { type: 'broadcast', filter: { event: 'new_message' } },
       { type: 'postgres_changes', filter: { event: 'DELETE', schema: 'public', table: 'messages' } },
@@ -142,6 +142,22 @@ describe('useRealtimeChannel', () => {
     expect(realtime.removeChannel).toHaveBeenCalledWith(channel)
     expect(channel.removed).toBe(true)
     expect(result.current.channelRef.current).toBeNull()
+  })
+
+  it('preserves caller channel options while defaulting to private authorization', () => {
+    const realtime = makeRealtimeMock()
+    renderHook(() =>
+      useRealtimeChannel({
+        topic: 'messages-ch-1',
+        deps: ['ch-1'],
+        options: { config: { broadcast: { self: true } } },
+        bindings: [{ type: 'broadcast', filter: { event: 'new_message' }, handler: vi.fn() }],
+      }),
+    )
+
+    expect(realtime.channel).toHaveBeenCalledWith('messages-ch-1', {
+      config: { broadcast: { self: true }, private: true },
+    })
   })
 
   it('remounts the same topic with a fresh channel after removing the first channel', () => {

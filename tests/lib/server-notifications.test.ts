@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   enqueueMentionNotifications,
   enqueueDirectMessageNotification,
+  enqueueThreadReplyNotifications,
+  buildThreadReplyUrl,
   extractMentionUsernames,
   notificationBody,
 } from '@/lib/server-notifications'
@@ -65,6 +67,10 @@ describe('server notification helpers', () => {
 
   it('extracts unique mention usernames', () => {
     expect(extractMentionUsernames('@Bob hello @alice, @bob again, email@test.com')).toEqual(['bob', 'alice'])
+  })
+
+  it('builds thread reply URLs', () => {
+    expect(buildThreadReplyUrl('ch-1', 'root-1', 'reply-1')).toBe('/channels/ch-1?thread=root-1#reply-1')
   })
 
   it('enqueues a direct message notification when enabled', async () => {
@@ -220,6 +226,7 @@ describe('server notification helpers', () => {
       messageId: 'thread-reply-1',
       channelId: 'ch-1',
       content: 'Private thread note for @bob and @carol',
+      urlBuilder: ({ channelId, messageId }) => buildThreadReplyUrl(channelId, 'root-1', messageId),
     })
 
     expect(preferenceBuilder.in).toHaveBeenCalledWith('user_id', ['user-c'])
@@ -229,23 +236,71 @@ describe('server notification helpers', () => {
       expect.objectContaining({
         user_id: 'user-c',
         body: 'Private thread note for @bob and @carol',
-        url: '/channels/ch-1#thread-reply-1',
+        url: '/channels/ch-1?thread=root-1#thread-reply-1',
       }),
     ])
   })
 
-  it('skips mention notification work when no mentions are present', async () => {
-    const profileBuilder = makeBuilder()
-    const supabase = setupClient([profileBuilder])
+  it('fans out thread reply notifications to root author and prior participants', async () => {
+    const rootBuilder = makeBuilder({ data: { user_id: 'root-author' } })
+    const participantBuilder = makeBuilder({ data: [
+      { user_id: 'participant-1' },
+      { user_id: 'participant-2' },
+      { user_id: 'reply-author' },
+      { user_id: 'participant-1' },
+    ] })
+    const eventBuilder = makeBuilder()
+    const supabase = setupClient([rootBuilder, participantBuilder, eventBuilder])
 
-    await enqueueMentionNotifications(supabase as any, {
-      senderId: 'user-a',
-      senderName: 'Alice',
-      messageId: 'msg-1',
+    await enqueueThreadReplyNotifications(supabase as any, {
+      threadRootId: 'root-1',
+      newReplyId: 'reply-3',
+      newReplyAuthorId: 'reply-author',
+      newReplyAuthorName: 'Alice',
       channelId: 'ch-1',
-      content: 'No mentions here',
+      content: 'New reply',
+      attachments: [],
     })
 
-    expect(supabase.from).not.toHaveBeenCalled()
+    expect(rootBuilder.eq).toHaveBeenCalledWith('id', 'root-1')
+    expect(participantBuilder.eq).toHaveBeenCalledWith('thread_root_id', 'root-1')
+    expect(eventBuilder.insert).toHaveBeenCalledWith([
+      {
+        user_id: 'root-author',
+        actor_id: 'reply-author',
+        type: 'thread_reply',
+        source_table: 'messages',
+        source_id: 'reply-3',
+        conversation_id: null,
+        channel_id: 'ch-1',
+        title: 'Alice replied in a thread',
+        body: 'New reply',
+        url: '/channels/ch-1?thread=root-1#reply-3',
+      },
+      {
+        user_id: 'participant-1',
+        actor_id: 'reply-author',
+        type: 'thread_reply',
+        source_table: 'messages',
+        source_id: 'reply-3',
+        conversation_id: null,
+        channel_id: 'ch-1',
+        title: 'Alice replied in a thread',
+        body: 'New reply',
+        url: '/channels/ch-1?thread=root-1#reply-3',
+      },
+      {
+        user_id: 'participant-2',
+        actor_id: 'reply-author',
+        type: 'thread_reply',
+        source_table: 'messages',
+        source_id: 'reply-3',
+        conversation_id: null,
+        channel_id: 'ch-1',
+        title: 'Alice replied in a thread',
+        body: 'New reply',
+        url: '/channels/ch-1?thread=root-1#reply-3',
+      },
+    ])
   })
 })

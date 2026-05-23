@@ -14,6 +14,7 @@ import PinnedMessagesPanel from '@/components/chat/PinnedMessagesPanel'
 import ThreadPanel from '@/components/chat/ThreadPanel'
 import { toggleReaction } from '@/app/(app)/reactions/actions'
 import { pinMessage, unpinMessage } from '@/app/(app)/messages/actions'
+import { fetchThreadRoot } from '@/app/(app)/messages/thread-actions'
 import { createClient } from '@/lib/supabase/client'
 import { PERMISSIONS } from '@/lib/permissions'
 import type { MessageWithProfile, Profile } from '@/lib/types'
@@ -72,10 +73,14 @@ export default function ChannelShell({
   const [replyingTo, setReplyingTo] = useState<MessageWithProfile | null>(null)
   const [pinnedPanelOpen, setPinnedPanelOpen] = useState(false)
   const [openThreadRootId, setOpenThreadRootId] = useState<string | null>(null)
+  const [loadedThreadRoot, setLoadedThreadRoot] = useState<MessageWithProfile | null>(null)
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null)
 
   const canPin = userRole ? PERMISSIONS.canPinMessages(userRole) : false
-  const openThreadRoot = openThreadRootId ? messages.find(message => message.id === openThreadRootId) ?? null : null
+  const visibleOpenThreadRoot = openThreadRootId ? messages.find(message => message.id === openThreadRootId) ?? null : null
+  const openThreadRoot = openThreadRootId
+    ? visibleOpenThreadRoot ?? (loadedThreadRoot?.id === openThreadRootId ? loadedThreadRoot : null)
+    : null
   const threadPanelOpen = Boolean(openThreadRootId)
 
   // Mark channel as read on mount (channel navigation)
@@ -91,6 +96,31 @@ export default function ChannelShell({
       markChannelRead(channelId, profile.id)
     }
   }, [messages.length, channelId, profile.id])
+
+  useEffect(() => {
+    if (!openThreadRootId) {
+      setLoadedThreadRoot(null)
+      return
+    }
+    if (visibleOpenThreadRoot) {
+      setLoadedThreadRoot(null)
+      return
+    }
+
+    let cancelled = false
+    fetchThreadRoot({ rootId: openThreadRootId }).then(result => {
+      if (cancelled) return
+      if ('ok' in result && result.ok) {
+        setLoadedThreadRoot(result.message)
+        return
+      }
+      setLoadedThreadRoot(null)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [openThreadRootId, visibleOpenThreadRoot])
 
   const handleEdit = useCallback(async (
     messageId: string,

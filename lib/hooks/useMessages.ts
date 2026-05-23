@@ -58,6 +58,28 @@ export function useMessages(
       },
       {
         type: 'broadcast',
+        filter: { event: 'thread_activity' },
+        handler: ({ payload }) => {
+          const activity = payload as { rootId?: string; replyCount?: number; lastReplyAt?: string }
+          if (!activity.rootId || typeof activity.replyCount !== 'number' || !activity.lastReplyAt) return
+          const replyCount = activity.replyCount
+          const lastReplyAt = activity.lastReplyAt
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === activity.rootId
+                ? {
+                    ...m,
+                    thread_reply_count: Math.max(m.thread_reply_count ?? 0, replyCount),
+                    thread_last_reply_at: lastReplyAt,
+                  }
+                : m
+            )
+          )
+          window.dispatchEvent(new CustomEvent('thread-activity', { detail: activity }))
+        },
+      },
+      {
+        type: 'broadcast',
         filter: { event: 'reaction_added' },
         handler: ({ payload }) => {
           const { messageId, reaction } = payload as { messageId: string; reaction: Reaction }

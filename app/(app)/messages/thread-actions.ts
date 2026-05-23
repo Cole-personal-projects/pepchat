@@ -18,6 +18,10 @@ type FetchThreadRepliesInput = {
   limit?: number
 }
 
+type FetchThreadRootInput = {
+  rootId: string
+}
+
 type ThreadRootRow = {
   id: string
   channel_id: string
@@ -75,6 +79,19 @@ export const sendThreadReply = withAuth(
 
     let result
     try {
+      const notificationDraft = {
+        type: 'thread_reply',
+        payload: {
+          threadRootId: rootId,
+          newReplyId: '',
+          newReplyAuthorId: ctx.user.id,
+          newReplyAuthorName: '',
+          channelId: threadRoot.channel_id,
+          content: trimmed,
+          attachments,
+        },
+      }
+
       result = await withSideEffects(ctx.supabase, ctx.user.id, async () => {
         const { data: message, error } = await ctx.supabase
           .from('messages')
@@ -99,8 +116,11 @@ export const sendThreadReply = withAuth(
           targetId: rootId,
           metadata: { channel_id: threadRoot.channel_id, mirror_to_channel: Boolean(input.mirrorToChannel) },
         },
-        // PR 1 intentionally leaves thread_reply fanout empty. PR 3 wires recipients.
-        notifications: [],
+        notifications: [notificationDraft],
+        afterCommit(message) {
+          notificationDraft.payload.newReplyId = message.id
+          notificationDraft.payload.newReplyAuthorName = message.profiles.display_name ?? message.profiles.username
+        },
       })
     } catch (err) {
       return { error: err instanceof Error ? err.message : 'Failed to send thread reply.' }
@@ -108,13 +128,14 @@ export const sendThreadReply = withAuth(
 
     try {
       const name = result.data.profiles.display_name ?? result.data.profiles.username
-      await import('@/lib/server-notifications').then(({ enqueueMentionNotifications }) =>
+      await import('@/lib/server-notifications').then(({ buildThreadReplyUrl, enqueueMentionNotifications }) =>
         enqueueMentionNotifications(ctx.supabase, {
           senderId: ctx.user.id,
           senderName: name,
           messageId: result.data.id,
           channelId: threadRoot.channel_id,
           content: trimmed,
+          urlBuilder: ({ channelId, messageId }) => buildThreadReplyUrl(channelId, rootId, messageId),
         })
       )
     } catch {
@@ -122,6 +143,25 @@ export const sendThreadReply = withAuth(
     }
 
     return { ok: true, message: result.data }
+  },
+  { unauthenticated: () => ({ error: 'Not authenticated.' }) }
+)
+
+export const fetchThreadRoot = withAuth(
+  async (ctx, input: FetchThreadRootInput) => {
+    const rootId = input.rootId?.trim()
+    if (!rootId) return { error: 'Missing thread root.' }
+
+    const { data: root, error } = await ctx.supabase
+      .from('messages')
+      .select(THREAD_MESSAGE_SELECT)
+      .eq('id', rootId)
+      .is('thread_root_id', null)
+      .maybeSingle()
+
+    if (error) return { error: error.message }
+    if (!root) return { error: 'Thread root not found.' }
+    return { ok: true, message: root as MessageWithProfile }
   },
   { unauthenticated: () => ({ error: 'Not authenticated.' }) }
 )
