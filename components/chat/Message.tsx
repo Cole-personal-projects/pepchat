@@ -6,6 +6,7 @@ import ReactionPills from '@/components/chat/ReactionPills'
 import MessageAttachments from '@/components/chat/MessageAttachments'
 import { MessageContent } from '@/components/chat/MessageContent'
 import MessageActionBar from '@/components/chat/MessageActionBar'
+import ThreadChip from '@/components/chat/ThreadChip'
 import { useMessageActions } from '@/components/chat/MessageActionsContext'
 import { useLongPress } from '@/lib/hooks/useLongPress'
 import type { MessageWithProfile } from '@/lib/types'
@@ -29,6 +30,7 @@ export interface MessageProps {
   isSaved?: boolean
   allowReactions?: boolean
   allowReplies?: boolean
+  showThreadChip?: boolean
   isPending?: boolean
   atReactionLimit?: boolean
 }
@@ -46,6 +48,7 @@ export default function Message({
   isSaved = false,
   allowReactions = true,
   allowReplies = true,
+  showThreadChip = true,
   isPending = false,
   atReactionLimit = false,
 }: MessageProps) {
@@ -248,6 +251,15 @@ export default function Message({
             reactions={msg.reactions}
             currentUserId={currentUserId}
             onToggle={emoji => actions.react(msg.id, emoji)}
+          />
+        )}
+
+        {showThreadChip && !isEditing && !msg.thread_root_id && (msg.thread_reply_count ?? 0) > 0 && (
+          <ThreadChip
+            rootId={msg.id}
+            replyCount={msg.thread_reply_count ?? 0}
+            lastReplyAt={msg.thread_last_reply_at}
+            onOpen={actions.openThread}
           />
         )}
       </div>

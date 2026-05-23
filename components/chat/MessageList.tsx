@@ -7,12 +7,13 @@ import { reportMessage } from '@/app/admin/actions'
 import Message from '@/components/chat/Message'
 import MessageModal from '@/components/chat/MessageModal'
 import MessageContextMenu from '@/components/chat/MessageContextMenu'
+import ThreadPanel from '@/components/chat/ThreadPanel'
 import { ChannelMessageActionsProvider, type MessageActions } from '@/components/chat/MessageActionsContext'
 import ReportMessageDialog from '@/components/chat/ReportMessageDialog'
 import SystemMessage from '@/components/chat/SystemMessage'
 import { PERMISSIONS } from '@/lib/permissions'
 import { getUnreadFromMessageLastReadAt, markChannelUnreadFromMessage } from '@/lib/channelReadState'
-import type { MessageSearchResult, MessageWithProfile } from '@/lib/types'
+import type { MessageSearchResult, MessageWithProfile, Profile } from '@/lib/types'
 import type { Role } from '@/lib/permissions'
 
 const ProfileCard = dynamic(() => import('@/components/profile/ProfileCard'), { ssr: false })
@@ -25,6 +26,7 @@ interface MessageListProps {
   loadingMore: boolean
   currentUserId: string
   currentUsername: string
+  profile?: Profile
   groupId?: string
   channelId?: string
   channelName?: string
@@ -48,6 +50,9 @@ interface MessageListProps {
   onEditSuccess?: (messageId: string, content: string) => void
   onDeleteSuccess?: (messageId: string) => void
   onOpenPinnedPanel?: () => void
+  onThreadPanelOpenChange?: (open: boolean) => void
+  onOpenThreadRootIdChange?: (rootId: string | null) => void
+  suppressThreadPanel?: boolean
   highlightedMessageId?: string | null
   initialLastReadAt?: string | null
   messageLinkBasePath?: string
@@ -89,6 +94,7 @@ export default function MessageList({
   hasMore,
   loadingMore,
   currentUserId,
+  profile,
   groupId,
   channelId,
   channelName,
@@ -106,6 +112,9 @@ export default function MessageList({
   onEditSuccess,
   onDeleteSuccess,
   onOpenPinnedPanel,
+  onThreadPanelOpenChange,
+  onOpenThreadRootIdChange,
+  suppressThreadPanel = false,
   highlightedMessageId,
   initialLastReadAt = null,
   messageLinkBasePath = '/channels',
@@ -142,6 +151,7 @@ export default function MessageList({
   const [mutedUserIds, setMutedUserIds] = useState<Set<string>>(() => readMutedUsers(currentUserId))
   const [localLastReadAt, setLocalLastReadAt] = useState(initialLastReadAt)
   const [reportedMessageIds, setReportedMessageIds] = useState(() => new Set<string>())
+  const [openThreadRootId, setOpenThreadRootId] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -158,6 +168,46 @@ export default function MessageList({
   useEffect(() => {
     setLocalLastReadAt(initialLastReadAt)
   }, [initialLastReadAt])
+
+  useEffect(() => {
+    function syncThreadFromUrl() {
+      const params = new URLSearchParams(window.location.search)
+      const rootId = params.get('thread')?.trim() || null
+      setThreadRootId(rootId)
+      onThreadPanelOpenChange?.(Boolean(rootId))
+    }
+
+    syncThreadFromUrl()
+    window.addEventListener('popstate', syncThreadFromUrl)
+    return () => window.removeEventListener('popstate', syncThreadFromUrl)
+  }, [onThreadPanelOpenChange])
+
+  function setThreadRootId(rootId: string | null) {
+    setOpenThreadRootId(rootId)
+    onOpenThreadRootIdChange?.(rootId)
+  }
+
+  function replaceThreadUrl(rootId: string | null) {
+    const url = new URL(window.location.href)
+    if (rootId) {
+      url.searchParams.set('thread', rootId)
+    } else {
+      url.searchParams.delete('thread')
+    }
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+  }
+
+  function openThread(messageId: string) {
+    replaceThreadUrl(messageId)
+    setThreadRootId(messageId)
+    onThreadPanelOpenChange?.(true)
+  }
+
+  function closeThread() {
+    replaceThreadUrl(null)
+    setThreadRootId(null)
+    onThreadPanelOpenChange?.(false)
+  }
 
   const visibleMessages = useMemo(() => messages.filter(msg => !mutedUserIds.has(msg.user_id)), [messages, mutedUserIds])
   const mutedCount = messages.length - visibleMessages.length
@@ -605,6 +655,7 @@ export default function MessageList({
       const msg = findMessageById(messageId)
       if (msg) onReply(msg)
     },
+    openThread,
     jumpToMessage: handleJumpToReply,
     pin: async (messageId: string) => handlePin(messageId),
     toggleSaved: (messageId: string) => {
@@ -661,7 +712,7 @@ export default function MessageList({
             : `${activeSearchResults.length} ${activeSearchResults.length === 1 ? 'result' : 'results'}`
       )
     : ''
-
+  const openThreadRoot = openThreadRootId ? findMessageById(openThreadRootId) : null
   return (
     <ChannelMessageActionsProvider value={messageActions}>
       <div style={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column', background: 'var(--bg-chat)' }}>
@@ -1126,6 +1177,19 @@ export default function MessageList({
           canMuteUser={contextMenu.msg.user_id !== currentUserId}
           closeMenu={() => setContextMenu(null)}
           messageLinkBasePath={messageLinkBasePath}
+        />
+      )}
+
+      {!suppressThreadPanel && !onOpenThreadRootIdChange && profile && (
+        <ThreadPanel
+          open={Boolean(openThreadRootId)}
+          rootMessage={openThreadRoot}
+          channelName={channelName ?? 'channel'}
+          profile={profile}
+          currentUserId={currentUserId}
+          groupId={groupId}
+          canPin={canPin}
+          onClose={closeThread}
         />
       )}
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import MessageList from '@/components/chat/MessageList'
+import { PROFILE_A } from '@/tests/fixtures'
 import type { MessageWithProfile } from '@/lib/types'
 
 // Minimal Message mock — emits the same edit events as the real component
@@ -37,6 +38,7 @@ vi.mock('@/components/chat/Message', async () => {
               <button data-testid={`delete-btn-${msg.id}`} onClick={() => actions.delete(msg.id)}>Delete</button>
               <button data-testid={`actions-btn-${msg.id}`} onClick={() => actions.openActions(msg.id)}>Actions</button>
               <button data-testid={`context-btn-${msg.id}`} onClick={(event) => actions.openContextMenu(msg.id, event)}>Context</button>
+              <button data-testid={`thread-btn-${msg.id}`} onClick={() => actions.openThread(msg.id)}>Thread</button>
             </>
           )}
         </div>
@@ -51,6 +53,15 @@ vi.mock('@/components/chat/SystemMessage', () => ({
       <button data-testid="system-see-all" onClick={onOpenPinnedPanel}>See all</button>
     </div>
   ),
+}))
+
+vi.mock('@/components/chat/ThreadPanel', () => ({
+  default: ({ open, rootMessage, onClose }: any) => open && rootMessage ? (
+    <div data-testid="thread-panel" data-root-id={rootMessage.id}>
+      <button data-testid="thread-panel-close" onClick={onClose}>Close thread</button>
+      {rootMessage.content}
+    </div>
+  ) : null,
 }))
 
 vi.mock('next/dynamic', () => ({ default: () => () => null }))
@@ -138,6 +149,7 @@ const BASE_PROPS = {
   loadingMore: false,
   currentUserId: 'u1',
   currentUsername: 'alice',
+  profile: PROFILE_A,
   onLoadMore: vi.fn(),
   onReact: vi.fn(),
   onReply: vi.fn(),
@@ -1075,5 +1087,54 @@ describe('MessageList — notification hash fallback', () => {
     fireEvent.click(screen.getByTestId('message-search-next'))
 
     expect(screen.queryByTestId('notification-fallback-notice')).not.toBeInTheDocument()
+  })
+})
+
+
+describe('MessageList — thread URL state', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    window.history.pushState({}, '', '/channels/ch-1')
+  })
+
+  it('opens a thread and replaces the thread query parameter', async () => {
+    const onThreadPanelOpenChange = vi.fn()
+    const onOpenThreadRootIdChange = vi.fn()
+    render(
+      <MessageList
+        {...BASE_PROPS}
+        messages={[MSG]}
+        channelId="ch-1"
+        onThreadPanelOpenChange={onThreadPanelOpenChange}
+        onOpenThreadRootIdChange={onOpenThreadRootIdChange}
+      />
+    )
+
+    fireEvent.click(screen.getByTestId('thread-btn-msg-1'))
+
+    expect(window.location.search).toBe('?thread=msg-1')
+    expect(onOpenThreadRootIdChange).toHaveBeenCalledWith('msg-1')
+    expect(onThreadPanelOpenChange).toHaveBeenCalledWith(true)
+    expect(screen.queryByTestId('thread-panel')).not.toBeInTheDocument()
+  })
+
+  it('opens the parent-owned thread panel from an initial thread query parameter', async () => {
+    const onThreadPanelOpenChange = vi.fn()
+    const onOpenThreadRootIdChange = vi.fn()
+    window.history.pushState({}, '', '/channels/ch-1?thread=msg-1')
+
+    render(
+      <MessageList
+        {...BASE_PROPS}
+        messages={[MSG]}
+        channelId="ch-1"
+        onThreadPanelOpenChange={onThreadPanelOpenChange}
+        onOpenThreadRootIdChange={onOpenThreadRootIdChange}
+      />
+    )
+
+    await waitFor(() => expect(onOpenThreadRootIdChange).toHaveBeenCalledWith('msg-1'))
+    expect(onThreadPanelOpenChange).toHaveBeenCalledWith(true)
+    expect(screen.queryByTestId('thread-panel')).not.toBeInTheDocument()
   })
 })

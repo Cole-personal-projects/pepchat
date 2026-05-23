@@ -3,7 +3,12 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import ChannelShell from '@/components/chat/ChannelShell'
 import type { MessageWithProfile, Profile } from '@/lib/types'
 
-const { mockMessageList, mockMessageInput } = vi.hoisted(() => ({
+const { mockChatHeader, mockMessageList, mockMessageInput, mockPinnedMessagesPanel, mockThreadPanel } = vi.hoisted(() => ({
+  mockChatHeader: vi.fn(({ pinnedPanelOpen, onTogglePinnedPanel }: any) => (
+    <button type="button" data-testid="toggle-pins" aria-pressed={pinnedPanelOpen} onClick={onTogglePinnedPanel}>
+      Toggle pins
+    </button>
+  )),
   mockMessageList: vi.fn(({ highlightedMessageId, messagesReadyForHashFallback }: any) => (
     <div>
       <div data-testid="message-list-highlight">{highlightedMessageId ?? ''}</div>
@@ -11,14 +16,17 @@ const { mockMessageList, mockMessageInput } = vi.hoisted(() => ({
     </div>
   )),
   mockMessageInput: vi.fn((_props: any) => <div data-testid="message-input" />),
+  mockPinnedMessagesPanel: vi.fn(({ open }: any) => <div data-testid="pinned-panel">{String(open)}</div>),
+  mockThreadPanel: vi.fn(({ open }: any) => <div data-testid="thread-panel">{String(open)}</div>),
 }))
 
-vi.mock('@/components/chat/ChatHeader', () => ({ default: () => <div data-testid="chat-header" /> }))
+vi.mock('@/components/chat/ChatHeader', () => ({ default: (props: any) => mockChatHeader(props) }))
 vi.mock('@/components/chat/MessageList', () => ({ default: (props: any) => mockMessageList(props) }))
 vi.mock('@/components/chat/MessageInput', () => ({ default: (props: any) => mockMessageInput(props) }))
 vi.mock('@/components/chat/TypingIndicator', () => ({ default: () => <div data-testid="typing-indicator" /> }))
 vi.mock('@/components/chat/PresencePanel', () => ({ default: () => <div data-testid="presence-panel" /> }))
-vi.mock('@/components/chat/PinnedMessagesPanel', () => ({ default: () => <div data-testid="pinned-panel" /> }))
+vi.mock('@/components/chat/PinnedMessagesPanel', () => ({ default: (props: any) => mockPinnedMessagesPanel(props) }))
+vi.mock('@/components/chat/ThreadPanel', () => ({ default: (props: any) => mockThreadPanel(props) }))
 
 vi.mock('@/lib/hooks/useMessages', () => ({
   useMessages: (_channelId: string, initialMessages: MessageWithProfile[]) => ({
@@ -145,6 +153,51 @@ describe('ChannelShell — message links', () => {
     })
 
     await waitFor(() => expect(screen.getByTestId('message-list-highlight')).toHaveTextContent('msg-1'))
+  })
+
+  it('does not treat a thread reply hash as a channel timeline jump', async () => {
+    window.history.replaceState(null, '', '/channels/ch-1?thread=msg-1#reply-1')
+
+    render(
+      <ChannelShell
+        channelId="ch-1"
+        channelName="general"
+        initialMessages={[MESSAGE]}
+        profile={PROFILE}
+        userRole="user"
+      />
+    )
+
+    await waitFor(() => expect(mockMessageList).toHaveBeenCalled())
+    expect(screen.getByTestId('message-list-highlight')).toBeEmptyDOMElement()
+  })
+
+  it('lets the pinned panel toggle take precedence over an open thread panel', async () => {
+    render(
+      <ChannelShell
+        channelId="ch-1"
+        channelName="general"
+        initialMessages={[MESSAGE]}
+        profile={PROFILE}
+        userRole="user"
+      />
+    )
+
+    act(() => {
+      mockMessageList.mock.calls.at(-1)?.[0].onOpenThreadRootIdChange('msg-1')
+      mockMessageList.mock.calls.at(-1)?.[0].onThreadPanelOpenChange(true)
+    })
+
+    expect(mockPinnedMessagesPanel.mock.calls.at(-1)?.[0].open).toBe(false)
+
+    act(() => {
+      screen.getByTestId('toggle-pins').click()
+    })
+
+    await waitFor(() => expect(mockPinnedMessagesPanel.mock.calls.at(-1)?.[0].open).toBe(true))
+    expect(mockChatHeader.mock.calls.at(-1)?.[0].pinnedPanelOpen).toBe(true)
+    expect(mockThreadPanel.mock.calls.at(-1)?.[0].open).toBe(false)
+    expect(screen.getByTestId('thread-panel')).toHaveTextContent('false')
   })
 
   it('passes hash fallback readiness to MessageList', () => {

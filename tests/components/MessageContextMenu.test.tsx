@@ -33,6 +33,7 @@ const BASE_ACTIONS: MessageActions = {
   delete: vi.fn(),
   react: vi.fn(),
   reply: vi.fn(),
+  openThread: vi.fn(),
   jumpToMessage: vi.fn(),
   pin: vi.fn(),
   toggleSaved: vi.fn(),
