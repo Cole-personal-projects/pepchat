@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { fetchThreadReplies } from '@/app/(app)/messages/thread-actions'
+import { fetchThreadReplies, markThreadRead } from '@/app/(app)/messages/thread-actions'
 import Message from '@/components/chat/Message'
 import MessageInput from '@/components/chat/MessageInput'
+import { useThreadMessages } from '@/lib/hooks/useThreadMessages'
 import type { MessageWithProfile, Profile } from '@/lib/types'
 
 interface ThreadPanelProps {
@@ -27,11 +28,19 @@ export default function ThreadPanel({
   canPin = false,
   onClose,
 }: ThreadPanelProps) {
-  const [replies, setReplies] = useState<MessageWithProfile[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [dragStartY, setDragStartY] = useState<number | null>(null)
+  const [dragOffset, setDragOffset] = useState(0)
 
   const rootId = rootMessage?.id ?? null
+  const {
+    replies,
+    setReplies,
+    addReply,
+    broadcastNewThreadReply,
+    broadcastThreadActivity,
+  } = useThreadMessages(rootId, rootMessage?.channel_id ?? null)
 
   useEffect(() => {
     if (!open || !rootId) {
@@ -51,6 +60,8 @@ export default function ThreadPanel({
         setError(result.error)
       } else if (result.messages) {
         setReplies(result.messages)
+        void markThreadRead({ rootId })
+        window.dispatchEvent(new CustomEvent('thread-read', { detail: { rootId } }))
       } else {
         setReplies([])
         setError('Failed to load thread replies.')
@@ -64,9 +75,29 @@ export default function ThreadPanel({
     return () => {
       ignore = true
     }
-  }, [open, rootId])
+  }, [open, rootId, setReplies])
+
+  useEffect(() => {
+    if (!open || !rootId || loading) return
+    const latestReplyAt = replies[replies.length - 1]?.created_at ?? rootMessage?.thread_last_reply_at
+    if (!latestReplyAt) return
+
+    void markThreadRead({ rootId })
+    window.dispatchEvent(new CustomEvent('thread-read', { detail: { rootId } }))
+  }, [loading, open, replies, rootId, rootMessage?.thread_last_reply_at])
 
   if (!open || !rootMessage) return null
+
+  function handleDragMove(clientY: number) {
+    if (dragStartY === null) return
+    setDragOffset(Math.max(0, clientY - dragStartY))
+  }
+
+  function handleDragEnd() {
+    if (dragOffset > 80) onClose()
+    setDragStartY(null)
+    setDragOffset(0)
+  }
 
   const baseMessageProps = {
     currentUserId,
@@ -92,9 +123,26 @@ export default function ThreadPanel({
       <aside
         data-testid="thread-panel"
         className="fixed inset-x-0 bottom-0 z-50 flex max-h-[85vh] flex-col rounded-t-2xl border-t border-black/20 lg:static lg:z-auto lg:max-h-none lg:w-80 lg:flex-shrink-0 lg:rounded-none lg:border-l lg:border-t-0 drawer-panel-enter"
-        style={{ background: 'var(--bg-secondary)' }}
+        style={{
+          background: 'var(--bg-secondary)',
+          transform: dragOffset ? `translateY(${dragOffset}px)` : undefined,
+          transition: dragStartY === null ? 'transform 160ms ease' : undefined,
+        }}
         aria-label="Thread panel"
       >
+        <div
+          data-testid="thread-panel-drag-handle"
+          className="flex justify-center pt-2 lg:hidden"
+          onPointerDown={event => {
+            event.currentTarget.setPointerCapture(event.pointerId)
+            setDragStartY(event.clientY)
+          }}
+          onPointerMove={event => handleDragMove(event.clientY)}
+          onPointerUp={handleDragEnd}
+          onPointerCancel={handleDragEnd}
+        >
+          <span className="h-1 w-10 rounded-full bg-white/25" aria-hidden="true" />
+        </div>
         <div className="flex flex-shrink-0 items-start justify-between gap-3 border-b border-black/20 px-4 py-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -179,7 +227,16 @@ export default function ThreadPanel({
             profile={profile}
             allowVideoUpload={true}
             draftStorageKey={`sidebar:draft:thread:${rootMessage.id}`}
-            onSent={message => setReplies(current => [...current, message])}
+            onSent={message => {
+              const nextReplyCount = Math.max(rootMessage.thread_reply_count ?? 0, replies.length) + 1
+              addReply(message)
+              broadcastNewThreadReply(message)
+              broadcastThreadActivity({
+                rootId: rootMessage.id,
+                replyCount: nextReplyCount,
+                lastReplyAt: message.created_at,
+              })
+            }}
           />
         </div>
       </aside>

@@ -1,6 +1,7 @@
 'use client'
 
 import Avatar from '@/components/ui/Avatar'
+import { useThreadUnread } from '@/lib/hooks/useThreadUnread'
 import type { Profile } from '@/lib/types'
 
 interface ThreadChipProps {
@@ -9,6 +10,7 @@ interface ThreadChipProps {
   lastReplyAt?: string | null
   authors?: Array<Pick<Profile, 'username' | 'avatar_url' | 'display_name' | 'username_color'>>
   hasUnread?: boolean
+  currentUserId?: string
   onOpen: (rootId: string) => void
 }
 
@@ -33,14 +35,17 @@ export default function ThreadChip({
   replyCount,
   lastReplyAt,
   authors = [],
-  hasUnread = false,
+  hasUnread,
+  currentUserId,
   onOpen,
 }: ThreadChipProps) {
+  const computedUnread = useThreadUnread(rootId, lastReplyAt, replyCount, currentUserId)
   if (replyCount <= 0) return null
 
   const visibleAuthors = authors.slice(0, 3)
   const replyLabel = `${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}`
   const timeLabel = formatRelativeTime(lastReplyAt)
+  const unread = hasUnread ?? computedUnread
 
   return (
     <button
@@ -50,7 +55,7 @@ export default function ThreadChip({
       className="mt-2 inline-flex max-w-full items-center gap-2 rounded-full border border-[var(--border-soft)] bg-[var(--bg-secondary)] px-2.5 py-1 text-xs font-semibold text-[var(--text-muted)] transition-colors hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)]"
       aria-label={`Open thread with ${replyLabel}`}
     >
-      {hasUnread && (
+      {unread && (
         <span
           data-testid={`thread-chip-unread-${rootId}`}
           className="h-2 w-2 rounded-full bg-[var(--accent)]"

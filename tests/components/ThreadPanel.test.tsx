@@ -5,9 +5,11 @@ import { CHANNEL, GROUP, MESSAGE, PROFILE_A, PROFILE_B } from '@/tests/fixtures'
 import type { MessageWithProfile } from '@/lib/types'
 
 const fetchThreadRepliesMock = vi.hoisted(() => vi.fn())
+const markThreadReadMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/app/(app)/messages/thread-actions', () => ({
   fetchThreadReplies: fetchThreadRepliesMock,
+  markThreadRead: markThreadReadMock,
 }))
 
 vi.mock('@/components/chat/Message', () => ({
@@ -90,6 +92,8 @@ const BASE_PROPS = {
 describe('ThreadPanel', () => {
   beforeEach(() => {
     fetchThreadRepliesMock.mockReset()
+    markThreadReadMock.mockReset()
+    markThreadReadMock.mockResolvedValue({ ok: true })
     fetchThreadRepliesMock.mockResolvedValue({ ok: true, messages: [REPLY_MESSAGE], nextCursor: null })
   })
 

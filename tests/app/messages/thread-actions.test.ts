@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fetchThreadReplies, markThreadRead, sendThreadReply } from '@/app/(app)/messages/thread-actions'
 
-const { mockCreateClient, mockEnqueueMentionNotifications, mockLogAuditEvent } = vi.hoisted(() => ({
+const { mockCreateClient, mockDispatchNotification, mockEnqueueMentionNotifications, mockLogAuditEvent } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
+  mockDispatchNotification: vi.fn(),
   mockEnqueueMentionNotifications: vi.fn(),
   mockLogAuditEvent: vi.fn(),
 }))
@@ -12,8 +13,9 @@ vi.mock('@/lib/supabase/server', () => ({
 }))
 
 vi.mock('@/lib/server-notifications', () => ({
+  buildThreadReplyUrl: (channelId: string, rootId: string, messageId: string) => `/channels/${channelId}?thread=${rootId}#${messageId}`,
   enqueueMentionNotifications: mockEnqueueMentionNotifications,
-  dispatchNotification: vi.fn().mockResolvedValue(undefined),
+  dispatchNotification: mockDispatchNotification,
 }))
 
 vi.mock('@/lib/audit', () => ({
@@ -84,6 +86,7 @@ describe('thread actions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockEnqueueMentionNotifications.mockResolvedValue(undefined)
+    mockDispatchNotification.mockResolvedValue(undefined)
     mockLogAuditEvent.mockResolvedValue(undefined)
   })
 
@@ -115,12 +118,25 @@ describe('thread actions', () => {
       'root-1',
       { channel_id: 'ch-1', mirror_to_channel: false }
     )
+    expect(mockDispatchNotification).toHaveBeenCalledWith(expect.anything(), {
+      type: 'thread_reply',
+      payload: {
+        threadRootId: 'root-1',
+        newReplyId: 'reply-1',
+        newReplyAuthorId: 'user-a',
+        newReplyAuthorName: 'Alice',
+        channelId: 'ch-1',
+        content: 'Hi @bob',
+        attachments: [],
+      },
+    })
     expect(mockEnqueueMentionNotifications).toHaveBeenCalledWith(expect.anything(), {
       senderId: 'user-a',
       senderName: 'Alice',
       messageId: 'reply-1',
       channelId: 'ch-1',
       content: 'Hi @bob',
+      urlBuilder: expect.any(Function),
     })
   })
 
