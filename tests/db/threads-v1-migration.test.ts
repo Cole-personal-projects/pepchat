@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 const root = process.cwd()
 const migration = readFileSync(join(root, 'migrations/threads-v1.sql'), 'utf8')
+const mirrorMigration = readFileSync(join(root, 'migrations/threads-v1-mirror.sql'), 'utf8')
 const rollback = readFileSync(join(root, 'migrations/threads-v1-rollback.sql'), 'utf8')
 
 describe('Threads V1 migration safety', () => {
@@ -35,5 +36,28 @@ describe('Threads V1 migration safety', () => {
     expect(migration).toContain("realtime.topic() ~ '^messages-[0-9a-fA-F-]{36}$'")
     expect(migration).toContain("realtime.topic() ~ '^thread-[0-9a-fA-F-]{36}$'")
     expect(migration).toContain('public.can_read_channel_messages')
+  })
+
+  it('validates mirror rows cannot forge unrelated or cross-channel thread replies', () => {
+    expect(mirrorMigration).toContain('CREATE OR REPLACE FUNCTION public.validate_thread_mirror_invariants()')
+    expect(mirrorMigration).toContain('BEFORE INSERT OR UPDATE OF channel_id, user_id, thread_root_id, mirrored_from_thread_id ON public.messages')
+    expect(mirrorMigration).toContain('Mirror messages must not be thread replies.')
+    expect(mirrorMigration).toContain('NEW.user_id IS DISTINCT FROM auth.uid()')
+    expect(mirrorMigration).toContain('source_thread_root_id IS NULL OR source_mirrored_from_thread_id IS NOT NULL')
+    expect(mirrorMigration).toContain('source_channel_id IS DISTINCT FROM NEW.channel_id')
+    expect(mirrorMigration).toContain('source_user_id IS DISTINCT FROM NEW.user_id')
+    expect(mirrorMigration).toContain('Not authorized to mirror this thread reply.')
+  })
+
+  it('syncs only legitimate same-channel same-author mirror rows without deleted_at', () => {
+    expect(mirrorMigration).toContain('CREATE OR REPLACE FUNCTION public.sync_thread_mirror()')
+    expect(mirrorMigration).toContain('SECURITY DEFINER\nSET search_path = public')
+    expect(mirrorMigration).toContain('UPDATE public.messages AS mirror')
+    expect(mirrorMigration).toContain('mirror.mirrored_from_thread_id = NEW.id')
+    expect(mirrorMigration).toContain('mirror.thread_root_id IS NULL')
+    expect(mirrorMigration).toContain('mirror.channel_id = NEW.channel_id')
+    expect(mirrorMigration).toContain('mirror.user_id = NEW.user_id')
+    expect(mirrorMigration).toContain("SET content = '[deleted]', edited_at = now()")
+    expect(mirrorMigration).not.toContain('deleted_at')
   })
 })
