@@ -17,6 +17,7 @@ interface ThreadPanelProps {
   groupId?: string
   canPin?: boolean
   onClose: () => void
+  onMirrorSent?: (message: MessageWithProfile) => void
 }
 
 export default function ThreadPanel({
@@ -28,6 +29,7 @@ export default function ThreadPanel({
   groupId,
   canPin = false,
   onClose,
+  onMirrorSent,
 }: ThreadPanelProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -250,10 +252,11 @@ export default function ThreadPanel({
             profile={profile}
             allowVideoUpload={true}
             draftStorageKey={`sidebar:draft:thread:${rootMessage.id}`}
-            onSent={message => {
+            onSent={(message, mirrorMessage) => {
               const nextReplyCount = Math.max(rootMessage.thread_reply_count ?? 0, replies.length) + 1
               addReply(message)
               broadcastNewThreadReply(message)
+              if (mirrorMessage) onMirrorSent?.(mirrorMessage)
               broadcastThreadActivity({
                 rootId: rootMessage.id,
                 replyCount: nextReplyCount,

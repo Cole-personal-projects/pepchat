@@ -11,6 +11,11 @@ vi.mock('@/app/(app)/messages/actions', () => ({
   sendMessage: vi.fn(),
 }))
 
+const { sendThreadReplyMock } = vi.hoisted(() => ({ sendThreadReplyMock: vi.fn() }))
+vi.mock('@/app/(app)/messages/thread-actions', () => ({
+  sendThreadReply: sendThreadReplyMock,
+}))
+
 vi.mock('@/lib/klipy', () => ({
   registerShare: vi.fn(),
 }))
@@ -121,6 +126,30 @@ describe('MessageInput draft persistence', () => {
       expect(window.localStorage.getItem('sidebar:draft:channel-1')).toBeNull()
     })
     expect(screen.getByTestId('message-input-textarea')).toHaveValue('')
+  })
+
+  it('passes and resets the thread mirror toggle', async () => {
+    sendThreadReplyMock.mockResolvedValue({ ok: true, message: MESSAGE, mirrorMessage: null })
+    render(<MessageInput {...BASE_PROPS} mode="thread" threadRootId="root-1" />)
+
+    const checkbox = screen.getByTestId('thread-mirror-checkbox')
+    expect(checkbox).not.toBeChecked()
+    fireEvent.click(checkbox)
+    expect(checkbox).toBeChecked()
+    fireEvent.change(screen.getByTestId('message-input-textarea'), {
+      target: { value: 'Mirror this reply' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    await waitFor(() => {
+      expect(sendThreadReplyMock).toHaveBeenCalledWith({
+        rootId: 'root-1',
+        content: 'Mirror this reply',
+        attachments: [],
+        mirrorToChannel: true,
+      })
+    })
+    expect(checkbox).not.toBeChecked()
   })
 
   it('shows an error instead of crashing when sending returns no result', async () => {

@@ -28,6 +28,11 @@ type ThreadRootRow = {
   thread_root_id: string | null
 }
 
+type SendThreadReplyOutput = {
+  message: MessageWithProfile
+  mirrorMessage: MessageWithProfile | null
+}
+
 function parseReplyCursor(cursor?: string): { createdAt: string; id: string } | null {
   if (!cursor) return null
   const separator = cursor.lastIndexOf('|')
@@ -92,7 +97,7 @@ export const sendThreadReply = withAuth(
         },
       }
 
-      result = await withSideEffects(ctx.supabase, ctx.user.id, async () => {
+      result = await withSideEffects<SendThreadReplyOutput>(ctx.supabase, ctx.user.id, async () => {
         const { data: message, error } = await ctx.supabase
           .from('messages')
           .insert({
@@ -107,7 +112,28 @@ export const sendThreadReply = withAuth(
           .single()
 
         if (error || !message) throw new Error(error?.message ?? 'Failed to send thread reply.')
-        return message as MessageWithProfile
+
+        let mirrorMessage: MessageWithProfile | null = null
+        if (input.mirrorToChannel) {
+          const { data: mirror, error: mirrorError } = await ctx.supabase
+            .from('messages')
+            .insert({
+              channel_id: threadRoot.channel_id,
+              user_id: ctx.user.id,
+              content: trimmed,
+              reply_to_id: null,
+              thread_root_id: null,
+              mirrored_from_thread_id: (message as MessageWithProfile).id,
+              attachments,
+            })
+            .select(THREAD_MESSAGE_SELECT)
+            .single()
+
+          if (mirrorError || !mirror) throw new Error(mirrorError?.message ?? 'Failed to mirror thread reply.')
+          mirrorMessage = mirror as MessageWithProfile
+        }
+
+        return { message: message as MessageWithProfile, mirrorMessage }
       }, {
         onFailure: 'silent',
         audit: {
@@ -117,9 +143,9 @@ export const sendThreadReply = withAuth(
           metadata: { channel_id: threadRoot.channel_id, mirror_to_channel: Boolean(input.mirrorToChannel) },
         },
         notifications: [notificationDraft],
-        afterCommit(message) {
-          notificationDraft.payload.newReplyId = message.id
-          notificationDraft.payload.newReplyAuthorName = message.profiles.display_name ?? message.profiles.username
+        afterCommit(output) {
+          notificationDraft.payload.newReplyId = output.message.id
+          notificationDraft.payload.newReplyAuthorName = output.message.profiles.display_name ?? output.message.profiles.username
         },
       })
     } catch (err) {
@@ -127,12 +153,12 @@ export const sendThreadReply = withAuth(
     }
 
     try {
-      const name = result.data.profiles.display_name ?? result.data.profiles.username
+      const name = result.data.message.profiles.display_name ?? result.data.message.profiles.username
       await import('@/lib/server-notifications').then(({ buildThreadReplyUrl, enqueueMentionNotifications }) =>
         enqueueMentionNotifications(ctx.supabase, {
           senderId: ctx.user.id,
           senderName: name,
-          messageId: result.data.id,
+          messageId: result.data.message.id,
           channelId: threadRoot.channel_id,
           content: trimmed,
           urlBuilder: ({ channelId, messageId }) => buildThreadReplyUrl(channelId, rootId, messageId),
@@ -142,7 +168,7 @@ export const sendThreadReply = withAuth(
       // Mention notification fanout should never block the core thread reply path.
     }
 
-    return { ok: true, message: result.data }
+    return { ok: true, message: result.data.message, mirrorMessage: result.data.mirrorMessage }
   },
   { unauthenticated: () => ({ error: 'Not authenticated.' }) }
 )

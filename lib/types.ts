@@ -107,6 +107,7 @@ export interface Message {
   thread_reply_count?: number
   thread_last_reply_at?: string | null
   mirrored_from_thread_id?: string | null
+  mirrored_from_thread?: Pick<Message, 'id' | 'thread_root_id'> | null
   edited_at: string | null
   pinned_at?: string | null
   is_system?: boolean
