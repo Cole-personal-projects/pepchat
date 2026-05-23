@@ -154,6 +154,21 @@ describe('useUnreadChannels', () => {
     expect(result.current.unreadCountsByChannelId.get('ch-a')).toBe(1)
   })
 
+  it('ignores realtime thread replies for channel unread state', async () => {
+    const ch = setupMock({ channels: [CH_A], channel_read_state: [], messages: [] })
+    const { result } = renderHook(() => useUnreadChannels(USER_ID, null))
+    await waitFor(() => { expect(result.current.unreadChannelIds.size).toBe(0) })
+
+    act(() => {
+      ;(ch._trigger as (t: string, p: unknown) => void)('messages', {
+        new: { channel_id: 'ch-a', user_id: OTHER_ID, thread_root_id: 'root-1' },
+      })
+    })
+
+    expect(result.current.unreadChannelIds.has('ch-a')).toBe(false)
+    expect(result.current.unreadCountsByChannelId.has('ch-a')).toBe(false)
+  })
+
   it('does not add active channel to unread on realtime message', async () => {
     const ch = setupMock({ channels: [CH_A], channel_read_state: [], messages: [] })
     const { result } = renderHook(() => useUnreadChannels(USER_ID, 'ch-a'))

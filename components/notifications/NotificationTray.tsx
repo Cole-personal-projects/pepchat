@@ -17,6 +17,7 @@ const FILTER_LABELS: Record<NotificationFilter, string> = {
   dm_message: 'DMs',
   mention: 'Mentions',
   group_message: 'Groups',
+  thread_reply: 'Threads',
 }
 
 function formatEventTime(value: string): string {
@@ -111,7 +112,7 @@ export default function NotificationTray() {
     events.reduce<Record<NotificationEvent['type'], number>>((counts, event) => {
       if (!event.read_at) counts[event.type] += 1
       return counts
-    }, { dm_message: 0, mention: 0, group_message: 0 })
+    }, { dm_message: 0, mention: 0, group_message: 0, thread_reply: 0 })
   ), [events])
 
   function markEventRead(event: NotificationEvent) {
@@ -198,7 +199,7 @@ export default function NotificationTray() {
           ) : (
             <>
             <div className="flex gap-1 overflow-x-auto border-b border-white/10 px-3 py-2">
-              {(['all', 'dm_message', 'mention', 'group_message'] as NotificationFilter[]).map(item => {
+              {(['all', 'dm_message', 'mention', 'group_message', 'thread_reply'] as NotificationFilter[]).map(item => {
                 const count = item === 'all' ? unreadCount : unreadByType[item]
                 return (
                   <button

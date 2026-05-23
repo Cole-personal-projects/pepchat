@@ -22,6 +22,19 @@ type MentionNotificationInput = {
   content: string
 }
 
+type MentionProfile = {
+  id: string
+  username: string
+  display_name: string | null
+}
+
+type ChannelAccessRow = {
+  id: string
+  group_id: string
+  noob_access: boolean
+  name: string
+}
+
 function attachmentFallback(attachments?: Attachment[] | null): string {
   if (!attachments || attachments.length === 0) return 'New message'
   if (attachments.length > 1) return `${attachments.length} attachments`
@@ -50,6 +63,41 @@ export function notificationBody(content: string, attachments?: Attachment[] | n
   const trimmed = content.trim()
   if (trimmed) return trimmed.slice(0, 140)
   return attachmentFallback(attachments)
+}
+
+async function mentionableRecipientsForChannel(
+  supabase: SupabaseClient,
+  channelId: string,
+  profiles: MentionProfile[]
+): Promise<MentionProfile[]> {
+  if (profiles.length === 0) return []
+
+  const { data: channel, error: channelError } = await supabase
+    .from('channels')
+    .select('id, group_id, noob_access, name')
+    .eq('id', channelId)
+    .maybeSingle()
+
+  if (channelError || !channel) return []
+
+  const channelRow = channel as ChannelAccessRow
+  const { data: memberships, error: membershipError } = await supabase
+    .from('group_members')
+    .select('user_id, role')
+    .eq('group_id', channelRow.group_id)
+    .in('user_id', profiles.map(profile => profile.id))
+
+  if (membershipError) return []
+
+  const roleByUserId = new Map(
+    ((memberships ?? []) as Array<{ user_id: string; role: string }>).map(row => [row.user_id, row.role])
+  )
+
+  return profiles.filter(profile => {
+    const role = roleByUserId.get(profile.id)
+    if (!role) return false
+    return role !== 'noob' || channelRow.noob_access || channelRow.name === 'welcome'
+  })
 }
 
 async function mentionPreferenceMap(
@@ -117,20 +165,25 @@ export async function enqueueMentionNotifications(
     .select('id, username, display_name')
     .in('username', usernames)
 
-  const mentionedProfiles = ((profiles ?? []) as Array<{
-    id: string
-    username: string
-    display_name: string | null
-  }>).filter(profile => profile.id !== input.senderId)
+  const mentionedProfiles = ((profiles ?? []) as MentionProfile[]).filter(profile => profile.id !== input.senderId)
 
   if (mentionedProfiles.length === 0) return
 
+  // Filter recipients through channel visibility before writing body/url-bearing
+  // notifications so thread reply mentions cannot leak private channel content.
+  const authorizedProfiles = await mentionableRecipientsForChannel(
+    supabase,
+    input.channelId,
+    mentionedProfiles
+  )
+  if (authorizedProfiles.length === 0) return
+
   const preferences = await mentionPreferenceMap(
     supabase,
-    mentionedProfiles.map(profile => profile.id)
+    authorizedProfiles.map(profile => profile.id)
   )
 
-  const rows = mentionedProfiles
+  const rows = authorizedProfiles
     .filter(profile => preferences.get(profile.id) ?? true)
     .map(profile => ({
       user_id: profile.id,

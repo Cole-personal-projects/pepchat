@@ -96,6 +96,7 @@ export function useMessages(
             .from('messages')
             .select(MESSAGE_SELECT)
             .eq('id', inserted.id)
+            .is('thread_root_id', null)
             .single()
 
           if (error || !data) return
@@ -241,6 +242,7 @@ export function useMessages(
       .from('messages')
       .select(MESSAGE_SELECT)
       .eq('channel_id', channelId)
+      .is('thread_root_id', null)
       .lt('created_at', oldest)
       .order('created_at', { ascending: false })
       .limit(PAGE_SIZE)

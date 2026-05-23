@@ -21,6 +21,7 @@ function makeMessageFetch(message: MessageWithProfile | null) {
   const builder: any = {
     select: vi.fn(() => builder),
     eq: vi.fn(() => builder),
+    is: vi.fn(() => builder),
     single: vi.fn().mockResolvedValue(message ? { data: message, error: null } : { data: null, error: { message: 'not found' } }),
   }
   return builder
@@ -114,6 +115,7 @@ describe('useMessages realtime migration', () => {
 
     expect(result.current.messages.map((m) => m.id)).toEqual(['msg-1', 'msg-2'])
     expect(messageFetch.eq).toHaveBeenCalledWith('id', 'msg-2')
+    expect(messageFetch.is).toHaveBeenCalledWith('thread_root_id', null)
   })
 
   it('applies reaction add/remove broadcasts without duplicating reactions', () => {

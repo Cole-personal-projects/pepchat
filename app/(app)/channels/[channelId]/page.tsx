@@ -53,6 +53,7 @@ export default async function ChannelPage({
     .from('messages')
     .select(MESSAGE_SELECT)
     .eq('channel_id', params.channelId)
+    .is('thread_root_id', null)
     .order('created_at', { ascending: false })
     .limit(50)
 
