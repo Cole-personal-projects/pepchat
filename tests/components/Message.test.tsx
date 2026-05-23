@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render as rtlRender, screen, fireEvent } from '@testing-library/react'
 import Message from '@/components/chat/Message'
+import { ChannelMessageActionsProvider, type MessageActions } from '@/components/chat/MessageActionsContext'
 import type { MessageWithProfile } from '@/lib/types'
 
 vi.mock('next/dynamic', () => ({ default: () => () => null }))
@@ -29,7 +30,26 @@ const BASE_MSG: MessageWithProfile = {
   },
 }
 
-const NOOP = vi.fn()
+const BASE_ACTIONS: MessageActions = {
+  startEdit: vi.fn(),
+  cancelEdit: vi.fn(),
+  changeEditContent: vi.fn(),
+  submitEdit: vi.fn(),
+  delete: vi.fn(),
+  react: vi.fn(),
+  reply: vi.fn(),
+  jumpToMessage: vi.fn(),
+  pin: vi.fn(),
+  toggleSaved: vi.fn(),
+  openProfile: vi.fn(),
+  openActions: vi.fn(),
+  openContextMenu: vi.fn(),
+  togglePicker: vi.fn(),
+  closePicker: vi.fn(),
+  markUnread: vi.fn(),
+  report: vi.fn(),
+  muteUser: vi.fn(),
+}
 
 const BASE_PROPS = {
   msg: BASE_MSG,
@@ -39,22 +59,18 @@ const BASE_PROPS = {
   editingId: null as string | null,
   editContent: '',
   pickerOpenFor: null as string | null,
-  onStartEdit: NOOP,
-  onCancelEdit: NOOP,
-  onEditContentChange: NOOP,
-  onSubmitEdit: NOOP,
-  onDelete: NOOP,
-  onOpenProfile: NOOP,
-  onPickerToggle: NOOP,
-  onPickerClose: NOOP,
-  onEmojiSelect: NOOP,
-  onReact: NOOP,
-  onReply: NOOP,
-  onJumpToMessage: NOOP,
   allowReactions: true,
   allowReplies: true,
   isPending: false,
   atReactionLimit: false,
+}
+
+function render(ui: React.ReactElement, actions: Partial<MessageActions> = {}) {
+  return rtlRender(
+    <ChannelMessageActionsProvider value={{ ...BASE_ACTIONS, ...actions }}>
+      {ui}
+    </ChannelMessageActionsProvider>,
+  )
 }
 
 describe('Message — ungrouped', () => {
@@ -127,7 +143,7 @@ describe('Message — reply quote', () => {
 
   it('calls onJumpToMessage when reply quote is clicked', () => {
     const onJumpToMessage = vi.fn()
-    render(<Message {...BASE_PROPS} msg={msgWithReply} onJumpToMessage={onJumpToMessage} />)
+    render(<Message {...BASE_PROPS} msg={msgWithReply} />, { jumpToMessage: onJumpToMessage })
 
     fireEvent.click(screen.getByTestId('message-reply-quote'))
 
@@ -173,22 +189,22 @@ describe('Message — edited marker', () => {
 describe('Message — edit keyboard shortcuts', () => {
   it('calls onSubmitEdit with msg.id when Enter pressed in edit textarea', () => {
     const onSubmitEdit = vi.fn()
-    render(<Message {...BASE_PROPS} isOwn editingId="msg-1" editContent="edited text" onSubmitEdit={onSubmitEdit} />)
+    render(<Message {...BASE_PROPS} isOwn editingId="msg-1" editContent="edited text" />, { submitEdit: onSubmitEdit })
     fireEvent.keyDown(screen.getByTestId('message-edit-textarea'), { key: 'Enter', shiftKey: false })
-    expect(onSubmitEdit).toHaveBeenCalledWith('msg-1')
+    expect(onSubmitEdit).toHaveBeenCalledWith('msg-1', 'edited text')
     expect(onSubmitEdit).toHaveBeenCalledTimes(1)
   })
 
   it('does not call onSubmitEdit when Shift+Enter pressed', () => {
     const onSubmitEdit = vi.fn()
-    render(<Message {...BASE_PROPS} isOwn editingId="msg-1" editContent="edited text" onSubmitEdit={onSubmitEdit} />)
+    render(<Message {...BASE_PROPS} isOwn editingId="msg-1" editContent="edited text" />, { submitEdit: onSubmitEdit })
     fireEvent.keyDown(screen.getByTestId('message-edit-textarea'), { key: 'Enter', shiftKey: true })
     expect(onSubmitEdit).not.toHaveBeenCalled()
   })
 
   it('calls onCancelEdit when Escape pressed', () => {
     const onCancelEdit = vi.fn()
-    render(<Message {...BASE_PROPS} isOwn editingId="msg-1" editContent="edited text" onCancelEdit={onCancelEdit} />)
+    render(<Message {...BASE_PROPS} isOwn editingId="msg-1" editContent="edited text" />, { cancelEdit: onCancelEdit })
     fireEvent.keyDown(screen.getByTestId('message-edit-textarea'), { key: 'Escape' })
     expect(onCancelEdit).toHaveBeenCalled()
   })

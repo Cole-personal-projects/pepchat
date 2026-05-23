@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render as rtlRender, screen, fireEvent } from '@testing-library/react'
 import MessageContextMenu from '@/components/chat/MessageContextMenu'
+import { ChannelMessageActionsProvider, type MessageActions } from '@/components/chat/MessageActionsContext'
 import type { MessageWithProfile } from '@/lib/types'
+import type React from 'react'
 
 const MSG: MessageWithProfile = {
   id: 'msg-1',
@@ -23,6 +25,27 @@ const MSG: MessageWithProfile = {
 
 const PINNED_MSG: MessageWithProfile = { ...MSG, pinned_at: '2024-04-19T12:00:00Z' }
 
+const BASE_ACTIONS: MessageActions = {
+  startEdit: vi.fn(),
+  cancelEdit: vi.fn(),
+  changeEditContent: vi.fn(),
+  submitEdit: vi.fn(),
+  delete: vi.fn(),
+  react: vi.fn(),
+  reply: vi.fn(),
+  jumpToMessage: vi.fn(),
+  pin: vi.fn(),
+  toggleSaved: vi.fn(),
+  openProfile: vi.fn(),
+  openActions: vi.fn(),
+  openContextMenu: vi.fn(),
+  togglePicker: vi.fn(),
+  closePicker: vi.fn(),
+  markUnread: vi.fn(),
+  report: vi.fn(),
+  muteUser: vi.fn(),
+}
+
 const defaultProps = {
   message: MSG,
   position: { x: 100, y: 100 },
@@ -31,13 +54,15 @@ const defaultProps = {
   canPin: false,
   allowReactions: true,
   allowReplies: true,
-  currentUserId: 'u2',
-  onClose: vi.fn(),
-  onStartEdit: vi.fn(),
-  onDelete: vi.fn(),
-  onPin: vi.fn(),
-  onReply: vi.fn(),
-  onEmojiSelect: vi.fn(),
+  closeMenu: vi.fn(),
+}
+
+function render(ui: React.ReactElement, actions: Partial<MessageActions> = {}) {
+  return rtlRender(
+    <ChannelMessageActionsProvider value={{ ...BASE_ACTIONS, ...actions }}>
+      {ui}
+    </ChannelMessageActionsProvider>,
+  )
 }
 
 beforeEach(() => {
@@ -119,21 +144,21 @@ describe('MessageContextMenu — rendering', () => {
 describe('MessageContextMenu — dismiss behavior', () => {
   it('calls onClose on Escape key', () => {
     const onClose = vi.fn()
-    render(<MessageContextMenu {...defaultProps} onClose={onClose} />)
+    render(<MessageContextMenu {...defaultProps} closeMenu={onClose} />)
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(onClose).toHaveBeenCalledOnce()
   })
 
   it('calls onClose on mousedown outside menu', () => {
     const onClose = vi.fn()
-    render(<MessageContextMenu {...defaultProps} onClose={onClose} />)
+    render(<MessageContextMenu {...defaultProps} closeMenu={onClose} />)
     fireEvent.mouseDown(document.body)
     expect(onClose).toHaveBeenCalledOnce()
   })
 
   it('does not call onClose on mousedown inside menu', () => {
     const onClose = vi.fn()
-    render(<MessageContextMenu {...defaultProps} onClose={onClose} />)
+    render(<MessageContextMenu {...defaultProps} closeMenu={onClose} />)
     const menu = document.querySelector('.context-menu')!
     fireEvent.mouseDown(menu)
     expect(onClose).not.toHaveBeenCalled()
@@ -144,25 +169,25 @@ describe('MessageContextMenu — actions', () => {
   it('calls onReply and onClose when Reply clicked', () => {
     const onClose = vi.fn()
     const onReply = vi.fn()
-    render(<MessageContextMenu {...defaultProps} onClose={onClose} onReply={onReply} />)
+    render(<MessageContextMenu {...defaultProps} closeMenu={onClose} />, { reply: onReply })
     fireEvent.click(screen.getByText('Reply'))
-    expect(onReply).toHaveBeenCalledWith(MSG)
+    expect(onReply).toHaveBeenCalledWith(MSG.id)
     expect(onClose).toHaveBeenCalledOnce()
   })
 
   it('calls onStartEdit and onClose when Edit clicked', () => {
     const onClose = vi.fn()
     const onStartEdit = vi.fn()
-    render(<MessageContextMenu {...defaultProps} isOwn={true} onClose={onClose} onStartEdit={onStartEdit} />)
+    render(<MessageContextMenu {...defaultProps} isOwn={true} closeMenu={onClose} />, { startEdit: onStartEdit })
     fireEvent.click(screen.getByText('Edit Message'))
-    expect(onStartEdit).toHaveBeenCalledWith(MSG)
+    expect(onStartEdit).toHaveBeenCalledWith(MSG.id)
     expect(onClose).toHaveBeenCalledOnce()
   })
 
   it('calls onPin and onClose when Pin clicked', () => {
     const onClose = vi.fn()
     const onPin = vi.fn()
-    render(<MessageContextMenu {...defaultProps} canPin={true} onClose={onClose} onPin={onPin} />)
+    render(<MessageContextMenu {...defaultProps} canPin={true} closeMenu={onClose} />, { pin: onPin })
     fireEvent.click(screen.getByText('Pin Message'))
     expect(onPin).toHaveBeenCalledWith(MSG.id)
     expect(onClose).toHaveBeenCalledOnce()
@@ -171,7 +196,7 @@ describe('MessageContextMenu — actions', () => {
   it('calls onPin and onClose when Unpin clicked', () => {
     const onClose = vi.fn()
     const onPin = vi.fn()
-    render(<MessageContextMenu {...defaultProps} canPin={true} message={PINNED_MSG} onClose={onClose} onPin={onPin} />)
+    render(<MessageContextMenu {...defaultProps} canPin={true} message={PINNED_MSG} closeMenu={onClose} />, { pin: onPin })
     fireEvent.click(screen.getByText('Unpin Message'))
     expect(onPin).toHaveBeenCalledWith(PINNED_MSG.id)
     expect(onClose).toHaveBeenCalledOnce()
@@ -180,11 +205,11 @@ describe('MessageContextMenu — actions', () => {
   it('calls onMarkUnread with message and onClose when Mark Unread clicked', () => {
     const onClose = vi.fn()
     const onMarkUnread = vi.fn()
-    render(<MessageContextMenu {...defaultProps} onClose={onClose} onMarkUnread={onMarkUnread} />)
+    render(<MessageContextMenu {...defaultProps} closeMenu={onClose} canMarkUnread />, { markUnread: onMarkUnread })
 
     fireEvent.click(screen.getByText('Mark Unread'))
 
-    expect(onMarkUnread).toHaveBeenCalledWith(MSG)
+    expect(onMarkUnread).toHaveBeenCalledWith(MSG.id)
     expect(onClose).toHaveBeenCalledOnce()
   })
 
@@ -202,7 +227,7 @@ describe('MessageContextMenu — actions', () => {
   it('shows confirm dialog when Delete clicked, then calls onDelete on confirm', () => {
     const onDelete = vi.fn()
     const onClose = vi.fn()
-    render(<MessageContextMenu {...defaultProps} isOwn={true} onDelete={onDelete} onClose={onClose} />)
+    render(<MessageContextMenu {...defaultProps} isOwn={true} closeMenu={onClose} />, { delete: onDelete })
     fireEvent.click(screen.getByText('Delete Message'))
     expect(screen.getByTestId('ctx-delete-confirm-dialog')).toBeTruthy()
     expect(onDelete).not.toHaveBeenCalled()
@@ -222,7 +247,7 @@ describe('MessageContextMenu — actions', () => {
   it('calls onEmojiSelect with emoji when quick reaction clicked', () => {
     const onEmojiSelect = vi.fn()
     const onClose = vi.fn()
-    render(<MessageContextMenu {...defaultProps} onEmojiSelect={onEmojiSelect} onClose={onClose} />)
+    render(<MessageContextMenu {...defaultProps} closeMenu={onClose} />, { react: onEmojiSelect })
     const reactions = document.querySelectorAll('.quick-reaction')
     fireEvent.click(reactions[0])
     expect(onEmojiSelect).toHaveBeenCalledWith(MSG.id, expect.any(String))
@@ -232,7 +257,7 @@ describe('MessageContextMenu — actions', () => {
 
 describe('MessageContextMenu — report', () => {
   it('shows Report Message when onReport is provided', () => {
-    render(<MessageContextMenu {...defaultProps} onReport={vi.fn()} />)
+    render(<MessageContextMenu {...defaultProps} canReport />)
     expect(screen.getByText('Report Message')).toBeTruthy()
   })
 
@@ -244,7 +269,7 @@ describe('MessageContextMenu — report', () => {
   it('calls onReport with message id and onClose when clicked', () => {
     const onReport = vi.fn()
     const onClose = vi.fn()
-    render(<MessageContextMenu {...defaultProps} onReport={onReport} onClose={onClose} />)
+    render(<MessageContextMenu {...defaultProps} canReport closeMenu={onClose} />, { report: onReport })
     fireEvent.click(screen.getByText('Report Message'))
     expect(onReport).toHaveBeenCalledWith(MSG.id)
     expect(onClose).toHaveBeenCalledOnce()

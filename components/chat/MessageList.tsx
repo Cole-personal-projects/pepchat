@@ -7,6 +7,7 @@ import { reportMessage } from '@/app/admin/actions'
 import Message from '@/components/chat/Message'
 import MessageModal from '@/components/chat/MessageModal'
 import MessageContextMenu from '@/components/chat/MessageContextMenu'
+import { ChannelMessageActionsProvider, type MessageActions } from '@/components/chat/MessageActionsContext'
 import ReportMessageDialog from '@/components/chat/ReportMessageDialog'
 import SystemMessage from '@/components/chat/SystemMessage'
 import { PERMISSIONS } from '@/lib/permissions'
@@ -461,6 +462,10 @@ export default function MessageList({
     jumpToMessage(messageId)
   }
 
+  function findMessageById(messageId: string) {
+    return messages.find(m => m.id === messageId) ?? null
+  }
+
   function startEdit(msg: MessageWithProfile) {
     setEditingId(msg.id)
     setEditContent(msg.content)
@@ -473,18 +478,18 @@ export default function MessageList({
     setEditContent('')
   }
 
-  async function submitEdit(messageId: string) {
-    if (!editContent.trim() || editPending) return
+  async function submitEdit(messageId: string, content = editContent) {
+    if (!content.trim() || editPending) return
     setError('')
     setEditPending(true)
     try {
       const action = editAction ?? editMessage
-      const result = await action(messageId, editContent)
+      const result = await action(messageId, content)
       if ('error' in result) {
         setError(result.error ?? '')
       } else {
         setEditingId(null)
-        onEditSuccess?.(messageId, editContent)
+        onEditSuccess?.(messageId, content)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save edit.')
@@ -583,6 +588,70 @@ export default function MessageList({
 
   const canDeleteAny = userRole ? PERMISSIONS.canDeleteAnyMessage(userRole) : false
   const canPin = userRole ? PERMISSIONS.canPinMessages(userRole) : false
+  const messageActions = useMemo<MessageActions>(() => ({
+    startEdit: (messageId: string) => {
+      const msg = findMessageById(messageId)
+      if (msg) startEdit(msg)
+    },
+    cancelEdit,
+    changeEditContent: setEditContent,
+    submitEdit,
+    delete: async (messageId: string) => handleModalDelete(messageId),
+    react: async (messageId: string, emoji: string) => {
+      setPickerOpenFor(null)
+      onReact(messageId, emoji)
+    },
+    reply: (messageId: string) => {
+      const msg = findMessageById(messageId)
+      if (msg) onReply(msg)
+    },
+    jumpToMessage: handleJumpToReply,
+    pin: async (messageId: string) => handlePin(messageId),
+    toggleSaved: (messageId: string) => {
+      const msg = findMessageById(messageId)
+      if (msg) toggleSaved(msg)
+    },
+    openProfile: (userId: string, anchor: HTMLElement) => setProfileCard({ userId, anchor }),
+    openActions: (messageId: string) => {
+      const msg = findMessageById(messageId)
+      if (msg) setModalMsg(msg)
+    },
+    openContextMenu: (messageId: string, event: React.MouseEvent) => {
+      const msg = findMessageById(messageId)
+      if (!msg) return
+      const vw = window.innerWidth
+      const menuWidth = 220
+      const x = event.clientX + menuWidth > vw ? vw - menuWidth - 8 : event.clientX
+      const vh = window.innerHeight
+      const menuHeight = 320
+      const y = event.clientY + menuHeight > vh ? vh - menuHeight - 8 : event.clientY
+      setContextMenu({ msg, x, y })
+    },
+    togglePicker: (messageId: string | null) => setPickerOpenFor(current => current === messageId ? null : messageId),
+    closePicker: () => setPickerOpenFor(null),
+    markUnread: (messageId: string) => {
+      const msg = findMessageById(messageId)
+      if (msg) handleMarkUnread(msg)
+    },
+    report: handleReport,
+    muteUser: (messageId: string) => {
+      const msg = findMessageById(messageId)
+      if (msg) muteUser(msg)
+    },
+  }), [
+    editContent,
+    editPending,
+    messages,
+    onReact,
+    onReply,
+    pinAction,
+    deleteAction,
+    editAction,
+    onEditSuccess,
+    onDeleteSuccess,
+    currentUserId,
+    reportedMessageIds,
+  ])
   const searchCountLabel = hasSearchFilters
     ? (
         groupSearchPending
@@ -594,7 +663,8 @@ export default function MessageList({
     : ''
 
   return (
-    <div style={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column', background: 'var(--bg-chat)' }}>
+    <ChannelMessageActionsProvider value={messageActions}>
+      <div style={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column', background: 'var(--bg-chat)' }}>
       <div
         style={{
           flexShrink: 0,
@@ -966,23 +1036,7 @@ export default function MessageList({
                   editingId={editingId}
                   editContent={editContent}
                   pickerOpenFor={pickerOpenFor}
-                  onStartEdit={startEdit}
-                  onCancelEdit={cancelEdit}
-                  onEditContentChange={setEditContent}
-                  onSubmitEdit={submitEdit}
-                  onDelete={handleDelete}
-                  onOpenProfile={(userId, anchor) => setProfileCard({ userId, anchor })}
-                  onPickerToggle={id => setPickerOpenFor(pickerOpenFor === id ? null : id)}
-                  onPickerClose={() => setPickerOpenFor(null)}
-                  onEmojiSelect={(msgId, emoji) => { setPickerOpenFor(null); onReact(msgId, emoji) }}
-                  onReact={emoji => onReact(msg.id, emoji)}
-                  onReply={onReply}
-                  onJumpToMessage={handleJumpToReply}
-                  onOpenActions={setModalMsg}
-                  onOpenContextMenu={(msg, x, y) => setContextMenu({ msg, x, y })}
-                  onPin={handlePin}
                   isSaved={savedMessageIds.has(msg.id)}
-                  onToggleSaved={toggleSaved}
                   allowReactions={allowReactions}
                   allowReplies={allowReplies}
                   isPending={editPending || isPending}
@@ -1052,18 +1106,9 @@ export default function MessageList({
         canPin={canPin}
         allowReactions={allowReactions}
         allowReplies={allowReplies}
-        onClose={() => setModalMsg(null)}
-        onStartEdit={msg => { startEdit(msg); setModalMsg(null) }}
-        onDelete={handleModalDelete}
-        onPin={handlePin}
-        onReply={msg => { onReply(msg); setModalMsg(null) }}
-        onEmojiSelect={(msgId, emoji) => { onReact(msgId, emoji); setModalMsg(null) }}
-        onMarkUnread={allowMarkUnread ? handleMarkUnread : undefined}
-        onReport={
-          allowReports && modalMsg && modalMsg.user_id !== currentUserId && !reportedMessageIds.has(modalMsg.id)
-            ? handleReport
-            : undefined
-        }
+        canMarkUnread={allowMarkUnread}
+        canReport={allowReports && modalMsg !== null && modalMsg.user_id !== currentUserId && !reportedMessageIds.has(modalMsg.id)}
+        closeModal={() => setModalMsg(null)}
         messageLinkBasePath={messageLinkBasePath}
       />
 
@@ -1076,20 +1121,10 @@ export default function MessageList({
           canPin={canPin}
           allowReactions={allowReactions}
           allowReplies={allowReplies}
-          currentUserId={currentUserId}
-          onClose={() => setContextMenu(null)}
-          onStartEdit={msg => { startEdit(msg); setContextMenu(null) }}
-          onDelete={msgId => { handleDelete(msgId); setContextMenu(null) }}
-          onPin={handlePin}
-          onReply={msg => { onReply(msg); setContextMenu(null) }}
-          onEmojiSelect={(msgId, emoji) => { onReact(msgId, emoji); setContextMenu(null) }}
-          onMarkUnread={allowMarkUnread ? handleMarkUnread : undefined}
-          onReport={
-            allowReports && contextMenu.msg.user_id !== currentUserId && !reportedMessageIds.has(contextMenu.msg.id)
-              ? handleReport
-              : undefined
-          }
-          onMuteUser={muteUser}
+          canMarkUnread={allowMarkUnread}
+          canReport={allowReports && contextMenu.msg.user_id !== currentUserId && !reportedMessageIds.has(contextMenu.msg.id)}
+          canMuteUser={contextMenu.msg.user_id !== currentUserId}
+          closeMenu={() => setContextMenu(null)}
           messageLinkBasePath={messageLinkBasePath}
         />
       )}
@@ -1101,7 +1136,8 @@ export default function MessageList({
         onClose={() => setReportTarget(null)}
         onSubmit={submitReport}
       />
-    </div>
+      </div>
+    </ChannelMessageActionsProvider>
   )
 }
 

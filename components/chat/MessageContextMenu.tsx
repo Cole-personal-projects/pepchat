@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import ReactDOM from 'react-dom'
 import dynamic from 'next/dynamic'
+import { useMessageActions } from '@/components/chat/MessageActionsContext'
 import type { MessageWithProfile } from '@/lib/types'
 
 const EmojiPickerPopover = dynamic(
@@ -20,16 +21,10 @@ export interface MessageContextMenuProps {
   canPin: boolean
   allowReactions: boolean
   allowReplies: boolean
-  currentUserId: string
-  onClose: () => void
-  onStartEdit: (msg: MessageWithProfile) => void
-  onDelete: (msgId: string) => void
-  onPin?: (msgId: string) => void
-  onReply: (msg: MessageWithProfile) => void
-  onEmojiSelect: (msgId: string, emoji: string) => void
-  onMarkUnread?: (msg: MessageWithProfile) => void
-  onReport?: (msgId: string) => void
-  onMuteUser?: (msg: MessageWithProfile) => void
+  canMarkUnread?: boolean
+  canReport?: boolean
+  canMuteUser?: boolean
+  closeMenu: () => void
   messageLinkBasePath?: string
 }
 
@@ -41,17 +36,13 @@ export default function MessageContextMenu({
   canPin,
   allowReactions,
   allowReplies,
-  onClose,
-  onStartEdit,
-  onDelete,
-  onPin,
-  onReply,
-  onEmojiSelect,
-  onMarkUnread,
-  onReport,
-  onMuteUser,
+  canMarkUnread = false,
+  canReport = false,
+  canMuteUser = false,
+  closeMenu,
   messageLinkBasePath = '/channels',
 }: MessageContextMenuProps) {
+  const actions = useMessageActions()
   const menuRef = useRef<HTMLDivElement>(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [showFullPicker, setShowFullPicker] = useState(false)
@@ -62,42 +53,42 @@ export default function MessageContextMenu({
 
   // Close on Escape
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeMenu() }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [onClose])
+  }, [closeMenu])
 
   // Close on outside mousedown
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose()
+        closeMenu()
       }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
-  }, [onClose])
+  }, [closeMenu])
 
   function handleCopyText() {
     navigator.clipboard?.writeText(message.content).catch(() => {})
     setCopyToast(true)
     setTimeout(() => {
       setCopyToast(false)
-      onClose()
+      closeMenu()
     }, 1200)
   }
 
   function handleCopyLink() {
     const url = `${window.location.origin}${messageLinkBasePath}/${message.channel_id}#${message.id}`
     navigator.clipboard?.writeText(url).catch(() => {})
-    onClose()
+    closeMenu()
   }
 
   function handleDelete() {
     if (!confirmingDelete) { setConfirmingDelete(true); return }
-    onDelete(message.id)
+    actions.delete(message.id)
     setConfirmingDelete(false)
-    onClose()
+    closeMenu()
   }
 
   const content = (
@@ -137,7 +128,7 @@ export default function MessageContextMenu({
                 <button
                   key={emoji}
                   className="quick-reaction"
-                  onClick={() => { onEmojiSelect(message.id, emoji); onClose() }}
+                  onClick={() => { actions.react(message.id, emoji); closeMenu() }}
                   style={quickReactionStyle(
                     (message.reactions ?? []).some(r => r.emoji === emoji)
                   )}
@@ -155,7 +146,7 @@ export default function MessageContextMenu({
       {showFullPicker && (
         <div style={{ position: 'relative', zIndex: 10 }}>
           <EmojiPickerPopover
-            onSelect={emoji => { onEmojiSelect(message.id, emoji); setShowFullPicker(false); onClose() }}
+            onSelect={emoji => { actions.react(message.id, emoji); setShowFullPicker(false); closeMenu() }}
             onClose={() => setShowFullPicker(false)}
           />
         </div>
@@ -165,7 +156,7 @@ export default function MessageContextMenu({
       {!confirmingDelete ? (
         <>
           {allowReplies && (
-            <MenuItem label="Reply" onClick={() => { onReply(message); onClose() }}>
+            <MenuItem label="Reply" onClick={() => { actions.reply(message.id); closeMenu() }}>
               <ReplyIcon />
             </MenuItem>
           )}
@@ -179,37 +170,37 @@ export default function MessageContextMenu({
           </MenuItem>
 
           {isOwn && (
-            <MenuItem label="Edit Message" onClick={() => { onStartEdit(message); onClose() }}>
+            <MenuItem label="Edit Message" onClick={() => { actions.startEdit(message.id); closeMenu() }}>
               <EditIcon />
             </MenuItem>
           )}
 
           {canPin && !isPinned && (
-            <MenuItem label="Pin Message" onClick={() => { onPin?.(message.id); onClose() }}>
+            <MenuItem label="Pin Message" onClick={() => { actions.pin(message.id); closeMenu() }}>
               <PinIcon />
             </MenuItem>
           )}
 
           {canPin && isPinned && (
-            <MenuItem label="Unpin Message" onClick={() => { onPin?.(message.id); onClose() }}>
+            <MenuItem label="Unpin Message" onClick={() => { actions.pin(message.id); closeMenu() }}>
               <PinIcon filled />
             </MenuItem>
           )}
 
-          {onMarkUnread && (
-            <MenuItem label="Mark Unread" onClick={() => { onMarkUnread(message); onClose() }}>
+          {canMarkUnread && (
+            <MenuItem label="Mark Unread" onClick={() => { actions.markUnread(message.id); closeMenu() }}>
               <MarkUnreadIcon />
             </MenuItem>
           )}
 
-          {onReport && (
-            <MenuItem label="Report Message" onClick={() => { onReport(message.id); onClose() }}>
+          {canReport && (
+            <MenuItem label="Report Message" onClick={() => { actions.report(message.id); closeMenu() }}>
               <FlagIcon />
             </MenuItem>
           )}
 
-          {onMuteUser && !isOwn && (
-            <MenuItem label={`Mute @${message.profiles?.username ?? 'user'}`} onClick={() => { onMuteUser(message); onClose() }}>
+          {canMuteUser && !isOwn && (
+            <MenuItem label={`Mute @${message.profiles?.username ?? 'user'}`} onClick={() => { actions.muteUser(message.id); closeMenu() }}>
               <MuteIcon />
             </MenuItem>
           )}

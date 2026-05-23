@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render as rtlRender, screen, fireEvent } from '@testing-library/react'
 import MessageActionBar from '@/components/chat/MessageActionBar'
+import { ChannelMessageActionsProvider, type MessageActions } from '@/components/chat/MessageActionsContext'
 import type { MessageWithProfile } from '@/lib/types'
+import type React from 'react'
 
 const MSG: MessageWithProfile = {
   id: 'msg-1',
@@ -16,6 +18,27 @@ const MSG: MessageWithProfile = {
   reactions: [],
 }
 
+const BASE_ACTIONS: MessageActions = {
+  startEdit: vi.fn(),
+  cancelEdit: vi.fn(),
+  changeEditContent: vi.fn(),
+  submitEdit: vi.fn(),
+  delete: vi.fn(),
+  react: vi.fn(),
+  reply: vi.fn(),
+  jumpToMessage: vi.fn(),
+  pin: vi.fn(),
+  toggleSaved: vi.fn(),
+  openProfile: vi.fn(),
+  openActions: vi.fn(),
+  openContextMenu: vi.fn(),
+  togglePicker: vi.fn(),
+  closePicker: vi.fn(),
+  markUnread: vi.fn(),
+  report: vi.fn(),
+  muteUser: vi.fn(),
+}
+
 const BASE = {
   msg: MSG,
   isOwn: false,
@@ -25,13 +48,14 @@ const BASE = {
   allowReplies: true,
   atReactionLimit: false,
   pickerOpenFor: null as string | null,
-  onPickerToggle: vi.fn(),
-  onPickerClose: vi.fn(),
-  onEmojiSelect: vi.fn(),
-  onReply: vi.fn(),
-  onStartEdit: vi.fn(),
-  onDelete: vi.fn(),
-  onPin: vi.fn(),
+}
+
+function render(ui: React.ReactElement, actions: Partial<MessageActions> = {}) {
+  return rtlRender(
+    <ChannelMessageActionsProvider value={{ ...BASE_ACTIONS, ...actions }}>
+      {ui}
+    </ChannelMessageActionsProvider>,
+  )
 }
 
 describe('MessageActionBar — visibility', () => {
@@ -94,35 +118,37 @@ describe('MessageActionBar — visibility', () => {
 describe('MessageActionBar — callbacks', () => {
   it('calls onPickerToggle with msg.id when emoji button clicked', () => {
     const onPickerToggle = vi.fn()
-    render(<MessageActionBar {...BASE} onPickerToggle={onPickerToggle} />)
+    render(<MessageActionBar {...BASE} />, { togglePicker: onPickerToggle })
     fireEvent.click(screen.getByTestId('action-react'))
     expect(onPickerToggle).toHaveBeenCalledWith('msg-1')
   })
 
   it('calls onReply with msg when reply button clicked', () => {
     const onReply = vi.fn()
-    render(<MessageActionBar {...BASE} onReply={onReply} />)
+    render(<MessageActionBar {...BASE} />, { reply: onReply })
     fireEvent.click(screen.getByTestId('action-reply'))
-    expect(onReply).toHaveBeenCalledWith(MSG)
+    expect(onReply).toHaveBeenCalledWith(MSG.id)
   })
 
   it('calls onStartEdit with msg when edit button clicked', () => {
     const onStartEdit = vi.fn()
-    render(<MessageActionBar {...BASE} isOwn={true} onStartEdit={onStartEdit} />)
+    render(<MessageActionBar {...BASE} isOwn={true} />, { startEdit: onStartEdit })
     fireEvent.click(screen.getByTestId('action-edit'))
-    expect(onStartEdit).toHaveBeenCalledWith(MSG)
+    expect(onStartEdit).toHaveBeenCalledWith(MSG.id)
   })
 
   it('calls onDelete with msg.id when delete button clicked', () => {
     const onDelete = vi.fn()
-    render(<MessageActionBar {...BASE} isOwn={true} onDelete={onDelete} />)
+    vi.stubGlobal('confirm', vi.fn(() => true))
+    render(<MessageActionBar {...BASE} isOwn={true} />, { delete: onDelete })
     fireEvent.click(screen.getByTestId('action-delete'))
     expect(onDelete).toHaveBeenCalledWith('msg-1')
+    vi.unstubAllGlobals()
   })
 
   it('calls onPin with msg.id when pin button clicked', () => {
     const onPin = vi.fn()
-    render(<MessageActionBar {...BASE} canPin={true} onPin={onPin} />)
+    render(<MessageActionBar {...BASE} canPin={true} />, { pin: onPin })
     fireEvent.click(screen.getByTestId('action-pin'))
     expect(onPin).toHaveBeenCalledWith('msg-1')
   })

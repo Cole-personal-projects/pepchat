@@ -6,6 +6,7 @@ import ReactionPills from '@/components/chat/ReactionPills'
 import MessageAttachments from '@/components/chat/MessageAttachments'
 import { MessageContent } from '@/components/chat/MessageContent'
 import MessageActionBar from '@/components/chat/MessageActionBar'
+import { useMessageActions } from '@/components/chat/MessageActionsContext'
 import { useLongPress } from '@/lib/hooks/useLongPress'
 import type { MessageWithProfile } from '@/lib/types'
 
@@ -25,23 +26,7 @@ export interface MessageProps {
   editingId: string | null
   editContent: string
   pickerOpenFor: string | null
-  onStartEdit: (msg: MessageWithProfile) => void
-  onCancelEdit: () => void
-  onEditContentChange: (val: string) => void
-  onSubmitEdit: (msgId: string) => void
-  onDelete: (msgId: string) => void
-  onOpenProfile: (userId: string, anchor: HTMLElement) => void
-  onPickerToggle: (msgId: string) => void
-  onPickerClose: () => void
-  onEmojiSelect: (msgId: string, emoji: string) => void
-  onReact: (emoji: string) => void
-  onReply: (msg: MessageWithProfile) => void
-  onJumpToMessage?: (messageId: string) => void
-  onOpenActions?: (msg: MessageWithProfile) => void
-  onOpenContextMenu?: (msg: MessageWithProfile, x: number, y: number) => void
-  onPin?: (msgId: string) => void
   isSaved?: boolean
-  onToggleSaved?: (msg: MessageWithProfile) => void
   allowReactions?: boolean
   allowReplies?: boolean
   isPending?: boolean
@@ -58,33 +43,18 @@ export default function Message({
   editingId,
   editContent,
   pickerOpenFor,
-  onStartEdit,
-  onCancelEdit,
-  onEditContentChange,
-  onSubmitEdit,
-  onDelete,
-  onOpenProfile,
-  onPickerToggle,
-  onPickerClose,
-  onEmojiSelect,
-  onReact,
-  onReply,
-  onJumpToMessage,
-  onOpenActions,
-  onOpenContextMenu,
-  onPin,
   isSaved = false,
-  onToggleSaved,
   allowReactions = true,
   allowReplies = true,
   isPending = false,
   atReactionLimit = false,
 }: MessageProps) {
+  const actions = useMessageActions()
   const isEditing = editingId === msg.id
   const displayName = msg.profiles?.display_name ?? msg.profiles?.username ?? 'Unknown'
   const usernameColor = (msg.profiles as any)?.username_color ?? 'var(--text-primary)'
 
-  const longPress = useLongPress(() => onOpenActions?.(msg))
+  const longPress = useLongPress(() => actions.openActions(msg.id))
 
   return (
     <div
@@ -94,17 +64,11 @@ export default function Message({
         paddingBottom: 2,
         position: 'relative',
       }}
-      onContextMenu={onOpenContextMenu ? (e) => {
+      onContextMenu={e => {
         e.preventDefault()
-        const vw = window.innerWidth
-        const menuWidth = 220
-        const x = e.clientX + menuWidth > vw ? vw - menuWidth - 8 : e.clientX
-        const vh = window.innerHeight
-        const menuHeight = 320
-        const y = e.clientY + menuHeight > vh ? vh - menuHeight - 8 : e.clientY
-        onOpenContextMenu(msg, x, y)
-      } : undefined}
-      {...(!isEditing && onOpenActions ? {
+        actions.openContextMenu(msg.id, e)
+      }}
+      {...(!isEditing ? {
         onPointerDown: longPress.onPointerDown,
         onPointerUp: longPress.onPointerUp,
         onPointerMove: longPress.onPointerMove,
@@ -128,7 +92,7 @@ export default function Message({
         ) : (
           <button
             className="rounded-full focus:outline-none"
-            onClick={e => onOpenProfile(msg.user_id, e.currentTarget)}
+            onClick={e => actions.openProfile(msg.user_id, e.currentTarget)}
           >
             <Avatar
               user={{
@@ -156,7 +120,7 @@ export default function Message({
               className="font-semibold hover:underline focus:outline-none"
               style={{ fontSize: 15, color: usernameColor, cursor: 'pointer' }}
               title={msg.profiles?.display_name ? `@${msg.profiles.username}` : undefined}
-              onClick={e => onOpenProfile(msg.user_id, e.currentTarget)}
+              onClick={e => actions.openProfile(msg.user_id, e.currentTarget)}
             >
               {displayName}
             </button>
@@ -182,7 +146,7 @@ export default function Message({
           <button
             type="button"
             data-testid="message-reply-quote"
-            onClick={() => onJumpToMessage?.(msg.replied_to!.id)}
+            onClick={() => actions.jumpToMessage(msg.replied_to!.id)}
             title="Jump to replied message"
             aria-label="Jump to replied message"
             style={{
@@ -199,7 +163,7 @@ export default function Message({
               background: 'transparent',
               fontSize: 12,
               color: 'var(--text-muted)',
-              cursor: onJumpToMessage ? 'pointer' : 'default',
+              cursor: 'pointer',
               textAlign: 'left',
             }}
           >
@@ -220,7 +184,7 @@ export default function Message({
             {/* Backdrop — tap outside to cancel */}
             <div
               style={{ position: 'fixed', inset: 0, zIndex: 10 }}
-              onPointerDown={() => onCancelEdit()}
+              onPointerDown={() => actions.cancelEdit()}
             />
             <div style={{ position: 'relative', zIndex: 11 }}>
               <textarea
@@ -233,24 +197,24 @@ export default function Message({
                 }}
                 rows={3}
                 value={editContent}
-                onChange={e => onEditContentChange(e.target.value)}
+                onChange={e => actions.changeEditContent(e.target.value)}
                 onKeyDown={e => {
                   e.stopPropagation()
-                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSubmitEdit(msg.id) }
-                  if (e.key === 'Escape') onCancelEdit()
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); actions.submitEdit(msg.id, editContent) }
+                  if (e.key === 'Escape') actions.cancelEdit()
                 }}
                 autoFocus
                 disabled={isPending}
               />
               <div style={{ display: 'flex', gap: 8, marginTop: 6, justifyContent: 'flex-end' }}>
                 <button
-                  onPointerDown={e => { e.stopPropagation(); onCancelEdit() }}
+                  onPointerDown={e => { e.stopPropagation(); actions.cancelEdit() }}
                   style={{ padding: '6px 14px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-sm)', color: 'var(--text-muted)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
                 >
                   Cancel
                 </button>
                 <button
-                  onPointerDown={e => { e.stopPropagation(); onSubmitEdit(msg.id) }}
+                  onPointerDown={e => { e.stopPropagation(); actions.submitEdit(msg.id, editContent) }}
                   disabled={isPending}
                   style={{ padding: '6px 14px', background: 'var(--accent)', border: 'none', borderRadius: 'var(--radius-sm)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
                 >
@@ -283,7 +247,7 @@ export default function Message({
           <ReactionPills
             reactions={msg.reactions}
             currentUserId={currentUserId}
-            onToggle={onReact}
+            onToggle={emoji => actions.react(msg.id, emoji)}
           />
         )}
       </div>
@@ -300,15 +264,7 @@ export default function Message({
           atReactionLimit={atReactionLimit}
           currentUserId={currentUserId}
           pickerOpenFor={pickerOpenFor}
-          onPickerToggle={onPickerToggle}
-          onPickerClose={onPickerClose}
-          onEmojiSelect={onEmojiSelect}
-          onReply={onReply}
-          onStartEdit={onStartEdit}
-          onDelete={onDelete}
-          onPin={onPin}
           isSaved={isSaved}
-          onToggleSaved={onToggleSaved}
         />
       )}
     </div>
