@@ -91,7 +91,7 @@ export default function ThreadPanel({
       />
       <aside
         data-testid="thread-panel"
-        className="fixed inset-x-0 bottom-0 z-50 flex max-h-[85vh] flex-col rounded-t-2xl border-t border-black/20 lg:inset-y-0 lg:left-auto lg:right-0 lg:max-h-none lg:w-80 lg:rounded-none lg:border-l lg:border-t-0 drawer-panel-enter"
+        className="fixed inset-x-0 bottom-0 z-50 flex max-h-[85vh] flex-col rounded-t-2xl border-t border-black/20 lg:static lg:z-auto lg:max-h-none lg:w-80 lg:flex-shrink-0 lg:rounded-none lg:border-l lg:border-t-0 drawer-panel-enter"
         style={{ background: 'var(--bg-secondary)' }}
         aria-label="Thread panel"
       >

@@ -1099,34 +1099,28 @@ describe('MessageList — thread URL state', () => {
 
   it('opens a thread and replaces the thread query parameter', async () => {
     const onThreadPanelOpenChange = vi.fn()
+    const onOpenThreadRootIdChange = vi.fn()
     render(
       <MessageList
         {...BASE_PROPS}
         messages={[MSG]}
         channelId="ch-1"
         onThreadPanelOpenChange={onThreadPanelOpenChange}
+        onOpenThreadRootIdChange={onOpenThreadRootIdChange}
       />
     )
 
     fireEvent.click(screen.getByTestId('thread-btn-msg-1'))
 
-    expect(screen.getByTestId('thread-panel')).toHaveAttribute('data-root-id', 'msg-1')
     expect(window.location.search).toBe('?thread=msg-1')
+    expect(onOpenThreadRootIdChange).toHaveBeenCalledWith('msg-1')
     expect(onThreadPanelOpenChange).toHaveBeenCalledWith(true)
-  })
-
-  it('strips the thread query parameter when closing the panel', async () => {
-    render(<MessageList {...BASE_PROPS} messages={[MSG]} channelId="ch-1" />)
-
-    fireEvent.click(screen.getByTestId('thread-btn-msg-1'))
-    fireEvent.click(screen.getByTestId('thread-panel-close'))
-
     expect(screen.queryByTestId('thread-panel')).not.toBeInTheDocument()
-    expect(window.location.search).toBe('')
   })
 
-  it('opens the thread panel from an initial thread query parameter', async () => {
+  it('opens the parent-owned thread panel from an initial thread query parameter', async () => {
     const onThreadPanelOpenChange = vi.fn()
+    const onOpenThreadRootIdChange = vi.fn()
     window.history.pushState({}, '', '/channels/ch-1?thread=msg-1')
 
     render(
@@ -1135,10 +1129,12 @@ describe('MessageList — thread URL state', () => {
         messages={[MSG]}
         channelId="ch-1"
         onThreadPanelOpenChange={onThreadPanelOpenChange}
+        onOpenThreadRootIdChange={onOpenThreadRootIdChange}
       />
     )
 
-    await waitFor(() => expect(screen.getByTestId('thread-panel')).toHaveAttribute('data-root-id', 'msg-1'))
+    await waitFor(() => expect(onOpenThreadRootIdChange).toHaveBeenCalledWith('msg-1'))
     expect(onThreadPanelOpenChange).toHaveBeenCalledWith(true)
+    expect(screen.queryByTestId('thread-panel')).not.toBeInTheDocument()
   })
 })

@@ -51,6 +51,8 @@ interface MessageListProps {
   onDeleteSuccess?: (messageId: string) => void
   onOpenPinnedPanel?: () => void
   onThreadPanelOpenChange?: (open: boolean) => void
+  onOpenThreadRootIdChange?: (rootId: string | null) => void
+  suppressThreadPanel?: boolean
   highlightedMessageId?: string | null
   initialLastReadAt?: string | null
   messageLinkBasePath?: string
@@ -111,6 +113,8 @@ export default function MessageList({
   onDeleteSuccess,
   onOpenPinnedPanel,
   onThreadPanelOpenChange,
+  onOpenThreadRootIdChange,
+  suppressThreadPanel = false,
   highlightedMessageId,
   initialLastReadAt = null,
   messageLinkBasePath = '/channels',
@@ -169,7 +173,7 @@ export default function MessageList({
     function syncThreadFromUrl() {
       const params = new URLSearchParams(window.location.search)
       const rootId = params.get('thread')?.trim() || null
-      setOpenThreadRootId(rootId)
+      setThreadRootId(rootId)
       onThreadPanelOpenChange?.(Boolean(rootId))
     }
 
@@ -177,6 +181,11 @@ export default function MessageList({
     window.addEventListener('popstate', syncThreadFromUrl)
     return () => window.removeEventListener('popstate', syncThreadFromUrl)
   }, [onThreadPanelOpenChange])
+
+  function setThreadRootId(rootId: string | null) {
+    setOpenThreadRootId(rootId)
+    onOpenThreadRootIdChange?.(rootId)
+  }
 
   function replaceThreadUrl(rootId: string | null) {
     const url = new URL(window.location.href)
@@ -190,13 +199,13 @@ export default function MessageList({
 
   function openThread(messageId: string) {
     replaceThreadUrl(messageId)
-    setOpenThreadRootId(messageId)
+    setThreadRootId(messageId)
     onThreadPanelOpenChange?.(true)
   }
 
   function closeThread() {
     replaceThreadUrl(null)
-    setOpenThreadRootId(null)
+    setThreadRootId(null)
     onThreadPanelOpenChange?.(false)
   }
 
@@ -704,7 +713,6 @@ export default function MessageList({
       )
     : ''
   const openThreadRoot = openThreadRootId ? findMessageById(openThreadRootId) : null
-
   return (
     <ChannelMessageActionsProvider value={messageActions}>
       <div style={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column', background: 'var(--bg-chat)' }}>
@@ -1172,7 +1180,7 @@ export default function MessageList({
         />
       )}
 
-      {profile && (
+      {!suppressThreadPanel && !onOpenThreadRootIdChange && profile && (
         <ThreadPanel
           open={Boolean(openThreadRootId)}
           rootMessage={openThreadRoot}

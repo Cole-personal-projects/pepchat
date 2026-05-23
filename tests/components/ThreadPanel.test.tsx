@@ -119,6 +119,14 @@ describe('ThreadPanel', () => {
     expect(screen.getByTestId('thread-composer')).toHaveAttribute('data-thread-root-id', 'root-1')
   })
 
+  it('uses the desktop right-rail layout instead of a fixed overlay', async () => {
+    render(<ThreadPanel {...BASE_PROPS} />)
+
+    expect(screen.getByTestId('thread-panel')).toHaveClass('lg:static', 'lg:w-80', 'lg:flex-shrink-0')
+    expect(screen.getByTestId('thread-panel')).not.toHaveClass('lg:right-0')
+    await waitFor(() => expect(screen.getByTestId('thread-reply-reply-1')).toBeInTheDocument())
+  })
+
   it('shows an empty state when the thread has no replies', async () => {
     fetchThreadRepliesMock.mockResolvedValueOnce({ ok: true, messages: [], nextCursor: null })
 

@@ -11,6 +11,7 @@ import MessageInput from '@/components/chat/MessageInput'
 import TypingIndicator from '@/components/chat/TypingIndicator'
 import PresencePanel from '@/components/chat/PresencePanel'
 import PinnedMessagesPanel from '@/components/chat/PinnedMessagesPanel'
+import ThreadPanel from '@/components/chat/ThreadPanel'
 import { toggleReaction } from '@/app/(app)/reactions/actions'
 import { pinMessage, unpinMessage } from '@/app/(app)/messages/actions'
 import { createClient } from '@/lib/supabase/client'
@@ -70,10 +71,12 @@ export default function ChannelShell({
 
   const [replyingTo, setReplyingTo] = useState<MessageWithProfile | null>(null)
   const [pinnedPanelOpen, setPinnedPanelOpen] = useState(false)
-  const [threadPanelOpen, setThreadPanelOpen] = useState(false)
+  const [openThreadRootId, setOpenThreadRootId] = useState<string | null>(null)
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null)
 
   const canPin = userRole ? PERMISSIONS.canPinMessages(userRole) : false
+  const openThreadRoot = openThreadRootId ? messages.find(message => message.id === openThreadRootId) ?? null : null
+  const threadPanelOpen = Boolean(openThreadRootId)
 
   // Mark channel as read on mount (channel navigation)
   useEffect(() => {
@@ -122,16 +125,34 @@ export default function ChannelShell({
 
   const handleJump = useCallback((messageId: string) => {
     setPinnedPanelOpen(false)
-    setThreadPanelOpen(false)
+    setOpenThreadRootId(null)
     setHighlightedMessageId(messageId)
     // Reset after animation so the same message can be jumped to again
     setTimeout(() => setHighlightedMessageId(null), 1700)
   }, [])
 
+  const closeThreadPanel = useCallback(() => {
+    setOpenThreadRootId(null)
+    if (typeof window === 'undefined') return
+    const url = new URL(window.location.href)
+    url.searchParams.delete('thread')
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+  }, [])
+
+  const handleTogglePinnedPanel = useCallback(() => {
+    if (openThreadRootId) {
+      closeThreadPanel()
+      setPinnedPanelOpen(true)
+      return
+    }
+    setPinnedPanelOpen(open => !open)
+  }, [closeThreadPanel, openThreadRootId])
+
   useEffect(() => {
     function jumpToHashMessage() {
       const messageId = decodeURIComponent(window.location.hash.replace(/^#/, '')).trim()
-      if (messageId) handleJump(messageId)
+      const threadRootId = new URLSearchParams(window.location.search).get('thread')?.trim()
+      if (messageId && !threadRootId) handleJump(messageId)
     }
 
     jumpToHashMessage()
@@ -163,7 +184,7 @@ export default function ChannelShell({
           channelTopic={channelTopic}
           pinnedCount={pinnedCount}
           pinnedPanelOpen={pinnedPanelOpen && !threadPanelOpen}
-          onTogglePinnedPanel={() => setPinnedPanelOpen(o => !o)}
+          onTogglePinnedPanel={handleTogglePinnedPanel}
         />
         <MessageList
           messages={messages}
@@ -183,8 +204,18 @@ export default function ChannelShell({
           userRole={userRole}
           onEditSuccess={updateMessageContent}
           onDeleteSuccess={removeMessage}
-          onOpenPinnedPanel={() => setPinnedPanelOpen(true)}
-          onThreadPanelOpenChange={setThreadPanelOpen}
+          onOpenPinnedPanel={() => {
+            closeThreadPanel()
+            setPinnedPanelOpen(true)
+          }}
+          onThreadPanelOpenChange={open => {
+            if (!open) setOpenThreadRootId(null)
+          }}
+          onOpenThreadRootIdChange={rootId => {
+            setOpenThreadRootId(rootId)
+            if (rootId) setPinnedPanelOpen(false)
+          }}
+          suppressThreadPanel
           highlightedMessageId={highlightedMessageId}
           messagesReadyForHashFallback={true}
           initialLastReadAt={initialLastReadAt}
@@ -227,6 +258,17 @@ export default function ChannelShell({
         onClose={() => setPinnedPanelOpen(false)}
         onJump={handleJump}
         onUnpin={handleUnpin}
+      />
+
+      <ThreadPanel
+        open={threadPanelOpen}
+        rootMessage={openThreadRoot}
+        channelName={channelName}
+        profile={profile}
+        currentUserId={userId ?? profile.id}
+        groupId={groupId}
+        canPin={canPin}
+        onClose={closeThreadPanel}
       />
     </div>
   )
