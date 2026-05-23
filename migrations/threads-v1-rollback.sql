@@ -11,7 +11,7 @@ ALTER TABLE messages
   DROP COLUMN IF EXISTS thread_last_reply_at,
   DROP COLUMN IF EXISTS thread_reply_count,
   DROP COLUMN IF EXISTS thread_root_id;
--- Do not recreate notification_events_type_check with a hard-coded type list.
--- Newer migrations may have extended the constraint after Threads V1; rollback
--- must not accidentally drop those future notification types.
-ALTER TABLE notification_events DROP CONSTRAINT IF EXISTS notification_events_type_check;
+-- Intentionally leave notification_events_type_check untouched.
+-- Rollback cannot safely know whether newer migrations extended the allowed
+-- notification types after Threads V1, so dropping/recreating the constraint
+-- here could either disable type integrity or delete future allowed types.
