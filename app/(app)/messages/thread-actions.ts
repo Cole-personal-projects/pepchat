@@ -38,6 +38,24 @@ function toReplyCursor(message: MessageWithProfile): string {
   return `${message.created_at}|${message.id}`
 }
 
+async function loadThreadRoot(
+  supabase: { from: (table: string) => any },
+  rootId: string,
+  nonRootError = 'Thread root not found.'
+): Promise<{ root: ThreadRootRow | null; error: string | null }> {
+  const { data: root, error } = await supabase
+    .from('messages')
+    .select('id, channel_id, thread_root_id')
+    .eq('id', rootId)
+    .maybeSingle()
+
+  if (error) return { root: null, error: error.message }
+  if (!root) return { root: null, error: 'Thread root not found.' }
+  if ((root as ThreadRootRow).thread_root_id) return { root: null, error: nonRootError }
+
+  return { root: root as ThreadRootRow, error: null }
+}
+
 export const sendThreadReply = withAuth(
   async (ctx, input: SendThreadReplyInput) => {
     const rootId = input.rootId?.trim()
@@ -48,17 +66,12 @@ export const sendThreadReply = withAuth(
     if (!trimmed && attachments.length === 0) return { error: 'Message cannot be empty.' }
     if (trimmed.length > 4000) return { error: 'Message too long (max 4000 characters).' }
 
-    const { data: root, error: rootError } = await ctx.supabase
-      .from('messages')
-      .select('id, channel_id, thread_root_id')
-      .eq('id', rootId)
-      .maybeSingle()
-
-    if (rootError) return { error: rootError.message }
-    if (!root) return { error: 'Thread root not found.' }
-
-    const threadRoot = root as ThreadRootRow
-    if (threadRoot.thread_root_id) return { error: 'Cannot reply to a thread reply.' }
+    const { root: threadRoot, error: rootError } = await loadThreadRoot(
+      ctx.supabase,
+      rootId,
+      'Cannot reply to a thread reply.'
+    )
+    if (rootError || !threadRoot) return { error: rootError ?? 'Thread root not found.' }
 
     let result
     try {
@@ -121,6 +134,9 @@ export const fetchThreadReplies = withAuth(
     const limit = Math.max(1, Math.min(input.limit ?? 50, 100))
     const cursor = parseReplyCursor(input.cursor)
 
+    const { error: rootError } = await loadThreadRoot(ctx.supabase, rootId)
+    if (rootError) return { error: rootError }
+
     let query = ctx.supabase
       .from('messages')
       .select(THREAD_MESSAGE_SELECT)
@@ -152,6 +168,9 @@ export const markThreadRead = withAuth(
   async (ctx, input: { rootId: string }) => {
     const rootId = input.rootId?.trim()
     if (!rootId) return { error: 'Missing thread root.' }
+
+    const { error: rootError } = await loadThreadRoot(ctx.supabase, rootId)
+    if (rootError) return { error: rootError }
 
     const { error } = await ctx.supabase
       .from('thread_read_state')

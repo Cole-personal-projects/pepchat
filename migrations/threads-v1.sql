@@ -58,9 +58,12 @@ ALTER TABLE notification_events
   CHECK (type IN ('dm_message', 'mention', 'group_message', 'thread_reply'));
 
 -- thread_read_state: user owns their own rows (mirrors channel_read_state)
+DROP POLICY IF EXISTS thread_read_state_select_own ON thread_read_state;
 CREATE POLICY thread_read_state_select_own ON thread_read_state
   FOR SELECT USING (user_id = auth.uid());
+DROP POLICY IF EXISTS thread_read_state_insert_own ON thread_read_state;
 CREATE POLICY thread_read_state_insert_own ON thread_read_state
   FOR INSERT WITH CHECK (user_id = auth.uid());
+DROP POLICY IF EXISTS thread_read_state_update_own ON thread_read_state;
 CREATE POLICY thread_read_state_update_own ON thread_read_state
   FOR UPDATE USING (user_id = auth.uid());

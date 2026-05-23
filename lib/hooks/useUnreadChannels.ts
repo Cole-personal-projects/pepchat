@@ -117,8 +117,13 @@ export function useUnreadChannels(
         type: 'postgres_changes',
         filter: { event: 'INSERT', schema: 'public', table: 'messages' },
         handler: (payload) => {
-          const { channel_id, user_id } = payload.new as { channel_id: string; user_id: string }
+          const { channel_id, user_id, thread_root_id } = payload.new as {
+            channel_id: string
+            user_id: string
+            thread_root_id?: string | null
+          }
           if (user_id === userId) return
+          if (thread_root_id) return
           if (channel_id === activeChannelIdRef.current) return
           setUnreadChannelIds(prev => new Set(Array.from(prev).concat(channel_id)))
           setUnreadCountsByChannelId(prev => {

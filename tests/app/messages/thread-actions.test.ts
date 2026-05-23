@@ -135,8 +135,9 @@ describe('thread actions', () => {
 
   it('fetches thread replies with cursor pagination', async () => {
     const reply2 = { ...THREAD_REPLY, id: 'reply-2', created_at: '2026-01-01T00:02:00.000Z' }
+    const rootBuilder = makeSingleBuilder({ data: { id: 'root-1', channel_id: 'ch-1', thread_root_id: null } })
     const fetchBuilder = makeChain({ data: [THREAD_REPLY, reply2] })
-    setupClient([fetchBuilder])
+    setupClient([rootBuilder, fetchBuilder])
 
     await expect(fetchThreadReplies({ rootId: 'root-1', limit: 1 })).resolves.toEqual({
       ok: true,
@@ -144,18 +145,30 @@ describe('thread actions', () => {
       nextCursor: '2026-01-01T00:01:00.000Z|reply-1',
     })
 
+    expect(rootBuilder.eq).toHaveBeenCalledWith('id', 'root-1')
     expect(fetchBuilder.eq).toHaveBeenCalledWith('thread_root_id', 'root-1')
     expect(fetchBuilder.order).toHaveBeenCalledWith('created_at', { ascending: true })
     expect(fetchBuilder.order).toHaveBeenCalledWith('id', { ascending: true })
     expect(fetchBuilder.limit).toHaveBeenCalledWith(2)
   })
 
+  it('rejects fetching replies for a non-root message', async () => {
+    const rootBuilder = makeSingleBuilder({ data: { id: 'reply-parent', channel_id: 'ch-1', thread_root_id: 'root-1' } })
+    setupClient([rootBuilder])
+
+    await expect(fetchThreadReplies({ rootId: 'reply-parent' })).resolves.toEqual({
+      error: 'Thread root not found.',
+    })
+  })
+
   it('marks a thread read with an owned upsert row', async () => {
+    const rootBuilder = makeSingleBuilder({ data: { id: 'root-1', channel_id: 'ch-1', thread_root_id: null } })
     const upsertBuilder = makeSingleBuilder({ data: null })
-    setupClient([upsertBuilder])
+    setupClient([rootBuilder, upsertBuilder])
 
     await expect(markThreadRead({ rootId: 'root-1' })).resolves.toEqual({ ok: true })
 
+    expect(rootBuilder.eq).toHaveBeenCalledWith('id', 'root-1')
     expect(upsertBuilder.upsert).toHaveBeenCalledWith(
       {
         user_id: 'user-a',
@@ -164,5 +177,14 @@ describe('thread actions', () => {
       },
       { onConflict: 'user_id,thread_root_id' }
     )
+  })
+
+  it('rejects marking a non-root message read', async () => {
+    const rootBuilder = makeSingleBuilder({ data: { id: 'reply-parent', channel_id: 'ch-1', thread_root_id: 'root-1' } })
+    setupClient([rootBuilder])
+
+    await expect(markThreadRead({ rootId: 'reply-parent' })).resolves.toEqual({
+      error: 'Thread root not found.',
+    })
   })
 })
