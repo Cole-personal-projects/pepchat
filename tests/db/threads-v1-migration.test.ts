@@ -6,6 +6,8 @@ const root = process.cwd()
 const migration = readFileSync(join(root, 'migrations/threads-v1.sql'), 'utf8')
 const mirrorMigration = readFileSync(join(root, 'migrations/threads-v1-mirror.sql'), 'utf8')
 const rollback = readFileSync(join(root, 'migrations/threads-v1-rollback.sql'), 'utf8')
+const promotionMigration = readFileSync(join(root, 'migrations/promote-thread-to-channel.sql'), 'utf8')
+const promotionRollback = readFileSync(join(root, 'migrations/promote-thread-to-channel-rollback.sql'), 'utf8')
 
 describe('Threads V1 migration safety', () => {
   it('keeps notification event type integrity during rollback', () => {
@@ -73,5 +75,22 @@ describe('Threads V1 migration safety', () => {
     expect(syncTriggerIndex).toBeGreaterThan(-1)
     expect(beforeDeleteIndex).toBeGreaterThan(syncTriggerIndex)
     expect(functionIndex).toBeGreaterThan(-1)
+  })
+
+  it('defines an atomic promote-thread RPC and rollback metadata cleanup', () => {
+    expect(promotionMigration).toContain('ADD COLUMN IF NOT EXISTS promoted_to_channel_id')
+    expect(promotionMigration).toContain('ADD COLUMN IF NOT EXISTS promoted_at')
+    expect(promotionMigration).toContain('CREATE INDEX IF NOT EXISTS idx_messages_promoted_lookup')
+    expect(promotionMigration).toContain('CREATE OR REPLACE FUNCTION public.promote_thread_to_channel')
+    expect(promotionMigration).toContain('SECURITY DEFINER\nSET search_path = public, auth')
+    expect(promotionMigration).toContain('LOCK TABLE public.channels IN SHARE ROW EXCLUSIVE MODE')
+    expect(promotionMigration).toContain("RAISE EXCEPTION 'Cannot promote an empty thread.'")
+    expect(promotionMigration).toContain('UPDATE public.messages\n    SET channel_id = v_new_channel_id,\n        thread_root_id = NULL')
+    expect(promotionMigration).toContain('promoted_to_channel_id = v_new_channel_id')
+    expect(promotionMigration).toContain('thread_reply_count = 0')
+    expect(promotionMigration).toContain('mirror.mirrored_from_thread_id = ANY(v_moved_reply_ids)')
+    expect(promotionRollback).toContain('DROP FUNCTION IF EXISTS public.promote_thread_to_channel(uuid, text, text, boolean, uuid)')
+    expect(promotionRollback).toContain('DROP INDEX IF EXISTS idx_messages_promoted_lookup')
+    expect(promotionRollback).toContain('DROP COLUMN IF EXISTS promoted_to_channel_id')
   })
 })

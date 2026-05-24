@@ -1,0 +1,178 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { promoteThreadToChannel } from '@/app/(app)/messages/promote-thread-action'
+
+const { mockCreateClient, mockLogAuditEvent } = vi.hoisted(() => ({
+  mockCreateClient: vi.fn(),
+  mockLogAuditEvent: vi.fn(),
+}))
+
+vi.mock('@/lib/supabase/server', () => ({
+  createClient: mockCreateClient,
+}))
+
+vi.mock('@/lib/audit', () => ({
+  logAuditEvent: mockLogAuditEvent,
+}))
+
+vi.mock('@/lib/server-notifications', () => ({
+  dispatchNotification: vi.fn(),
+}))
+
+type QueryResult = { data?: unknown; error?: { message: string; code?: string } | null }
+
+function makeBuilder(result: QueryResult = {}) {
+  const builder: Record<string, any> = {}
+  for (const method of ['select', 'eq', 'order', 'limit']) {
+    builder[method] = vi.fn(() => builder)
+  }
+  builder.single = vi.fn().mockResolvedValue({ data: result.data ?? null, error: result.error ?? null })
+  builder.maybeSingle = vi.fn().mockResolvedValue({ data: result.data ?? null, error: result.error ?? null })
+  return builder
+}
+
+function setupClient(builders: unknown[], options: {
+  userId?: string | null
+  rpcResult?: QueryResult
+} = {}) {
+  const queue = [...builders]
+  const channelSend = vi.fn().mockResolvedValue('ok')
+  const from = vi.fn((table: string) => {
+    const next = queue.shift()
+    if (!next) throw new Error(`Unexpected from(${table}) call`)
+    return next
+  })
+  const rpc = vi.fn().mockResolvedValue({
+    data: options.rpcResult?.data ?? [{ new_channel_id: 'ch-new', moved_reply_count: 2 }],
+    error: options.rpcResult?.error ?? null,
+  })
+  const channel = vi.fn(() => ({ send: channelSend }))
+  mockCreateClient.mockResolvedValue({
+    auth: {
+      getUser: vi.fn().mockResolvedValue({
+        data: { user: options.userId === null ? null : { id: options.userId ?? 'actor-1' } },
+        error: null,
+      }),
+    },
+    from,
+    rpc,
+    channel,
+  })
+  return { from, rpc, channel, channelSend }
+}
+
+const ROOT = { id: 'root-1', channel_id: 'ch-source', thread_root_id: null, user_id: 'author-1' }
+const SOURCE_CHANNEL = { id: 'ch-source', group_id: 'group-1', noob_access: true }
+const NEW_CHANNEL = { id: 'ch-new', group_id: 'group-1', name: 'promoted-thread' }
+
+describe('promoteThreadToChannel', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockLogAuditEvent.mockResolvedValue(undefined)
+  })
+
+  it('promotes a root thread for a channel manager and broadcasts after commit', async () => {
+    const root = makeBuilder({ data: ROOT })
+    const source = makeBuilder({ data: SOURCE_CHANNEL })
+    const gate = makeBuilder({ data: { role: 'moderator' } })
+    const duplicate = makeBuilder({ data: null })
+    const newChannel = makeBuilder({ data: NEW_CHANNEL })
+    const { rpc, channel, channelSend } = setupClient([root, source, gate, duplicate, newChannel])
+
+    await expect(promoteThreadToChannel({
+      rootMessageId: ' root-1 ',
+      channelName: ' Promoted Thread ',
+      channelTopic: ' Topic ',
+    })).resolves.toEqual({ newChannelId: 'ch-new', movedReplyCount: 2 })
+
+    expect(gate.eq).toHaveBeenCalledWith('group_id', 'group-1')
+    expect(gate.eq).toHaveBeenCalledWith('user_id', 'actor-1')
+    expect(duplicate.eq).toHaveBeenCalledWith('name', 'promoted-thread')
+    expect(rpc).toHaveBeenCalledWith('promote_thread_to_channel', {
+      p_root_message_id: 'root-1',
+      p_new_channel_name: 'promoted-thread',
+      p_new_channel_topic: 'Topic',
+      p_noob_access: true,
+      p_actor_id: 'actor-1',
+    })
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      'actor-1',
+      'thread.promoted_to_channel',
+      'message',
+      'root-1',
+      {
+        source_channel_id: 'ch-source',
+        target_channel_id: 'ch-new',
+        root_message_id: 'root-1',
+        moved_reply_count: 2,
+      },
+    )
+    expect(channel).toHaveBeenCalledWith('thread-root-1')
+    expect(channel).toHaveBeenCalledWith('channels-group-1')
+    expect(channelSend).toHaveBeenCalledWith({
+      type: 'broadcast',
+      event: 'thread_promoted',
+      payload: { newChannelId: 'ch-new' },
+    })
+    expect(channelSend).toHaveBeenCalledWith({
+      type: 'broadcast',
+      event: 'channel_added',
+      payload: NEW_CHANNEL,
+    })
+  })
+
+  it('allows the root author even without channel-manager role', async () => {
+    const root = makeBuilder({ data: { ...ROOT, user_id: 'actor-1' } })
+    const source = makeBuilder({ data: SOURCE_CHANNEL })
+    const gate = makeBuilder({ data: { role: 'user' } })
+    const duplicate = makeBuilder({ data: null })
+    const newChannel = makeBuilder({ data: NEW_CHANNEL })
+    setupClient([root, source, gate, duplicate, newChannel])
+
+    await expect(promoteThreadToChannel({ rootMessageId: 'root-1', channelName: 'promoted' }))
+      .resolves.toEqual({ newChannelId: 'ch-new', movedReplyCount: 2 })
+  })
+
+  it('denies non-author non-managers before validation or RPC', async () => {
+    const root = makeBuilder({ data: ROOT })
+    const source = makeBuilder({ data: SOURCE_CHANNEL })
+    const gate = makeBuilder({ data: { role: 'user' } })
+    const duplicate = makeBuilder({ data: null })
+    const { rpc } = setupClient([root, source, gate, duplicate])
+
+    await expect(promoteThreadToChannel({ rootMessageId: 'root-1', channelName: 'promoted' }))
+      .resolves.toEqual({ error: 'You do not have permission to promote this thread.' })
+
+    expect(duplicate.select).not.toHaveBeenCalled()
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('returns createChannel-compatible name collision errors before RPC', async () => {
+    const root = makeBuilder({ data: ROOT })
+    const source = makeBuilder({ data: SOURCE_CHANNEL })
+    const gate = makeBuilder({ data: { role: 'admin' } })
+    const duplicate = makeBuilder({ data: { id: 'existing' } })
+    const { rpc } = setupClient([root, source, gate, duplicate])
+
+    await expect(promoteThreadToChannel({ rootMessageId: 'root-1', channelName: 'Promoted' }))
+      .resolves.toEqual({ error: 'Channel name already exists.' })
+
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('surfaces typed empty-thread errors from the transactional RPC', async () => {
+    const root = makeBuilder({ data: ROOT })
+    const source = makeBuilder({ data: SOURCE_CHANNEL })
+    const gate = makeBuilder({ data: { role: 'admin' } })
+    const duplicate = makeBuilder({ data: null })
+    const { rpc } = setupClient([root, source, gate, duplicate], {
+      rpcResult: { error: { message: 'Cannot promote an empty thread.' } },
+    })
+
+    await expect(promoteThreadToChannel({ rootMessageId: 'root-1', channelName: 'Promoted' }))
+      .resolves.toEqual({ error: 'Cannot promote an empty thread.' })
+
+    expect(rpc).toHaveBeenCalled()
+    expect(mockLogAuditEvent).not.toHaveBeenCalled()
+  })
+})

@@ -1,11 +1,10 @@
 'use server'
 
 import { withAuth } from '@/lib/actions/withAuth'
+import { createChannelInternal, CHANNEL_MANAGE_DENIED, normalizeChannelName } from '@/lib/channels/createChannelInternal'
 import { gateGroupRole } from '@/lib/permissions/gate'
 import { PERMISSIONS } from '@/lib/permissions'
 import { redirect } from 'next/navigation'
-
-const CHANNEL_MANAGE_DENIED = 'You do not have permission to manage channels.'
 
 /** Creates a text channel inside a group. Channel manager only. */
 export const createChannel = withAuth(
@@ -13,12 +12,10 @@ export const createChannel = withAuth(
     { supabase, user },
     formData: FormData,
   ): Promise<{ error: string } | never> {
-    const name = (formData.get('name') as string).trim().toLowerCase().replace(/\s+/g, '-')
-    const description = ((formData.get('description') as string | null) ?? '').trim()
+    const name = formData.get('name') as string
     const groupId = formData.get('group_id') as string
-    const noobAccess = formData.get('noob_access') === 'on'
 
-    if (!name) return { error: 'Channel name is required.' }
+    if (!normalizeChannelName(name ?? '')) return { error: 'Channel name is required.' }
     if (!groupId) return { error: 'Missing group.' }
 
     const gateResult = await gateGroupRole(supabase, {
@@ -29,30 +26,15 @@ export const createChannel = withAuth(
     })
     if ('error' in gateResult) return gateResult
 
-    // Get the current max position
-    const { data: existing } = await supabase
-      .from('channels')
-      .select('position')
-      .eq('group_id', groupId)
-      .order('position', { ascending: false })
-      .limit(1)
+    const result = await createChannelInternal(supabase, {
+      groupId,
+      name,
+      description: formData.get('description') as string | null,
+      noobAccess: formData.get('noob_access') === 'on',
+    })
 
-    const nextPosition = existing && existing.length > 0 ? existing[0].position + 1 : 0
-
-    const { data: channel, error } = await supabase
-      .from('channels')
-      .insert({
-        group_id: groupId,
-        name,
-        description: description || null,
-        noob_access: noobAccess,
-        position: nextPosition,
-      })
-      .select()
-      .single()
-
-    if (error || !channel) return { error: error?.message ?? 'Failed to create channel.' }
-    redirect(`/channels/${channel.id}`)
+    if ('error' in result) return result
+    redirect(`/channels/${result.channel.id}`)
   },
   { unauthenticated: () => redirect('/login') },
 )

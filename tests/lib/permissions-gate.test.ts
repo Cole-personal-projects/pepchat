@@ -24,6 +24,17 @@ function setupSupabase(result: QueryResult) {
   return { supabase, builder }
 }
 
+describe('canPromoteThread', () => {
+  it('allows channel managers and root authors only', () => {
+    expect(PERMISSIONS.canPromoteThread('admin', false)).toBe(true)
+    expect(PERMISSIONS.canPromoteThread('moderator', false)).toBe(true)
+    expect(PERMISSIONS.canPromoteThread('user', true)).toBe(true)
+    expect(PERMISSIONS.canPromoteThread('noob', true)).toBe(true)
+    expect(PERMISSIONS.canPromoteThread('user', false)).toBe(false)
+    expect(PERMISSIONS.canPromoteThread('noob', false)).toBe(false)
+  })
+})
+
 describe('gateGroupRole', () => {
   beforeEach(() => {
     vi.clearAllMocks()
