@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { RealtimeChannel, RealtimeChannelOptions } from '@supabase/supabase-js'
 
+let realtimeChannelInstanceId = 0
+
 export type RealtimeStatus = 'CLOSED' | 'CHANNEL_ERROR' | 'TIMED_OUT' | 'SUBSCRIBED' | string
 
 export type RealtimeBinding = {
@@ -39,9 +41,19 @@ function withRealtimeAuthorization(options: RealtimeChannelOptions | undefined, 
   }
 }
 
+function shouldUseIsolatedPostgresTopic(bindings: RealtimeBinding[]): boolean {
+  return bindings.length > 0 && bindings.every(binding => binding.type === 'postgres_changes')
+}
+
 export function useRealtimeChannel(config: UseRealtimeChannelConfig): UseRealtimeChannelResult {
   const channelRef = useRef<RealtimeChannel | null>(null)
+  const isolatedTopicIdRef = useRef<string | null>(null)
   const [status, setStatus] = useState<RealtimeStatus | null>(null)
+
+  if (isolatedTopicIdRef.current === null) {
+    realtimeChannelInstanceId += 1
+    isolatedTopicIdRef.current = `instance-${realtimeChannelInstanceId}`
+  }
 
   useEffect(() => {
     if (config.enabled === false) {
@@ -51,13 +63,17 @@ export function useRealtimeChannel(config: UseRealtimeChannelConfig): UseRealtim
     }
 
     const supabase = createClient()
+    const usesBroadcast = config.bindings.some(binding => binding.type === 'broadcast')
     const channelOptions = withRealtimeAuthorization(
       config.options,
-      config.bindings.some(binding => binding.type === 'broadcast'),
+      usesBroadcast,
     )
+    const channelTopic = shouldUseIsolatedPostgresTopic(config.bindings)
+      ? `${config.topic}:${isolatedTopicIdRef.current}`
+      : config.topic
     const channel = channelOptions
-      ? supabase.channel(config.topic, channelOptions)
-      : supabase.channel(config.topic)
+      ? supabase.channel(channelTopic, channelOptions)
+      : supabase.channel(channelTopic)
 
     let boundChannel = channel
     for (const binding of config.bindings) {

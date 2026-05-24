@@ -23,6 +23,7 @@ type TestChannel = {
   presenceState: ReturnType<typeof vi.fn>
   bindings: BindingCall[]
   removed: boolean
+  subscribed: boolean
   statusCallback?: (status: RealtimeStatus) => void
 }
 
@@ -43,17 +44,25 @@ function makeRealtimeMock() {
   })
 
   const channel = vi.fn((topic: string, options?: Record<string, unknown>) => {
+    const existing = channels.find((candidate) => candidate.topic === topic && !candidate.removed)
+    if (existing) return existing
+
     const ch: TestChannel = {
       topic,
       options,
       bindings: [],
       removed: false,
+      subscribed: false,
       on: vi.fn((type: string, filter: Record<string, unknown>, handler: (payload: unknown) => void) => {
+        if (ch.subscribed) {
+          throw new Error(`cannot add \`${type}\` callbacks for ${topic} after \`subscribe()\`.`)
+        }
         ch.bindings.push({ type, filter, handler })
         log.push({ action: 'on', topic, channel: ch, type, filter })
         return ch
       }),
       subscribe: vi.fn((statusCallback?: (status: RealtimeStatus) => void) => {
+        ch.subscribed = true
         ch.statusCallback = statusCallback
         log.push({ action: 'subscribe', topic, channel: ch })
         return ch
@@ -127,6 +136,48 @@ describe('useRealtimeChannel', () => {
     act(() => realtime.emit('messages-ch-1', payload))
     expect(onInsert).toHaveBeenCalledWith(payload)
     expect(onDelete).not.toHaveBeenCalled()
+  })
+
+  it('uses distinct physical topics for concurrent postgres-only subscribers with the same logical topic', () => {
+    const realtime = makeRealtimeMock()
+    const firstHandler = vi.fn()
+    const secondHandler = vi.fn()
+
+    const first = renderHook(() =>
+      useRealtimeChannel({
+        topic: 'mention-candidates-group-1',
+        deps: ['group-1', 'first'],
+        bindings: [
+          {
+            type: 'postgres_changes',
+            filter: { event: '*', schema: 'public', table: 'group_members', filter: 'group_id=eq.group-1' },
+            handler: firstHandler,
+          },
+        ],
+      }),
+    )
+    const second = renderHook(() =>
+      useRealtimeChannel({
+        topic: 'mention-candidates-group-1',
+        deps: ['group-1', 'second'],
+        bindings: [
+          {
+            type: 'postgres_changes',
+            filter: { event: '*', schema: 'public', table: 'group_members', filter: 'group_id=eq.group-1' },
+            handler: secondHandler,
+          },
+        ],
+      }),
+    )
+
+    expect(realtime.channels).toHaveLength(2)
+    expect(realtime.channels[0].topic).toMatch(/^mention-candidates-group-1:/)
+    expect(realtime.channels[1].topic).toMatch(/^mention-candidates-group-1:/)
+    expect(realtime.channels[0].topic).not.toBe(realtime.channels[1].topic)
+    expect(first.result.current.channelRef.current).toBe(realtime.channels[0])
+    expect(second.result.current.channelRef.current).toBe(realtime.channels[1])
+    expect(realtime.channels[0].bindings).toHaveLength(1)
+    expect(realtime.channels[1].bindings).toHaveLength(1)
   })
 
   it('removes the active channel exactly once on clean unmount', () => {
