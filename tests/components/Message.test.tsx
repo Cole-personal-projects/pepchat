@@ -152,6 +152,37 @@ describe('Message — reply quote', () => {
   })
 })
 
+describe('Message — mobile thread entry', () => {
+  it('shows a visible mobile thread affordance for root messages with no replies', () => {
+    render(<Message {...BASE_PROPS} />)
+
+    expect(screen.getByTestId('mobile-action-reply-thread')).toHaveTextContent('Thread')
+  })
+
+  it('opens the thread from the mobile thread affordance', () => {
+    const openThread = vi.fn()
+    render(<Message {...BASE_PROPS} />, { openThread })
+
+    fireEvent.click(screen.getByTestId('mobile-action-reply-thread'))
+
+    expect(openThread).toHaveBeenCalledWith('msg-1')
+  })
+
+  it('hides the mobile thread affordance for thread reply messages', () => {
+    const threadReply: MessageWithProfile = { ...BASE_MSG, thread_root_id: 'root-1' }
+
+    render(<Message {...BASE_PROPS} msg={threadReply} />)
+
+    expect(screen.queryByTestId('mobile-action-reply-thread')).not.toBeInTheDocument()
+  })
+
+  it('hides the mobile thread affordance when replies are disabled', () => {
+    render(<Message {...BASE_PROPS} allowReplies={false} />)
+
+    expect(screen.queryByTestId('mobile-action-reply-thread')).not.toBeInTheDocument()
+  })
+})
+
 describe('Message — edit mode', () => {
   it('shows edit textarea when editingId matches msg.id', () => {
     render(<Message {...BASE_PROPS} editingId="msg-1" editContent="Hello world" />)
