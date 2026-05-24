@@ -51,6 +51,20 @@ describe('PromoteThreadModal', () => {
     expect(screen.getByTestId('promote-thread-summary')).toHaveTextContent('#general')
   })
 
+  it('resets the default channel name when reused for another root message', () => {
+    const { rerender } = render(<PromoteThreadModal {...BASE_PROPS} />)
+    expect(screen.getByLabelText('Channel Name')).toHaveValue('launch-planning-thread-with-ex')
+
+    rerender(
+      <PromoteThreadModal
+        {...BASE_PROPS}
+        rootMessage={{ ...ROOT_MESSAGE, id: 'root-2', content: 'Support escalation follow up' }}
+      />
+    )
+
+    expect(screen.getByLabelText('Channel Name')).toHaveValue('support-escalation-follow-up')
+  })
+
   it('submits promotion, closes, and navigates to the new channel', async () => {
     promoteThreadToChannelMock.mockResolvedValueOnce({ newChannelId: 'new-channel-id', movedReplyCount: 2 })
     const onPromoted = vi.fn()

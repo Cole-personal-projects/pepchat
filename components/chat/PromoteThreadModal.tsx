@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/ui/Modal'
 import { promoteThreadToChannel } from '@/app/(app)/messages/promote-thread-action'
@@ -45,6 +45,10 @@ export default function PromoteThreadModal({
   const [isPending, startTransition] = useTransition()
   const defaultName = useMemo(() => defaultPromotedChannelName(rootMessage.content), [rootMessage.content])
   const [channelName, setChannelName] = useState(defaultName)
+
+  useEffect(() => {
+    setChannelName(defaultName)
+  }, [defaultName, rootMessage.id])
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()

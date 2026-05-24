@@ -142,8 +142,24 @@ describe('useMessages realtime migration', () => {
     act(() => updateBinding.handler({ new: { id: 'msg-1', channel_id: 'ch-2', content: 'ignored', edited_at: 'later', pinned_at: 'pin' } }))
     expect(result.current.messages[0].content).toBe('hello')
 
-    act(() => updateBinding.handler({ new: { id: 'msg-1', channel_id: 'ch-1', content: 'updated', edited_at: 'later', pinned_at: 'pin' } }))
-    expect(result.current.messages[0]).toMatchObject({ content: 'updated', edited_at: 'later', pinned_at: 'pin' })
+    act(() => updateBinding.handler({
+      new: {
+        id: 'msg-1',
+        channel_id: 'ch-1',
+        content: '',
+        edited_at: 'later',
+        pinned_at: 'pin',
+        promoted_to_channel_id: 'promoted-channel',
+        promoted_at: '2024-01-02T00:00:00Z',
+      },
+    }))
+    expect(result.current.messages[0]).toMatchObject({
+      content: '',
+      edited_at: 'later',
+      pinned_at: 'pin',
+      promoted_to_channel_id: 'promoted-channel',
+      promoted_at: '2024-01-02T00:00:00Z',
+    })
 
     act(() => deleteBinding.handler({ old: { id: 'msg-1' } }))
     expect(result.current.messages).toEqual([])
