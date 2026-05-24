@@ -108,6 +108,19 @@ describe('useThreadMessages', () => {
     expect(realtime.from).not.toHaveBeenCalled()
   })
 
+  it('notifies promotions without exposing target channel metadata from realtime', async () => {
+    const realtime = makeRealtimeMock()
+    const onThreadPromoted = vi.fn()
+    renderHook(() => useThreadMessages('root-1', 'ch-1', undefined, onThreadPromoted))
+    const threadChannel = realtime.channels.find(channel => channel.topic === 'thread-root-1')!
+
+    await act(async () => {
+      await threadChannel.bindings[1].handler({ payload: { promoted: true, newChannelId: 'hidden-channel', channelName: 'Hidden' } })
+    })
+
+    expect(onThreadPromoted).toHaveBeenCalledWith({ rootId: 'root-1' })
+  })
+
   it('broadcasts minimal new thread replies and channel thread activity', () => {
     const realtime = makeRealtimeMock()
     const { result } = renderHook(() => useThreadMessages('root-1', 'ch-1'))

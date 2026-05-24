@@ -201,15 +201,17 @@ export default function MessageList({
       }
 
       const loadedRoot = messages.find(message => message.id === rootId) ?? null
-      if (loadedRoot?.promoted_to_channel_id) {
-        redirectPromotedThread(loadedRoot.promoted_to_channel_id, loadedRoot.promoted_channel?.name)
+      const loadedRootPromotedChannel = loadedRoot?.promoted_channel ?? null
+      if (loadedRootPromotedChannel?.id) {
+        redirectPromotedThread(loadedRootPromotedChannel.id, loadedRootPromotedChannel.name)
         return
       }
 
       fetchThreadRoot({ rootId }).then(result => {
         if (cancelled) return
-        if ('ok' in result && result.ok && result.message.promoted_to_channel_id) {
-          redirectPromotedThread(result.message.promoted_to_channel_id, result.message.promoted_channel?.name)
+        const promotedChannel = 'ok' in result && result.ok ? result.message.promoted_channel : null
+        if (promotedChannel?.id) {
+          redirectPromotedThread(promotedChannel.id, promotedChannel.name)
           return
         }
         openThreadFromUrl(rootId)
@@ -227,11 +229,14 @@ export default function MessageList({
   useEffect(() => {
     function handleThreadPromoted(event: Event) {
       const detail = (event as CustomEvent<{ rootId?: string; newChannelId?: string; channelName?: string }>).detail
-      if (!detail?.rootId || !detail.newChannelId) return
+      if (!detail?.rootId) return
       if (openThreadRootId === detail.rootId) {
         closeThread()
       }
-      setNotice(`This thread was promoted to #${detail.channelName ?? 'new-channel'}.`)
+      setNotice(detail.newChannelId
+        ? `This thread was promoted to #${detail.channelName ?? 'new-channel'}.`
+        : 'This thread was promoted to a channel.'
+      )
     }
 
     window.addEventListener('thread-promoted', handleThreadPromoted)

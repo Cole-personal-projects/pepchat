@@ -27,7 +27,15 @@ export default async function ChannelPage({
       .maybeSingle()
 
     if (promotedRoot?.promoted_to_channel_id) {
-      redirect(`/channels/${promotedRoot.promoted_to_channel_id}`)
+      const { data: targetChannel } = await supabase
+        .from('channels')
+        .select('id')
+        .eq('id', promotedRoot.promoted_to_channel_id)
+        .maybeSingle()
+
+      if (targetChannel?.id) {
+        redirect(`/channels/${targetChannel.id}`)
+      }
     }
   }
 

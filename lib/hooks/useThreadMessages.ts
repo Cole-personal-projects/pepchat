@@ -20,11 +20,6 @@ type NewThreadReplyPayload = {
 
 export type ThreadPromotedPayload = {
   rootId: string
-  newChannelId: string
-  channelName: string
-}
-
-type ThreadPromotedBroadcastPayload = {
   newChannelId?: string
   channelName?: string
 }
@@ -92,14 +87,9 @@ export function useThreadMessages(
       {
         type: 'broadcast',
         filter: { event: 'thread_promoted' },
-        handler: ({ payload }) => {
-          const promotedPayload = payload as ThreadPromotedBroadcastPayload | undefined
-          if (!rootId || !promotedPayload?.newChannelId) return
-          onThreadPromoted?.({
-            rootId,
-            newChannelId: promotedPayload.newChannelId,
-            channelName: promotedPayload.channelName ?? 'new-channel',
-          })
+        handler: () => {
+          if (!rootId) return
+          onThreadPromoted?.({ rootId })
         },
       },
       {

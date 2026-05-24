@@ -51,15 +51,15 @@ export default function ThreadPanel({
   const handleThreadPromoted = useCallback((payload: ThreadPromotedPayload) => {
     if (typeof window !== 'undefined') {
       const threadDraftKey = `sidebar:draft:thread:${payload.rootId}`
-      const channelDraftKey = `sidebar:draft:channel:${payload.newChannelId}`
       const draft = window.localStorage.getItem(threadDraftKey)
-      if (draft && draft.trim()) {
+      if (payload.newChannelId && draft && draft.trim()) {
+        const channelDraftKey = `sidebar:draft:channel:${payload.newChannelId}`
         window.localStorage.setItem(channelDraftKey, draft)
       }
       window.dispatchEvent(new CustomEvent('thread-promoted', { detail: payload }))
     }
     onClose()
-    router.push(`/channels/${payload.newChannelId}`)
+    if (payload.newChannelId) router.push(`/channels/${payload.newChannelId}`)
   }, [onClose, router])
   const {
     replies,

@@ -62,14 +62,17 @@ export default function Message({
   const displayName = msg.profiles?.display_name ?? msg.profiles?.username ?? 'Unknown'
   const usernameColor = (msg.profiles as any)?.username_color ?? 'var(--text-primary)'
   const mirrorRootId = msg.mirrored_from_thread?.thread_root_id ?? null
-  const promotedChannelId = msg.promoted_to_channel_id ?? null
-  const promotedChannelName = msg.promoted_channel?.name ?? 'new-channel'
-  const mirrorPromotedChannelId = msg.mirrored_from_thread?.promoted_to_channel_id ?? null
-  const mirrorPromotedChannelName = msg.mirrored_from_thread?.promoted_channel?.name ?? 'new-channel'
+  const wasPromoted = Boolean(msg.promoted_to_channel_id)
+  const promotedChannel = msg.promoted_channel ?? null
+  const promotedChannelId = promotedChannel?.id ?? null
+  const promotedChannelName = promotedChannel?.name ?? 'new-channel'
+  const mirrorPromotedChannel = msg.mirrored_from_thread?.promoted_channel ?? null
+  const mirrorPromotedChannelId = mirrorPromotedChannel?.id ?? null
+  const mirrorPromotedChannelName = mirrorPromotedChannel?.name ?? 'new-channel'
 
   const longPress = useLongPress(() => actions.openActions(msg.id))
 
-  if (promotedChannelId) {
+  if (wasPromoted) {
     return (
       <div
         data-testid="message-promoted-tombstone"
@@ -81,13 +84,17 @@ export default function Message({
         </div>
         <div className="min-w-0 flex-1 rounded border border-[var(--border-soft)] bg-[var(--bg-secondary)] px-3 py-2 text-sm text-[var(--text-muted)]">
           <span>This thread was promoted to </span>
-          <a
-            data-testid="message-promoted-channel-link"
-            href={`/channels/${promotedChannelId}`}
-            className="font-semibold text-[var(--accent)] hover:underline"
-          >
-            #{promotedChannelName}
-          </a>
+          {promotedChannelId ? (
+            <a
+              data-testid="message-promoted-channel-link"
+              href={`/channels/${promotedChannelId}`}
+              className="font-semibold text-[var(--accent)] hover:underline"
+            >
+              #{promotedChannelName}
+            </a>
+          ) : (
+            <span>a channel</span>
+          )}
           {msg.promoted_at && <span> on {formatPromotedDate(msg.promoted_at)}</span>}
           {displayName && <span> by {displayName}</span>}
         </div>
