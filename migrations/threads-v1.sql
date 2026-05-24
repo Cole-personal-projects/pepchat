@@ -102,6 +102,8 @@ BEGIN
     -- SELECT MAX); allow it to drift. Recompute lazily on next thread fetch
     -- if accuracy becomes a problem. V2 candidate.
   END IF;
+  -- Thread promotion bulk-moves replies by setting thread_root_id = NULL, then
+  -- explicitly resets the original root's counters to zero in the promotion RPC.
   RETURN COALESCE(NEW, OLD);
 END;
 $$;

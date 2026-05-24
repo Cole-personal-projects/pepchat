@@ -36,6 +36,10 @@ function makeSelectBuilder(result: QueryResult): Builder {
     data: result.data ?? null,
     error: result.error ?? null,
   })
+  builder.maybeSingle = vi.fn().mockResolvedValue({
+    data: result.data ?? null,
+    error: result.error ?? null,
+  })
   return builder
 }
 
@@ -160,8 +164,9 @@ describe('channel actions — createChannel', () => {
 
   it('rejects insufficient roles before reading existing channel positions', async () => {
     const gate = makeGateBuilder('user')
+    const duplicate = makeSelectBuilder({ data: null })
     const existing = makeListBuilder({ data: [{ position: 0 }] })
-    setupClient([gate, existing])
+    setupClient([gate, duplicate, existing])
 
     await expect(createChannel(makeFormData({ name: 'General', groupId: 'group-1' }))).resolves.toEqual({
       error: CHANNEL_DENIED,
@@ -175,9 +180,10 @@ describe('channel actions — createChannel', () => {
 
   it('allows managers while preserving normalization, position, noob access, and redirect behavior', async () => {
     const gate = makeGateBuilder('moderator')
+    const duplicate = makeSelectBuilder({ data: null })
     const existing = makeListBuilder({ data: [{ position: 2 }] })
     const insert = makeInsertBuilder({ data: { id: 'ch-new' } })
-    setupClient([gate, existing, insert])
+    setupClient([gate, duplicate, existing, insert])
 
     await expect(createChannel(makeFormData({
       name: ' Welcome Chat ',

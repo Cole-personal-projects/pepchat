@@ -1,6 +1,10 @@
 export type Role = 'admin' | 'moderator' | 'user' | 'noob'
 export type RolePredicate = (role: Role) => boolean
 
+export function canPromoteThread(role: Role, isRootAuthor: boolean): boolean {
+  return (['admin', 'moderator'] as Role[]).includes(role) || isRootAuthor
+}
+
 /**
  * Central permissions helper.
  * All role-gating in the UI goes through this object so rules
@@ -10,6 +14,9 @@ export const PERMISSIONS = {
   /** Can create, edit, and delete channels. */
   canManageChannels: (role: Role) =>
     (['admin', 'moderator'] as Role[]).includes(role),
+
+  /** Can promote a thread into a channel. Root authors get a one-off channel-create elevation. */
+  canPromoteThread,
 
   /** Can generate or revoke invite codes. */
   canGenerateInvite: (role: Role) =>
