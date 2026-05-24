@@ -7,6 +7,10 @@ import type { MessageWithProfile } from '@/lib/types'
 const fetchThreadRepliesMock = vi.hoisted(() => vi.fn())
 const markThreadReadMock = vi.hoisted(() => vi.fn())
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}))
+
 vi.mock('@/app/(app)/messages/thread-actions', () => ({
   fetchThreadReplies: fetchThreadRepliesMock,
   markThreadRead: markThreadReadMock,
@@ -50,6 +54,12 @@ vi.mock('@/components/chat/MessageInput', () => ({
       </button>
     </div>
   ),
+}))
+
+vi.mock('@/components/chat/PromoteThreadModal', () => ({
+  default: ({ open, replyCount }: { open: boolean; replyCount: number }) => open ? (
+    <div data-testid="promote-thread-modal" data-reply-count={replyCount}>Promote modal</div>
+  ) : null,
 }))
 
 const ROOT_MESSAGE: MessageWithProfile = {
@@ -176,5 +186,32 @@ describe('ThreadPanel', () => {
 
     expect(screen.getByTestId('thread-reply-reply-new')).toHaveTextContent('New reply')
     expect(screen.getByTestId('thread-reply-count')).toHaveTextContent('1 reply')
+  })
+
+  it('shows promote action only to eligible users and opens the modal', async () => {
+    render(<ThreadPanel {...BASE_PROPS} userRole="user" />)
+
+    await waitFor(() => expect(screen.getByTestId('thread-reply-reply-1')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('thread-panel-menu-trigger'))
+    expect(screen.getByTestId('thread-promote-menu-item')).toBeEnabled()
+    fireEvent.click(screen.getByTestId('thread-promote-menu-item'))
+    expect(screen.getByTestId('promote-thread-modal')).toHaveAttribute('data-reply-count', '1')
+  })
+
+  it('hides promote action from ineligible users', () => {
+    const rootMessage = { ...ROOT_MESSAGE, user_id: PROFILE_B.id }
+    render(<ThreadPanel {...BASE_PROPS} rootMessage={rootMessage} userRole="user" />)
+
+    expect(screen.queryByTestId('thread-panel-menu-trigger')).not.toBeInTheDocument()
+  })
+
+  it('disables promotion when there are no replies', async () => {
+    const rootMessage = { ...ROOT_MESSAGE, thread_reply_count: 0 }
+    fetchThreadRepliesMock.mockResolvedValueOnce({ ok: true, messages: [], nextCursor: null })
+    render(<ThreadPanel {...BASE_PROPS} rootMessage={rootMessage} userRole="admin" />)
+
+    await waitFor(() => expect(screen.getByTestId('thread-empty')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('thread-panel-menu-trigger'))
+    expect(screen.getByTestId('thread-promote-menu-item')).toBeDisabled()
   })
 })

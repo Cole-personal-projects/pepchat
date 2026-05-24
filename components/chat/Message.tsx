@@ -17,6 +17,11 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
+function formatPromotedDate(iso?: string | null) {
+  if (!iso) return ''
+  return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
 export interface MessageProps {
   msg: MessageWithProfile
   isCompact: boolean
@@ -57,8 +62,38 @@ export default function Message({
   const displayName = msg.profiles?.display_name ?? msg.profiles?.username ?? 'Unknown'
   const usernameColor = (msg.profiles as any)?.username_color ?? 'var(--text-primary)'
   const mirrorRootId = msg.mirrored_from_thread?.thread_root_id ?? null
+  const promotedChannelId = msg.promoted_to_channel_id ?? null
+  const promotedChannelName = msg.promoted_channel?.name ?? 'new-channel'
+  const mirrorPromotedChannelId = msg.mirrored_from_thread?.promoted_to_channel_id ?? null
+  const mirrorPromotedChannelName = msg.mirrored_from_thread?.promoted_channel?.name ?? 'new-channel'
 
   const longPress = useLongPress(() => actions.openActions(msg.id))
+
+  if (promotedChannelId) {
+    return (
+      <div
+        data-testid="message-promoted-tombstone"
+        className="message-row flex items-start gap-3 rounded px-2 py-2"
+        style={{ position: 'relative' }}
+      >
+        <div style={{ width: 36, flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
+          <span aria-hidden="true" className="mt-1 text-[var(--accent)]">↗</span>
+        </div>
+        <div className="min-w-0 flex-1 rounded border border-[var(--border-soft)] bg-[var(--bg-secondary)] px-3 py-2 text-sm text-[var(--text-muted)]">
+          <span>This thread was promoted to </span>
+          <a
+            data-testid="message-promoted-channel-link"
+            href={`/channels/${promotedChannelId}`}
+            className="font-semibold text-[var(--accent)] hover:underline"
+          >
+            #{promotedChannelName}
+          </a>
+          {msg.promoted_at && <span> on {formatPromotedDate(msg.promoted_at)}</span>}
+          {displayName && <span> by {displayName}</span>}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -244,18 +279,28 @@ export default function Message({
               <MessageAttachments attachments={msg.attachments} />
             )}
             {msg.mirrored_from_thread_id && (
-              <button
-                type="button"
-                data-testid="message-from-thread-link"
-                onClick={() => {
-                  if (mirrorRootId) actions.openThread(mirrorRootId)
-                }}
-                disabled={!mirrorRootId}
-                className="mt-1 inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/10 disabled:cursor-default disabled:opacity-60"
-                title={mirrorRootId ? 'Open thread' : 'Thread unavailable'}
-              >
-                ↳ From thread
-              </button>
+              mirrorPromotedChannelId ? (
+                <a
+                  href={`/channels/${mirrorPromotedChannelId}`}
+                  data-testid="message-from-promoted-thread-link"
+                  className="mt-1 inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/10"
+                >
+                  From promoted thread → #{mirrorPromotedChannelName}
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  data-testid="message-from-thread-link"
+                  onClick={() => {
+                    if (mirrorRootId) actions.openThread(mirrorRootId)
+                  }}
+                  disabled={!mirrorRootId}
+                  className="mt-1 inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/10 disabled:cursor-default disabled:opacity-60"
+                  title={mirrorRootId ? 'Open thread' : 'Thread unavailable'}
+                >
+                  ↳ From thread
+                </button>
+              )
             )}
           </>
         )}

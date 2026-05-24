@@ -1,11 +1,14 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { fetchThreadReplies, markThreadRead } from '@/app/(app)/messages/thread-actions'
 import Message from '@/components/chat/Message'
 import { ChannelMessageActionsProvider, type MessageActions } from '@/components/chat/MessageActionsContext'
 import MessageInput from '@/components/chat/MessageInput'
-import { useThreadMessages } from '@/lib/hooks/useThreadMessages'
+import PromoteThreadModal from '@/components/chat/PromoteThreadModal'
+import { useThreadMessages, type ThreadPromotedPayload } from '@/lib/hooks/useThreadMessages'
+import { canPromoteThread, type Role } from '@/lib/permissions'
 import type { MessageWithProfile, Profile } from '@/lib/types'
 
 interface ThreadPanelProps {
@@ -15,6 +18,8 @@ interface ThreadPanelProps {
   profile: Profile
   currentUserId: string
   groupId?: string
+  userRole?: Role | null
+  sourceNoobAccess?: boolean
   canPin?: boolean
   onClose: () => void
   onMirrorSent?: (message: MessageWithProfile) => void
@@ -27,23 +32,42 @@ export default function ThreadPanel({
   profile,
   currentUserId,
   groupId,
+  userRole,
+  sourceNoobAccess = false,
   canPin = false,
   onClose,
   onMirrorSent,
 }: ThreadPanelProps) {
+  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [dragStartY, setDragStartY] = useState<number | null>(null)
   const [dragOffset, setDragOffset] = useState(0)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [promoteModalOpen, setPromoteModalOpen] = useState(false)
 
   const rootId = rootMessage?.id ?? null
+
+  const handleThreadPromoted = useCallback((payload: ThreadPromotedPayload) => {
+    if (typeof window !== 'undefined') {
+      const threadDraftKey = `sidebar:draft:thread:${payload.rootId}`
+      const channelDraftKey = `sidebar:draft:channel:${payload.newChannelId}`
+      const draft = window.localStorage.getItem(threadDraftKey)
+      if (draft && draft.trim()) {
+        window.localStorage.setItem(channelDraftKey, draft)
+      }
+      window.dispatchEvent(new CustomEvent('thread-promoted', { detail: payload }))
+    }
+    onClose()
+    router.push(`/channels/${payload.newChannelId}`)
+  }, [onClose, router])
   const {
     replies,
     setReplies,
     addReply,
     broadcastNewThreadReply,
     broadcastThreadActivity,
-  } = useThreadMessages(rootId, rootMessage?.channel_id ?? null)
+  } = useThreadMessages(rootId, rootMessage?.channel_id ?? null, undefined, handleThreadPromoted)
 
   useEffect(() => {
     if (!open || !rootId) {
@@ -124,6 +148,10 @@ export default function ThreadPanel({
     setDragOffset(0)
   }
 
+  const roleCanPromote = Boolean(userRole && rootMessage && canPromoteThread(userRole, rootMessage.user_id === currentUserId))
+  const replyCountForPromotion = Math.max(rootMessage.thread_reply_count ?? 0, replies.length)
+  const promoteDisabled = replyCountForPromotion === 0
+
   const baseMessageProps = {
     currentUserId,
     canDeleteAny: false,
@@ -182,17 +210,58 @@ export default function ThreadPanel({
               in #{channelName}
             </p>
           </div>
-          <button
-            data-testid="thread-panel-close"
-            type="button"
-            onClick={onClose}
-            aria-label="Close thread"
-            className="rounded p-0.5 text-[var(--text-muted)] transition-colors hover:bg-white/10 hover:text-[var(--text-primary)]"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
+          <div className="relative flex items-center gap-1">
+            {roleCanPromote && (
+              <>
+                <button
+                  data-testid="thread-panel-menu-trigger"
+                  type="button"
+                  onClick={() => setMenuOpen(open => !open)}
+                  aria-label="Thread options"
+                  aria-expanded={menuOpen}
+                  className="rounded p-0.5 text-[var(--text-muted)] transition-colors hover:bg-white/10 hover:text-[var(--text-primary)]"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <circle cx="12" cy="5" r="1.7" />
+                    <circle cx="12" cy="12" r="1.7" />
+                    <circle cx="12" cy="19" r="1.7" />
+                  </svg>
+                </button>
+                {menuOpen && (
+                  <div
+                    data-testid="thread-panel-menu"
+                    className="absolute right-7 top-7 z-10 min-w-44 rounded border border-[var(--border-soft)] bg-[var(--bg-secondary)] p-1 shadow-xl"
+                  >
+                    <button
+                      data-testid="thread-promote-menu-item"
+                      type="button"
+                      disabled={promoteDisabled}
+                      title={promoteDisabled ? 'Threads need at least one reply before promotion.' : 'Promote this thread to a channel'}
+                      onClick={() => {
+                        if (promoteDisabled) return
+                        setPromoteModalOpen(true)
+                        setMenuOpen(false)
+                      }}
+                      className="block w-full rounded px-2 py-1.5 text-left text-xs font-semibold text-[var(--text-primary)] transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Promote to channel
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+            <button
+              data-testid="thread-panel-close"
+              type="button"
+              onClick={onClose}
+              aria-label="Close thread"
+              className="rounded p-0.5 text-[var(--text-muted)] transition-colors hover:bg-white/10 hover:text-[var(--text-primary)]"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-2 py-3">
@@ -266,6 +335,22 @@ export default function ThreadPanel({
           />
         </div>
       </aside>
+      <PromoteThreadModal
+        open={promoteModalOpen}
+        onClose={() => setPromoteModalOpen(false)}
+        rootMessage={rootMessage}
+        sourceChannelName={channelName}
+        sourceNoobAccess={sourceNoobAccess}
+        replyCount={replyCountForPromotion}
+        onPromoted={(newChannelId, promotedChannelName) => {
+          if (typeof window !== 'undefined' && rootId) {
+            window.dispatchEvent(new CustomEvent('thread-promoted', {
+              detail: { rootId, newChannelId, channelName: promotedChannelName },
+            }))
+          }
+          onClose()
+        }}
+      />
     </ChannelMessageActionsProvider>
   )
 }

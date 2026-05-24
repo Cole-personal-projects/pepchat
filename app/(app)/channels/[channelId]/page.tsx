@@ -7,12 +7,29 @@ import type { Role } from '@/lib/permissions'
 
 export default async function ChannelPage({
   params,
+  searchParams,
 }: {
   params: { channelId: string }
+  searchParams?: { thread?: string }
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
+
+  const threadRootId = searchParams?.thread?.trim()
+  if (threadRootId) {
+    const { data: promotedRoot } = await supabase
+      .from('messages')
+      .select('promoted_to_channel_id')
+      .eq('id', threadRootId)
+      .eq('channel_id', params.channelId)
+      .is('thread_root_id', null)
+      .maybeSingle()
+
+    if (promotedRoot?.promoted_to_channel_id) {
+      redirect(`/channels/${promotedRoot.promoted_to_channel_id}`)
+    }
+  }
 
   // Fetch channel details
   const { data: channel } = await supabase
@@ -66,6 +83,7 @@ export default async function ChannelPage({
         groupId={channel.group_id}
         channelName={channel.name}
         channelTopic={channel.description}
+        sourceNoobAccess={Boolean(channel.noob_access)}
         initialMessages={initialMessages}
         profile={profile as Profile}
         userRole={userRole}

@@ -128,7 +128,7 @@ describe('promoteThreadToChannel', () => {
     expect(channelSend).toHaveBeenCalledWith({
       type: 'broadcast',
       event: 'thread_promoted',
-      payload: { newChannelId: 'ch-new' },
+      payload: { newChannelId: 'ch-new', channelName: 'promoted-thread' },
     })
     expect(channelSend).toHaveBeenCalledWith({
       type: 'broadcast',
@@ -181,7 +181,7 @@ describe('promoteThreadToChannel', () => {
     expect(channelSend).toHaveBeenCalledWith({
       type: 'broadcast',
       event: 'thread_promoted',
-      payload: { newChannelId: 'ch-new' },
+      payload: { newChannelId: 'ch-new', channelName: 'promoted-thread' },
     })
   })
 
@@ -202,7 +202,7 @@ describe('promoteThreadToChannel', () => {
     expect(channelSend).toHaveBeenCalledWith({
       type: 'broadcast',
       event: 'thread_promoted',
-      payload: { newChannelId: 'ch-new' },
+      payload: { newChannelId: 'ch-new', channelName: 'new-channel' },
     })
   })
 

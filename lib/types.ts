@@ -107,7 +107,12 @@ export interface Message {
   thread_reply_count?: number
   thread_last_reply_at?: string | null
   mirrored_from_thread_id?: string | null
-  mirrored_from_thread?: Pick<Message, 'id' | 'thread_root_id'> | null
+  promoted_to_channel_id?: string | null
+  promoted_at?: string | null
+  promoted_channel?: Pick<Channel, 'id' | 'name'> | null
+  mirrored_from_thread?: (Pick<Message, 'id' | 'thread_root_id' | 'promoted_to_channel_id' | 'promoted_at'> & {
+    promoted_channel?: Pick<Channel, 'id' | 'name'> | null
+  }) | null
   edited_at: string | null
   pinned_at?: string | null
   is_system?: boolean

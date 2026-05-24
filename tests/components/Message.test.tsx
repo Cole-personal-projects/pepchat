@@ -130,6 +130,44 @@ describe('Message — ungrouped', () => {
 
     expect(screen.getByTestId('thread-chip-msg-1')).toHaveTextContent('1 reply · Today at 11:56 AM')
   })
+
+  it('renders a promoted-thread tombstone instead of normal message actions', () => {
+    const msg: MessageWithProfile = {
+      ...BASE_MSG,
+      promoted_to_channel_id: 'ch-promoted',
+      promoted_at: '2024-01-16T10:30:00Z',
+      promoted_channel: { id: 'ch-promoted', name: 'promoted-thread' },
+      thread_reply_count: 3,
+    }
+
+    render(<Message {...BASE_PROPS} msg={msg} />)
+
+    expect(screen.getByTestId('message-promoted-tombstone')).toHaveTextContent('This thread was promoted to')
+    expect(screen.getByTestId('message-promoted-channel-link')).toHaveTextContent('#promoted-thread')
+    expect(screen.getByTestId('message-promoted-channel-link')).toHaveAttribute('href', '/channels/ch-promoted')
+    expect(screen.queryByTestId('mobile-action-reply-thread')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('thread-chip-msg-1')).not.toBeInTheDocument()
+  })
+
+  it('renders promoted source affordance for mirror messages', () => {
+    const msg: MessageWithProfile = {
+      ...BASE_MSG,
+      mirrored_from_thread_id: 'reply-1',
+      mirrored_from_thread: {
+        id: 'reply-1',
+        thread_root_id: 'root-1',
+        promoted_to_channel_id: 'ch-promoted',
+        promoted_at: '2024-01-16T10:30:00Z',
+        promoted_channel: { id: 'ch-promoted', name: 'promoted-thread' },
+      },
+    }
+
+    render(<Message {...BASE_PROPS} msg={msg} />)
+
+    expect(screen.getByTestId('message-from-promoted-thread-link')).toHaveTextContent('From promoted thread → #promoted-thread')
+    expect(screen.getByTestId('message-from-promoted-thread-link')).toHaveAttribute('href', '/channels/ch-promoted')
+    expect(screen.queryByTestId('message-from-thread-link')).not.toBeInTheDocument()
+  })
 })
 
 describe('Message — grouped / compact', () => {

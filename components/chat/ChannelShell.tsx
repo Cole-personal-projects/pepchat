@@ -25,6 +25,7 @@ interface ChannelShellProps {
   groupId?: string
   channelName: string
   channelTopic?: string | null
+  sourceNoobAccess?: boolean
   initialMessages: MessageWithProfile[]
   profile: Profile
   userRole?: Role | null
@@ -42,6 +43,7 @@ export default function ChannelShell({
   groupId,
   channelName,
   channelTopic,
+  sourceNoobAccess = false,
   initialMessages,
   profile,
   userRole,
@@ -226,6 +228,7 @@ export default function ChannelShell({
           groupId={groupId}
           channelId={channelId}
           channelName={channelName}
+          sourceNoobAccess={sourceNoobAccess}
           onLoadMore={loadMore}
           editAction={handleEdit}
           pinAction={handlePin}
@@ -297,6 +300,8 @@ export default function ChannelShell({
         profile={profile}
         currentUserId={userId ?? profile.id}
         groupId={groupId}
+        userRole={userRole}
+        sourceNoobAccess={sourceNoobAccess}
         canPin={canPin}
         onClose={closeThreadPanel}
         onMirrorSent={message => {

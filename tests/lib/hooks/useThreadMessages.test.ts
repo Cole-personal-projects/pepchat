@@ -79,6 +79,7 @@ describe('useThreadMessages', () => {
     const threadChannel = realtime.channels.find(channel => channel.topic === 'thread-root-1')!
     expect(threadChannel.bindings.map(({ type, filter }) => ({ type, filter }))).toEqual([
       { type: 'broadcast', filter: { event: 'new_thread_reply' } },
+      { type: 'broadcast', filter: { event: 'thread_promoted' } },
       { type: 'postgres_changes', filter: { event: 'UPDATE', schema: 'public', table: 'messages', filter: 'thread_root_id=eq.root-1' } },
       { type: 'postgres_changes', filter: { event: 'DELETE', schema: 'public', table: 'messages', filter: 'thread_root_id=eq.root-1' } },
     ])
