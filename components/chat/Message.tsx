@@ -278,6 +278,22 @@ export default function Message({
             onOpen={actions.openThread}
           />
         )}
+
+        {allowReplies && !isEditing && !msg.thread_root_id && (
+          <button
+            type="button"
+            data-testid="mobile-action-reply-thread"
+            onClick={() => actions.openThread(msg.id)}
+            className="mt-1 inline-flex items-center gap-1 rounded px-2 py-1 text-[12px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/10 md:hidden"
+            title="Reply in thread"
+            aria-label="Reply in thread"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
+            </svg>
+            Thread
+          </button>
+        )}
       </div>
 
       {/* Hover action bar (desktop only) */}

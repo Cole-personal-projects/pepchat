@@ -15,6 +15,17 @@ test.beforeEach(async ({ page }) => {
 })
 
 test.describe('Threads', () => {
+  test('exposes a visible mobile thread entry point for root messages', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+
+    const firstRoot = page.locator('.message-row').first()
+    await expect(firstRoot).toBeVisible()
+    await expect(page.locator('[data-testid="mobile-action-reply-thread"]').first()).toBeVisible()
+
+    await page.locator('[data-testid="mobile-action-reply-thread"]').first().click()
+    await expect(page.locator('[data-testid="thread-panel"]')).toBeVisible()
+  })
+
   test('mirrors a thread reply into the channel and opens the source thread', async ({ page }) => {
     const firstRoot = page.locator('.message-row').first()
     await expect(firstRoot).toBeVisible()
