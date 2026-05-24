@@ -98,6 +98,7 @@ describe('thread actions', () => {
     await expect(sendThreadReply({ rootId: 'root-1', content: ' Hi @bob ' })).resolves.toEqual({
       ok: true,
       message: THREAD_REPLY,
+      mirrorMessage: null,
     })
 
     expect(from).toHaveBeenNthCalledWith(1, 'messages')
@@ -138,6 +139,53 @@ describe('thread actions', () => {
       content: 'Hi @bob',
       urlBuilder: expect.any(Function),
     })
+  })
+
+  it('creates a channel mirror when requested', async () => {
+    const mirrorMessage = {
+      ...THREAD_REPLY,
+      id: 'mirror-1',
+      thread_root_id: null,
+      mirrored_from_thread_id: 'reply-1',
+      mirrored_from_thread: { id: 'reply-1', thread_root_id: 'root-1' },
+    }
+    const rootBuilder = makeSingleBuilder({ data: { id: 'root-1', channel_id: 'ch-1', thread_root_id: null } })
+    const replyInsertBuilder = makeSingleBuilder({ data: THREAD_REPLY })
+    const mirrorInsertBuilder = makeSingleBuilder({ data: mirrorMessage })
+    setupClient([rootBuilder, replyInsertBuilder, mirrorInsertBuilder])
+
+    await expect(sendThreadReply({ rootId: 'root-1', content: 'mirror me', mirrorToChannel: true })).resolves.toEqual({
+      ok: true,
+      message: THREAD_REPLY,
+      mirrorMessage,
+    })
+
+    expect(replyInsertBuilder.insert).toHaveBeenCalledWith({
+      channel_id: 'ch-1',
+      user_id: 'user-a',
+      content: 'mirror me',
+      reply_to_id: null,
+      thread_root_id: 'root-1',
+      attachments: [],
+    })
+    expect(mirrorInsertBuilder.insert).toHaveBeenCalledWith({
+      channel_id: 'ch-1',
+      user_id: 'user-a',
+      content: 'mirror me',
+      reply_to_id: null,
+      thread_root_id: null,
+      mirrored_from_thread_id: 'reply-1',
+      attachments: [],
+    })
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-a',
+      'thread.reply',
+      'message',
+      'root-1',
+      { channel_id: 'ch-1', mirror_to_channel: true }
+    )
+    expect(mockEnqueueMentionNotifications).toHaveBeenCalledTimes(1)
   })
 
   it('rejects replies to replies', async () => {

@@ -299,6 +299,10 @@ export default function ChannelShell({
         groupId={groupId}
         canPin={canPin}
         onClose={closeThreadPanel}
+        onMirrorSent={message => {
+          addMessage(message)
+          broadcastNewMessage(message)
+        }}
       />
     </div>
   )

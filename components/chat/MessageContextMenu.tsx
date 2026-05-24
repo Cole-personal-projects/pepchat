@@ -50,6 +50,8 @@ export default function MessageContextMenu({
 
   const canDelete = isOwn || canDeleteAny
   const isPinned = !!message.pinned_at
+  const mirrorRootId = message.mirrored_from_thread?.thread_root_id ?? null
+  const isMirror = Boolean(message.mirrored_from_thread_id)
 
   // Close on Escape
   useEffect(() => {
@@ -176,7 +178,17 @@ export default function MessageContextMenu({
           </MenuItem>
 
           {isOwn && (
-            <MenuItem label="Edit Message" onClick={() => { actions.startEdit(message.id); closeMenu() }}>
+            <MenuItem
+              label={isMirror ? 'Edit in Thread' : 'Edit Message'}
+              onClick={() => {
+                if (isMirror) {
+                  if (mirrorRootId) actions.openThread(mirrorRootId)
+                } else {
+                  actions.startEdit(message.id)
+                }
+                closeMenu()
+              }}
+            >
               <EditIcon />
             </MenuItem>
           )}

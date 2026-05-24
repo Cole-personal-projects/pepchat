@@ -47,6 +47,8 @@ export default function MessageModal({
   if (!open || !msg) return null
 
   const canDelete = isOwn || canDeleteAny
+  const mirrorRootId = msg.mirrored_from_thread?.thread_root_id ?? null
+  const isMirror = Boolean(msg.mirrored_from_thread_id)
 
   function handleBackdropClick(e: React.MouseEvent) {
     if (e.target === e.currentTarget) closeModal()
@@ -211,8 +213,15 @@ export default function MessageModal({
           {isOwn && (
             <ActionRow
               testId="modal-action-edit"
-              label="Edit Message"
-              onClick={() => { actions.startEdit(msg.id); closeModal() }}
+              label={isMirror ? 'Edit in Thread' : 'Edit Message'}
+              onClick={() => {
+                if (isMirror) {
+                  if (mirrorRootId) actions.openThread(mirrorRootId)
+                } else {
+                  actions.startEdit(msg.id)
+                }
+                closeModal()
+              }}
             />
           )}
 

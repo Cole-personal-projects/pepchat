@@ -544,6 +544,11 @@ export default function MessageList({
   }, [messages, openThreadRootId])
 
   function startEdit(msg: MessageWithProfile) {
+    const mirrorRootId = msg.mirrored_from_thread?.thread_root_id
+    if (msg.mirrored_from_thread_id && mirrorRootId) {
+      openThread(mirrorRootId)
+      return
+    }
     setEditingId(msg.id)
     setEditContent(msg.content)
     setError('')

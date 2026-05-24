@@ -56,6 +56,7 @@ export default function Message({
   const isEditing = editingId === msg.id
   const displayName = msg.profiles?.display_name ?? msg.profiles?.username ?? 'Unknown'
   const usernameColor = (msg.profiles as any)?.username_color ?? 'var(--text-primary)'
+  const mirrorRootId = msg.mirrored_from_thread?.thread_root_id ?? null
 
   const longPress = useLongPress(() => actions.openActions(msg.id))
 
@@ -241,6 +242,20 @@ export default function Message({
             )}
             {msg.attachments && msg.attachments.length > 0 && (
               <MessageAttachments attachments={msg.attachments} />
+            )}
+            {msg.mirrored_from_thread_id && (
+              <button
+                type="button"
+                data-testid="message-from-thread-link"
+                onClick={() => {
+                  if (mirrorRootId) actions.openThread(mirrorRootId)
+                }}
+                disabled={!mirrorRootId}
+                className="mt-1 inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/10 disabled:cursor-default disabled:opacity-60"
+                title={mirrorRootId ? 'Open thread' : 'Thread unavailable'}
+              >
+                ↳ From thread
+              </button>
             )}
           </>
         )}

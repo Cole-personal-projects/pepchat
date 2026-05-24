@@ -23,7 +23,7 @@ interface MessageInputProps {
   replyingTo?: MessageWithProfile | null
   onCancelReply?: () => void
   onTyping?: () => void
-  onSent?: (message: MessageWithProfile) => void
+  onSent?: (message: MessageWithProfile, mirrorMessage?: MessageWithProfile | null) => void
   placeholder?: string
   draftStorageKey?: string
   allowVideoUpload?: boolean
@@ -35,7 +35,7 @@ interface MessageInputProps {
 
 const SEND_FAILURE_MESSAGE = 'Message failed to send. Please try again.'
 
-type SendResult = { error: string } | { ok: true; message?: MessageWithProfile }
+type SendResult = { error: string } | { ok: true; message?: MessageWithProfile; mirrorMessage?: MessageWithProfile | null }
 
 function isSendResult(result: unknown): result is SendResult {
   return typeof result === 'object' && result !== null && ('error' in result || 'ok' in result)
@@ -62,6 +62,7 @@ export default function MessageInput({
   const [error, setError] = useState('')
   const [isPending, startTransition] = useTransition()
   const [isDragging, setIsDragging] = useState(false)
+  const [mirrorToChannel, setMirrorToChannel] = useState(false)
   const [gifPickerOpen, setGifPickerOpen] = useState(false)
   const [mentionUsers, setMentionUsers] = useState<Array<{ id: string; username: string; display_name?: string | null }>>([])
   const [mentionIndex, setMentionIndex] = useState(0)
@@ -153,7 +154,7 @@ export default function MessageInput({
         textareaRef.current?.focus()
         onCancelReply?.()
         const sentMessage = result.message
-        if (sentMessage) onSent?.(sentMessage)
+        if (sentMessage) onSent?.(sentMessage, result.mirrorMessage ?? null)
       }
     })
   }
@@ -250,6 +251,7 @@ export default function MessageInput({
       } else {
         removeDraft(draftStorageKey)
         setContent('')
+        setMirrorToChannel(false)
         clearAll()
         if (textareaRef.current) textareaRef.current.style.height = 'auto'
         if (window.innerWidth < 768) {
@@ -259,7 +261,7 @@ export default function MessageInput({
         }
         onCancelReply?.()
         const sentMessage = result.message
-        if (sentMessage) onSent?.(sentMessage)
+        if (sentMessage) onSent?.(sentMessage, result.mirrorMessage ?? null)
       }
     })
   }
@@ -277,7 +279,12 @@ export default function MessageInput({
     if (sendAction) return sendAction(messageContent, replyingTo?.id ?? null, messageAttachments)
     if (mode === 'thread') {
       if (!threadRootId) return Promise.resolve({ error: 'Missing thread root.' })
-      return sendThreadReply({ rootId: threadRootId, content: messageContent, attachments: messageAttachments })
+      return sendThreadReply({
+        rootId: threadRootId,
+        content: messageContent,
+        attachments: messageAttachments,
+        mirrorToChannel,
+      })
     }
     return sendMessage(channelId, messageContent, replyingTo?.id, messageAttachments)
   }
@@ -369,6 +376,19 @@ export default function MessageInput({
         onFocusCapture={e => (e.currentTarget.style.borderColor = 'var(--border-strong)')}
         onBlurCapture={e => (e.currentTarget.style.borderColor = 'var(--border-soft)')}
       >
+        {mode === 'thread' && (
+          <label className="flex items-center gap-2 px-3 pt-2 text-xs text-[var(--text-muted)]">
+            <input
+              type="checkbox"
+              data-testid="thread-mirror-checkbox"
+              checked={mirrorToChannel}
+              onChange={event => setMirrorToChannel(event.target.checked)}
+              disabled={isPending}
+              className="h-3.5 w-3.5 rounded border-[var(--border-strong)] bg-transparent accent-[var(--accent)]"
+            />
+            <span>Also send to channel</span>
+          </label>
+        )}
         {/* Textarea row */}
         <div className="flex items-end gap-2 px-3 py-2.5 relative">
           {activeMentionSuggestions.length > 0 && (

@@ -31,6 +31,8 @@ export default function MessageActionBar({
 }: MessageActionBarProps) {
   const actions = useMessageActions()
   const canDelete = isOwn || canDeleteAny
+  const mirrorRootId = msg.mirrored_from_thread?.thread_root_id ?? null
+  const isMirror = Boolean(msg.mirrored_from_thread_id)
 
   return (
     <div
@@ -101,8 +103,15 @@ export default function MessageActionBar({
       {isOwn && (
         <button
           data-testid="action-edit"
-          onClick={e => { e.stopPropagation(); actions.startEdit(msg.id) }}
-          title="Edit"
+          onClick={e => {
+            e.stopPropagation()
+            if (isMirror) {
+              if (mirrorRootId) actions.openThread(mirrorRootId)
+              return
+            }
+            actions.startEdit(msg.id)
+          }}
+          title={isMirror ? 'Edit in thread' : 'Edit'}
           className="icon-btn"
           style={{ padding: 6 }}
         >
