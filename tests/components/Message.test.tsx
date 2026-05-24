@@ -152,7 +152,6 @@ describe('Message — ungrouped', () => {
   it('hides promoted target details when the promoted channel is not visible under RLS', () => {
     const msg: MessageWithProfile = {
       ...BASE_MSG,
-      promoted_to_channel_id: 'ch-hidden',
       promoted_at: '2024-01-16T10:30:00Z',
       promoted_channel: null,
     }
@@ -162,6 +161,7 @@ describe('Message — ungrouped', () => {
     expect(screen.getByTestId('message-promoted-tombstone')).toHaveTextContent('This thread was promoted to a channel')
     expect(screen.queryByTestId('message-promoted-channel-link')).not.toBeInTheDocument()
     expect(screen.queryByText('#new-channel')).not.toBeInTheDocument()
+    expect(msg).not.toHaveProperty('promoted_to_channel_id')
   })
 
   it('renders promoted source affordance for mirror messages', () => {
@@ -191,7 +191,6 @@ describe('Message — ungrouped', () => {
       mirrored_from_thread: {
         id: 'reply-1',
         thread_root_id: 'root-1',
-        promoted_to_channel_id: 'ch-hidden',
         promoted_at: '2024-01-16T10:30:00Z',
         promoted_channel: null,
       },
@@ -202,6 +201,7 @@ describe('Message — ungrouped', () => {
     expect(screen.queryByTestId('message-from-promoted-thread-link')).not.toBeInTheDocument()
     expect(screen.getByTestId('message-from-thread-link')).toHaveTextContent('↳ From thread')
     expect(screen.queryByText('#new-channel')).not.toBeInTheDocument()
+    expect(msg.mirrored_from_thread).not.toHaveProperty('promoted_to_channel_id')
   })
 })
 

@@ -143,7 +143,6 @@ export function useMessages(
                     content: payload.new.content as string,
                     edited_at: payload.new.edited_at as string | null,
                     pinned_at: payload.new.pinned_at as string | null,
-                    promoted_to_channel_id: payload.new.promoted_to_channel_id as string | null,
                     promoted_at: payload.new.promoted_at as string | null,
                   }
                 : m

@@ -62,7 +62,7 @@ export default function Message({
   const displayName = msg.profiles?.display_name ?? msg.profiles?.username ?? 'Unknown'
   const usernameColor = (msg.profiles as any)?.username_color ?? 'var(--text-primary)'
   const mirrorRootId = msg.mirrored_from_thread?.thread_root_id ?? null
-  const wasPromoted = Boolean(msg.promoted_to_channel_id)
+  const wasPromoted = Boolean(msg.promoted_at || msg.promoted_channel)
   const promotedChannel = msg.promoted_channel ?? null
   const promotedChannelId = promotedChannel?.id ?? null
   const promotedChannelName = promotedChannel?.name ?? 'new-channel'

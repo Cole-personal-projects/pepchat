@@ -157,9 +157,9 @@ describe('useMessages realtime migration', () => {
       content: '',
       edited_at: 'later',
       pinned_at: 'pin',
-      promoted_to_channel_id: 'promoted-channel',
       promoted_at: '2024-01-02T00:00:00Z',
     })
+    expect(result.current.messages[0]).not.toHaveProperty('promoted_to_channel_id')
 
     act(() => deleteBinding.handler({ old: { id: 'msg-1' } }))
     expect(result.current.messages).toEqual([])
