@@ -94,19 +94,7 @@ describe('promoteThreadToChannel', () => {
       p_noob_access: true,
       p_actor_id: 'actor-1',
     })
-    expect(mockLogAuditEvent).toHaveBeenCalledWith(
-      expect.anything(),
-      'actor-1',
-      'thread.promoted_to_channel',
-      'message',
-      'root-1',
-      {
-        source_channel_id: 'ch-source',
-        target_channel_id: 'ch-new',
-        root_message_id: 'root-1',
-        moved_reply_count: 2,
-      },
-    )
+    expect(mockLogAuditEvent).not.toHaveBeenCalled()
     expect(channel).toHaveBeenCalledWith('thread-root-1')
     expect(channel).toHaveBeenCalledWith('channels-group-1')
     expect(channelSend).toHaveBeenCalledWith({
@@ -131,6 +119,47 @@ describe('promoteThreadToChannel', () => {
 
     await expect(promoteThreadToChannel({ rootMessageId: 'root-1', channelName: 'promoted' }))
       .resolves.toEqual({ newChannelId: 'ch-new', movedReplyCount: 2 })
+  })
+
+  it('does not fail a committed promotion because of action-level audit logging', async () => {
+    mockLogAuditEvent.mockRejectedValue(new Error('audit unavailable'))
+    const root = makeBuilder({ data: ROOT })
+    const source = makeBuilder({ data: SOURCE_CHANNEL })
+    const gate = makeBuilder({ data: { role: 'moderator' } })
+    const duplicate = makeBuilder({ data: null })
+    const newChannel = makeBuilder({ data: NEW_CHANNEL })
+    const { channelSend } = setupClient([root, source, gate, duplicate, newChannel])
+
+    await expect(promoteThreadToChannel({ rootMessageId: 'root-1', channelName: 'promoted' }))
+      .resolves.toEqual({ newChannelId: 'ch-new', movedReplyCount: 2 })
+
+    expect(mockLogAuditEvent).not.toHaveBeenCalled()
+    expect(channelSend).toHaveBeenCalledWith({
+      type: 'broadcast',
+      event: 'thread_promoted',
+      payload: { newChannelId: 'ch-new' },
+    })
+  })
+
+  it('skips the channel_added broadcast when the new channel payload cannot be loaded', async () => {
+    const root = makeBuilder({ data: ROOT })
+    const source = makeBuilder({ data: SOURCE_CHANNEL })
+    const gate = makeBuilder({ data: { role: 'moderator' } })
+    const duplicate = makeBuilder({ data: null })
+    const newChannel = makeBuilder({ data: null })
+    const { channel, channelSend } = setupClient([root, source, gate, duplicate, newChannel])
+
+    await expect(promoteThreadToChannel({ rootMessageId: 'root-1', channelName: 'promoted' }))
+      .resolves.toEqual({ newChannelId: 'ch-new', movedReplyCount: 2 })
+
+    expect(channel).toHaveBeenCalledWith('thread-root-1')
+    expect(channel).not.toHaveBeenCalledWith('channels-group-1')
+    expect(channelSend).toHaveBeenCalledTimes(1)
+    expect(channelSend).toHaveBeenCalledWith({
+      type: 'broadcast',
+      event: 'thread_promoted',
+      payload: { newChannelId: 'ch-new' },
+    })
   })
 
   it('denies non-author non-managers before validation or RPC', async () => {

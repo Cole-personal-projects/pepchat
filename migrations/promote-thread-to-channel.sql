@@ -137,10 +137,27 @@ BEGIN
 
   UPDATE public.messages AS mirror
     SET content = '',
-        edited_at = now()
+        edited_at = now(),
+        promoted_to_channel_id = v_new_channel_id,
+        promoted_at = now()
     WHERE mirror.mirrored_from_thread_id = ANY(v_moved_reply_ids)
       AND mirror.thread_root_id IS NULL
       AND mirror.channel_id = v_source_channel_id;
+
+  INSERT INTO public.audit_log (admin_id, action, target_type, target_id, metadata)
+    VALUES (
+      p_actor_id,
+      'thread.promoted_to_channel',
+      'message',
+      p_root_message_id,
+      jsonb_build_object(
+        'source_channel_id', v_source_channel_id,
+        'target_channel_id', v_new_channel_id,
+        'root_message_id', p_root_message_id,
+        'moved_reply_count', v_moved_count,
+        'channel_name', v_channel_name
+      )
+    );
 
   new_channel_id := v_new_channel_id;
   moved_reply_count := v_moved_count;

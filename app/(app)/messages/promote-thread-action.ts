@@ -1,7 +1,6 @@
 'use server'
 
 import { withAuth } from '@/lib/actions/withAuth'
-import { withSideEffects } from '@/lib/actions/sideEffects'
 import { validateChannelInput } from '@/lib/channels/createChannelInternal'
 import { PERMISSIONS } from '@/lib/permissions'
 import { gateGroupRole } from '@/lib/permissions/gate'
@@ -39,7 +38,7 @@ type PromoteThreadOutput =
 
 async function broadcastPromotion(
   supabase: { channel?: (topic: string) => { send: (payload: { type: 'broadcast'; event: string; payload: unknown }) => Promise<unknown> } },
-  input: { rootMessageId: string; groupId: string; newChannelId: string; channel: unknown },
+  input: { rootMessageId: string; groupId: string; newChannelId: string; channel: unknown | null },
 ) {
   if (!supabase.channel) return
 
@@ -48,6 +47,8 @@ async function broadcastPromotion(
     event: 'thread_promoted',
     payload: { newChannelId: input.newChannelId },
   })
+
+  if (!input.channel) return
 
   await supabase.channel(`channels-${input.groupId}`).send({
     type: 'broadcast',
@@ -100,51 +101,24 @@ export const promoteThreadToChannel = withAuth(
     })
     if ('error' in validation) return validation
 
-    const auditMetadata = {
-      source_channel_id: rootMessage.channel_id,
-      target_channel_id: '',
-      root_message_id: rootMessageId,
-      moved_reply_count: 0,
-    }
-
     let output: { newChannelId: string; movedReplyCount: number }
     try {
-      const sideEffectResult = await withSideEffects(
-        supabase,
-        user.id,
-        async () => {
-          const { data, error } = await supabase.rpc('promote_thread_to_channel', {
-            p_root_message_id: rootMessageId,
-            p_new_channel_name: validation.value.name,
-            p_new_channel_topic: validation.value.description,
-            p_noob_access: validation.value.noobAccess,
-            p_actor_id: user.id,
-          })
+      const { data, error } = await supabase.rpc('promote_thread_to_channel', {
+        p_root_message_id: rootMessageId,
+        p_new_channel_name: validation.value.name,
+        p_new_channel_topic: validation.value.description,
+        p_noob_access: validation.value.noobAccess,
+        p_actor_id: user.id,
+      })
 
-          if (error) throw new Error(error.message)
-          const row = Array.isArray(data) ? data[0] : data
-          if (!row) throw new Error('Failed to promote thread.')
-          const result = row as PromoteRpcRow
-          return {
-            newChannelId: result.new_channel_id,
-            movedReplyCount: result.moved_reply_count,
-          }
-        },
-        {
-          onFailure: 'bubble',
-          audit: {
-            action: 'thread.promoted_to_channel',
-            targetType: 'message',
-            targetId: rootMessageId,
-            metadata: auditMetadata,
-          },
-          afterCommit(result) {
-            auditMetadata.target_channel_id = result.newChannelId
-            auditMetadata.moved_reply_count = result.movedReplyCount
-          },
-        },
-      )
-      output = sideEffectResult.data
+      if (error) throw new Error(error.message)
+      const row = Array.isArray(data) ? data[0] : data
+      if (!row) throw new Error('Failed to promote thread.')
+      const result = row as PromoteRpcRow
+      output = {
+        newChannelId: result.new_channel_id,
+        movedReplyCount: result.moved_reply_count,
+      }
     } catch (err) {
       return { error: err instanceof Error ? err.message : 'Failed to promote thread.' }
     }
