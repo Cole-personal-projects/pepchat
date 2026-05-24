@@ -75,6 +75,16 @@ describe('MessageActionBar — visibility', () => {
     expect(screen.getByTestId('action-reply')).toBeInTheDocument()
   })
 
+  it('renders thread reply action for root messages when allowReplies=true', () => {
+    render(<MessageActionBar {...BASE} />)
+    expect(screen.getByTestId('action-reply-thread')).toHaveAttribute('title', 'Reply in Thread')
+  })
+
+  it('hides thread reply action for messages already inside a thread', () => {
+    render(<MessageActionBar {...BASE} msg={{ ...MSG, thread_root_id: 'msg-root' } as MessageWithProfile} />)
+    expect(screen.queryByTestId('action-reply-thread')).not.toBeInTheDocument()
+  })
+
   it('hides reply button when allowReplies=false', () => {
     render(<MessageActionBar {...BASE} allowReplies={false} />)
     expect(screen.queryByTestId('action-reply')).not.toBeInTheDocument()
@@ -129,6 +139,13 @@ describe('MessageActionBar — callbacks', () => {
     render(<MessageActionBar {...BASE} />, { reply: onReply })
     fireEvent.click(screen.getByTestId('action-reply'))
     expect(onReply).toHaveBeenCalledWith(MSG.id)
+  })
+
+  it('calls onOpenThread with msg id when thread reply button clicked', () => {
+    const onOpenThread = vi.fn()
+    render(<MessageActionBar {...BASE} />, { openThread: onOpenThread })
+    fireEvent.click(screen.getByTestId('action-reply-thread'))
+    expect(onOpenThread).toHaveBeenCalledWith(MSG.id)
   })
 
   it('calls onStartEdit with msg when edit button clicked', () => {

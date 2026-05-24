@@ -6,7 +6,7 @@ import { PROFILE_A, PROFILE_B } from '@/tests/fixtures'
 describe('ThreadChip', () => {
   beforeEach(() => {
     vi.useFakeTimers()
-    vi.setSystemTime(new Date('2024-01-15T12:05:00Z'))
+    vi.setSystemTime(new Date('2024-01-15T12:05:00'))
   })
 
   afterEach(() => {
@@ -18,17 +18,56 @@ describe('ThreadChip', () => {
     expect(screen.queryByTestId('thread-chip-msg-1')).not.toBeInTheDocument()
   })
 
-  it('renders reply count and relative last reply time', () => {
+  it('renders reply count and Today last reply time', () => {
     render(
       <ThreadChip
         rootId="msg-1"
         replyCount={3}
-        lastReplyAt="2024-01-15T12:00:00Z"
+        lastReplyAt="2024-01-15T12:00:00"
         onOpen={vi.fn()}
       />
     )
 
-    expect(screen.getByTestId('thread-chip-msg-1')).toHaveTextContent('3 replies · last reply 5m ago')
+    expect(screen.getByTestId('thread-chip-msg-1')).toHaveTextContent('3 replies · Today at 12:00 PM')
+  })
+
+  it('renders singular reply count with timestamp', () => {
+    render(
+      <ThreadChip
+        rootId="msg-1"
+        replyCount={1}
+        lastReplyAt="2024-01-15T11:56:00"
+        onOpen={vi.fn()}
+      />
+    )
+
+    expect(screen.getByTestId('thread-chip-msg-1')).toHaveTextContent('1 reply · Today at 11:56 AM')
+  })
+
+  it('renders yesterday last reply time', () => {
+    render(
+      <ThreadChip
+        rootId="msg-1"
+        replyCount={2}
+        lastReplyAt="2024-01-14T23:10:00"
+        onOpen={vi.fn()}
+      />
+    )
+
+    expect(screen.getByTestId('thread-chip-msg-1')).toHaveTextContent('2 replies · Yesterday at 11:10 PM')
+  })
+
+  it('renders older last reply time with month and day', () => {
+    render(
+      <ThreadChip
+        rootId="msg-1"
+        replyCount={2}
+        lastReplyAt="2024-01-10T09:05:00"
+        onOpen={vi.fn()}
+      />
+    )
+
+    expect(screen.getByTestId('thread-chip-msg-1')).toHaveTextContent('2 replies · Jan 10 at 9:05 AM')
   })
 
   it('calls onOpen with the root id when clicked', () => {
