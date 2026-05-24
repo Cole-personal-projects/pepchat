@@ -1,5 +1,6 @@
 'use server'
 
+import { createAdminClient } from '@/lib/supabase/admin'
 import { withAuth } from '@/lib/actions/withAuth'
 import { validateChannelInput } from '@/lib/channels/createChannelInternal'
 import { PERMISSIONS } from '@/lib/permissions'
@@ -35,6 +36,20 @@ type PromoteRpcRow = {
 type PromoteThreadOutput =
   | { newChannelId: string; movedReplyCount: number }
   | { error: string }
+
+async function isActorBanned(userId: string): Promise<boolean> {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return false
+
+  const adminClient = createAdminClient()
+  const { data, error } = await adminClient
+    .from('banned_users')
+    .select('user_id')
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (error && error.code !== 'PGRST116') throw new Error(error.message)
+  return Boolean(data)
+}
 
 async function broadcastPromotion(
   supabase: { channel?: (topic: string) => { send: (payload: { type: 'broadcast'; event: string; payload: unknown }) => Promise<unknown> } },
@@ -83,6 +98,14 @@ export const promoteThreadToChannel = withAuth(
     if (!sourceChannel) return { error: 'Source channel not found.' }
     const channel = sourceChannel as SourceChannelRow
     const isRootAuthor = rootMessage.user_id === user.id
+
+    let banned = false
+    try {
+      banned = await isActorBanned(user.id)
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : PROMOTE_DENIED }
+    }
+    if (banned) return { error: PROMOTE_DENIED }
 
     const gateResult = await gateGroupRole(supabase, {
       groupId: channel.group_id,

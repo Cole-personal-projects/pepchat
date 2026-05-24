@@ -1,13 +1,18 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { promoteThreadToChannel } from '@/app/(app)/messages/promote-thread-action'
 
-const { mockCreateClient, mockLogAuditEvent } = vi.hoisted(() => ({
+const { mockCreateAdminClient, mockCreateClient, mockLogAuditEvent } = vi.hoisted(() => ({
+  mockCreateAdminClient: vi.fn(),
   mockCreateClient: vi.fn(),
   mockLogAuditEvent: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: mockCreateClient,
+}))
+
+vi.mock('@/lib/supabase/admin', () => ({
+  createAdminClient: mockCreateAdminClient,
 }))
 
 vi.mock('@/lib/audit', () => ({
@@ -33,6 +38,8 @@ function makeBuilder(result: QueryResult = {}) {
 function setupClient(builders: unknown[], options: {
   userId?: string | null
   rpcResult?: QueryResult
+  adminBanned?: boolean
+  adminBanError?: { message: string; code?: string }
 } = {}) {
   const queue = [...builders]
   const channelSend = vi.fn().mockResolvedValue('ok')
@@ -57,17 +64,38 @@ function setupClient(builders: unknown[], options: {
     rpc,
     channel,
   })
-  return { from, rpc, channel, channelSend }
+
+  const banLookup = makeBuilder({
+    data: options.adminBanned ? { user_id: options.userId ?? 'actor-1' } : null,
+    error: options.adminBanError ?? null,
+  })
+  const adminFrom = vi.fn((table: string) => {
+    if (table !== 'banned_users') throw new Error(`Unexpected admin from(${table}) call`)
+    return banLookup
+  })
+  mockCreateAdminClient.mockReturnValue({ from: adminFrom })
+
+  return { from, rpc, channel, channelSend, adminFrom, banLookup }
 }
 
 const ROOT = { id: 'root-1', channel_id: 'ch-source', thread_root_id: null, user_id: 'author-1' }
 const SOURCE_CHANNEL = { id: 'ch-source', group_id: 'group-1', noob_access: true }
 const NEW_CHANNEL = { id: 'ch-new', group_id: 'group-1', name: 'promoted-thread' }
+const ORIGINAL_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 describe('promoteThreadToChannel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockLogAuditEvent.mockResolvedValue(undefined)
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key'
+  })
+
+  afterEach(() => {
+    if (ORIGINAL_SERVICE_ROLE_KEY === undefined) {
+      delete process.env.SUPABASE_SERVICE_ROLE_KEY
+    } else {
+      process.env.SUPABASE_SERVICE_ROLE_KEY = ORIGINAL_SERVICE_ROLE_KEY
+    }
   })
 
   it('promotes a root thread for a channel manager and broadcasts after commit', async () => {
@@ -119,6 +147,22 @@ describe('promoteThreadToChannel', () => {
 
     await expect(promoteThreadToChannel({ rootMessageId: 'root-1', channelName: 'promoted' }))
       .resolves.toEqual({ newChannelId: 'ch-new', movedReplyCount: 2 })
+  })
+
+  it('denies banned actors before role gate or RPC', async () => {
+    const root = makeBuilder({ data: { ...ROOT, user_id: 'actor-1' } })
+    const source = makeBuilder({ data: SOURCE_CHANNEL })
+    const gate = makeBuilder({ data: { role: 'admin' } })
+    const duplicate = makeBuilder({ data: null })
+    const { rpc, banLookup } = setupClient([root, source, gate, duplicate], { adminBanned: true })
+
+    await expect(promoteThreadToChannel({ rootMessageId: 'root-1', channelName: 'promoted' }))
+      .resolves.toEqual({ error: 'You do not have permission to promote this thread.' })
+
+    expect(banLookup.eq).toHaveBeenCalledWith('user_id', 'actor-1')
+    expect(gate.select).not.toHaveBeenCalled()
+    expect(duplicate.select).not.toHaveBeenCalled()
+    expect(rpc).not.toHaveBeenCalled()
   })
 
   it('does not fail a committed promotion because of action-level audit logging', async () => {

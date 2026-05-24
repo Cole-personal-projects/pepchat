@@ -33,9 +33,18 @@ DECLARE
   v_moved_reply_ids uuid[];
   v_channel_name text;
   v_channel_topic text;
+  v_actor_role public.member_role;
 BEGIN
   IF p_actor_id IS NULL OR p_actor_id IS DISTINCT FROM auth.uid() THEN
     RAISE EXCEPTION 'Not authenticated.';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+      FROM public.banned_users bu
+      WHERE bu.user_id = p_actor_id
+  ) THEN
+    RAISE EXCEPTION 'You do not have permission to promote this thread.';
   END IF;
 
   v_channel_name := lower(regexp_replace(trim(coalesce(p_new_channel_name, '')), '\s+', '-', 'g'));
@@ -75,13 +84,21 @@ BEGIN
     RAISE EXCEPTION 'Thread already promoted.';
   END IF;
 
-  IF NOT EXISTS (
-    SELECT 1
-      FROM public.group_members gm
-      WHERE gm.group_id = v_group_id
-        AND gm.user_id = p_actor_id
-        AND (gm.role IN ('admin', 'moderator') OR p_actor_id = v_root_author)
-  ) THEN
+  SELECT gm.role
+    INTO v_actor_role
+    FROM public.group_members gm
+    WHERE gm.group_id = v_group_id
+      AND gm.user_id = p_actor_id;
+
+  IF v_actor_role IS NULL THEN
+    RAISE EXCEPTION 'You do not have permission to promote this thread.';
+  END IF;
+
+  IF v_actor_role NOT IN ('admin', 'moderator')
+    AND (
+      p_actor_id IS DISTINCT FROM v_root_author
+      OR NOT public.can_read_channel_messages(v_source_channel_id)
+    ) THEN
     RAISE EXCEPTION 'You do not have permission to promote this thread.';
   END IF;
 
@@ -164,3 +181,6 @@ BEGIN
   RETURN NEXT;
 END;
 $$;
+
+REVOKE ALL ON FUNCTION public.promote_thread_to_channel(uuid, text, text, boolean, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.promote_thread_to_channel(uuid, text, text, boolean, uuid) TO authenticated;
