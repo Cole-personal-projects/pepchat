@@ -113,10 +113,10 @@ describe('Message — ungrouped', () => {
     expect(screen.getByText('Hello world')).toBeInTheDocument()
   })
 
-  it('does not render a thread summary or always-visible Thread label for messages with no replies', () => {
+  it('does not render a thread summary for messages with no replies', () => {
     render(<Message {...BASE_PROPS} />)
     expect(screen.queryByTestId('thread-chip-msg-1')).not.toBeInTheDocument()
-    expect(screen.queryByText(/^Thread$/i)).not.toBeInTheDocument()
+    expect(screen.getByTestId('mobile-action-reply-thread')).toHaveTextContent('Thread')
   })
 
   it('renders thread summary only when the message has replies', () => {
