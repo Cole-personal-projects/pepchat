@@ -18,6 +18,12 @@ type NewThreadReplyPayload = {
   channelId?: string
 }
 
+export type ThreadPromotedPayload = {
+  rootId: string
+  newChannelId?: string
+  channelName?: string
+}
+
 const EMPTY_REPLIES: MessageWithProfile[] = []
 
 interface UseThreadMessagesReturn {
@@ -32,7 +38,8 @@ interface UseThreadMessagesReturn {
 export function useThreadMessages(
   rootId: string | null,
   channelId: string | null,
-  initialReplies: MessageWithProfile[] = EMPTY_REPLIES
+  initialReplies: MessageWithProfile[] = EMPTY_REPLIES,
+  onThreadPromoted?: (payload: ThreadPromotedPayload) => void
 ): UseThreadMessagesReturn {
   const [replies, setReplies] = useState<MessageWithProfile[]>(initialReplies)
 
@@ -54,7 +61,7 @@ export function useThreadMessages(
   const { channelRef: threadChannelRef } = useRealtimeChannel({
     topic: `thread-${rootId ?? 'idle'}`,
     enabled: Boolean(rootId),
-    deps: [rootId],
+    deps: [rootId, onThreadPromoted],
     bindings: [
       {
         type: 'broadcast',
@@ -78,6 +85,14 @@ export function useThreadMessages(
         },
       },
       {
+        type: 'broadcast',
+        filter: { event: 'thread_promoted' },
+        handler: () => {
+          if (!rootId) return
+          onThreadPromoted?.({ rootId })
+        },
+      },
+      {
         type: 'postgres_changes',
         filter: {
           event: 'UPDATE',
@@ -94,6 +109,7 @@ export function useThreadMessages(
                     content: payload.new.content as string,
                     edited_at: payload.new.edited_at as string | null,
                     pinned_at: payload.new.pinned_at as string | null,
+                    promoted_at: payload.new.promoted_at as string | null,
                   }
                 : reply
             )

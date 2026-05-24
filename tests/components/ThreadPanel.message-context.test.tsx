@@ -7,6 +7,10 @@ import type { MessageWithProfile } from '@/lib/types'
 const fetchThreadRepliesMock = vi.hoisted(() => vi.fn())
 const markThreadReadMock = vi.hoisted(() => vi.fn())
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}))
+
 vi.mock('@/app/(app)/messages/thread-actions', () => ({
   fetchThreadReplies: fetchThreadRepliesMock,
   markThreadRead: markThreadReadMock,

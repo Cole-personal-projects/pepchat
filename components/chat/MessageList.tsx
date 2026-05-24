@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import dynamic from 'next/dynamic'
+import { useRouter } from 'next/navigation'
 import { editMessage, deleteMessage, searchMessages } from '@/app/(app)/messages/actions'
 import { fetchThreadRoot } from '@/app/(app)/messages/thread-actions'
 import { reportMessage } from '@/app/admin/actions'
@@ -31,6 +32,7 @@ interface MessageListProps {
   groupId?: string
   channelId?: string
   channelName?: string
+  sourceNoobAccess?: boolean
   userRole?: Role | null
   onLoadMore: () => void
   onReact: (messageId: string, emoji: string) => void
@@ -99,6 +101,7 @@ export default function MessageList({
   groupId,
   channelId,
   channelName,
+  sourceNoobAccess = false,
   onLoadMore,
   onReact,
   onReply,
@@ -124,6 +127,7 @@ export default function MessageList({
   messagesReadyForHashFallback = true,
   animateInitialMessages = true,
 }: MessageListProps) {
+  const router = useRouter()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
   const [error, setError] = useState('')
@@ -172,17 +176,72 @@ export default function MessageList({
   }, [initialLastReadAt])
 
   useEffect(() => {
-    function syncThreadFromUrl() {
-      const params = new URLSearchParams(window.location.search)
-      const rootId = params.get('thread')?.trim() || null
+    let cancelled = false
+
+    function openThreadFromUrl(rootId: string | null) {
+      if (cancelled) return
       setThreadRootId(rootId)
       onThreadPanelOpenChange?.(Boolean(rootId))
     }
 
+    function redirectPromotedThread(newChannelId: string, channelName?: string | null) {
+      if (cancelled) return
+      setNotice(`This thread was promoted to #${channelName ?? 'new-channel'}.`)
+      setThreadRootId(null)
+      onThreadPanelOpenChange?.(false)
+      router.replace(`/channels/${newChannelId}`)
+    }
+
+    function syncThreadFromUrl() {
+      const params = new URLSearchParams(window.location.search)
+      const rootId = params.get('thread')?.trim() || null
+      if (!rootId) {
+        openThreadFromUrl(null)
+        return
+      }
+
+      const loadedRoot = messages.find(message => message.id === rootId) ?? null
+      const loadedRootPromotedChannel = loadedRoot?.promoted_channel ?? null
+      if (loadedRootPromotedChannel?.id) {
+        redirectPromotedThread(loadedRootPromotedChannel.id, loadedRootPromotedChannel.name)
+        return
+      }
+
+      fetchThreadRoot({ rootId }).then(result => {
+        if (cancelled) return
+        const promotedChannel = 'ok' in result && result.ok ? result.message.promoted_channel : null
+        if (promotedChannel?.id) {
+          redirectPromotedThread(promotedChannel.id, promotedChannel.name)
+          return
+        }
+        openThreadFromUrl(rootId)
+      }).catch(() => openThreadFromUrl(rootId))
+    }
+
     syncThreadFromUrl()
     window.addEventListener('popstate', syncThreadFromUrl)
-    return () => window.removeEventListener('popstate', syncThreadFromUrl)
-  }, [onThreadPanelOpenChange])
+    return () => {
+      cancelled = true
+      window.removeEventListener('popstate', syncThreadFromUrl)
+    }
+  }, [messages, onThreadPanelOpenChange, router])
+
+  useEffect(() => {
+    function handleThreadPromoted(event: Event) {
+      const detail = (event as CustomEvent<{ rootId?: string; newChannelId?: string; channelName?: string }>).detail
+      if (!detail?.rootId) return
+      if (openThreadRootId === detail.rootId) {
+        closeThread()
+      }
+      setNotice(detail.newChannelId
+        ? `This thread was promoted to #${detail.channelName ?? 'new-channel'}.`
+        : 'This thread was promoted to a channel.'
+      )
+    }
+
+    window.addEventListener('thread-promoted', handleThreadPromoted)
+    return () => window.removeEventListener('thread-promoted', handleThreadPromoted)
+  }, [openThreadRootId])
 
   function setThreadRootId(rootId: string | null) {
     setOpenThreadRootId(rootId)
@@ -1223,6 +1282,8 @@ export default function MessageList({
           profile={profile}
           currentUserId={currentUserId}
           groupId={groupId}
+          userRole={userRole}
+          sourceNoobAccess={sourceNoobAccess}
           canPin={canPin}
           onClose={closeThread}
         />

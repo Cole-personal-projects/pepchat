@@ -79,6 +79,7 @@ describe('useThreadMessages', () => {
     const threadChannel = realtime.channels.find(channel => channel.topic === 'thread-root-1')!
     expect(threadChannel.bindings.map(({ type, filter }) => ({ type, filter }))).toEqual([
       { type: 'broadcast', filter: { event: 'new_thread_reply' } },
+      { type: 'broadcast', filter: { event: 'thread_promoted' } },
       { type: 'postgres_changes', filter: { event: 'UPDATE', schema: 'public', table: 'messages', filter: 'thread_root_id=eq.root-1' } },
       { type: 'postgres_changes', filter: { event: 'DELETE', schema: 'public', table: 'messages', filter: 'thread_root_id=eq.root-1' } },
     ])
@@ -105,6 +106,47 @@ describe('useThreadMessages', () => {
     })
 
     expect(realtime.from).not.toHaveBeenCalled()
+  })
+
+  it('notifies promotions without exposing target channel metadata from realtime', async () => {
+    const realtime = makeRealtimeMock()
+    const onThreadPromoted = vi.fn()
+    renderHook(() => useThreadMessages('root-1', 'ch-1', undefined, onThreadPromoted))
+    const threadChannel = realtime.channels.find(channel => channel.topic === 'thread-root-1')!
+
+    await act(async () => {
+      await threadChannel.bindings[1].handler({ payload: { promoted: true, newChannelId: 'hidden-channel', channelName: 'Hidden' } })
+    })
+
+    expect(onThreadPromoted).toHaveBeenCalledWith({ rootId: 'root-1' })
+  })
+
+  it('does not merge hidden promoted target IDs from postgres UPDATE payloads into replies', () => {
+    const realtime = makeRealtimeMock()
+    const initialReplies = [REPLY]
+    const { result } = renderHook(() => useThreadMessages('root-1', 'ch-1', initialReplies))
+    const threadChannel = realtime.channels.find(channel => channel.topic === 'thread-root-1')!
+    const updateBinding = threadChannel.bindings.find(binding => binding.type === 'postgres_changes' && binding.filter.event === 'UPDATE')!
+
+    act(() => {
+      updateBinding.handler({
+        new: {
+          id: REPLY.id,
+          content: 'promoted',
+          edited_at: '2026-01-01T00:01:00.000Z',
+          pinned_at: null,
+          promoted_to_channel_id: 'hidden-channel',
+          promoted_at: '2026-01-01T00:02:00.000Z',
+        },
+      })
+    })
+
+    expect(result.current.replies[0]).toMatchObject({
+      content: 'promoted',
+      edited_at: '2026-01-01T00:01:00.000Z',
+      promoted_at: '2026-01-01T00:02:00.000Z',
+    })
+    expect(result.current.replies[0]).not.toHaveProperty('promoted_to_channel_id')
   })
 
   it('broadcasts minimal new thread replies and channel thread activity', () => {

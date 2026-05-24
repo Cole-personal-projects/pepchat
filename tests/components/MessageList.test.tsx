@@ -4,6 +4,10 @@ import MessageList from '@/components/chat/MessageList'
 import { PROFILE_A } from '@/tests/fixtures'
 import type { MessageWithProfile } from '@/lib/types'
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+}))
+
 // Minimal Message mock — emits the same edit events as the real component
 vi.mock('@/components/chat/Message', async () => {
   const { useMessageActions } = await import('@/components/chat/MessageActionsContext')

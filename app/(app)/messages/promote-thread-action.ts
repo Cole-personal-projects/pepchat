@@ -53,14 +53,14 @@ async function isActorBanned(userId: string): Promise<boolean> {
 
 async function broadcastPromotion(
   supabase: { channel?: (topic: string) => { send: (payload: { type: 'broadcast'; event: string; payload: unknown }) => Promise<unknown> } },
-  input: { rootMessageId: string; groupId: string; newChannelId: string; channel: unknown | null },
+  input: { rootMessageId: string; groupId: string; channel: unknown | null },
 ) {
   if (!supabase.channel) return
 
   await supabase.channel(`thread-${input.rootMessageId}`).send({
     type: 'broadcast',
     event: 'thread_promoted',
-    payload: { newChannelId: input.newChannelId },
+    payload: { promoted: true },
   })
 
   if (!input.channel) return
@@ -156,7 +156,6 @@ export const promoteThreadToChannel = withAuth(
       await broadcastPromotion(supabase, {
         rootMessageId,
         groupId: channel.group_id,
-        newChannelId: output.newChannelId,
         channel: newChannel,
       })
     } catch {

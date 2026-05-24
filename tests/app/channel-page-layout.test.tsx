@@ -49,6 +49,49 @@ describe('ChannelPage desktop layout', () => {
     mockCreateClient.mockResolvedValue(makeSupabase())
   })
 
+  it('does not redirect promoted thread links when target channel is hidden by RLS', async () => {
+    const channelResults = [
+      tableResult(null),
+      tableResult({ id: 'ch-1', group_id: 'group-1', name: 'general', description: null, noob_access: false }),
+    ]
+    const messageResults = [
+      tableResult({ promoted_to_channel_id: 'ch-hidden' }),
+      tableResult([]),
+    ]
+    const supabase = makeSupabase()
+    supabase.from = vi.fn((table: string) => {
+      if (table === 'messages') return messageResults.shift() ?? tableResult([])
+      if (table === 'channels') return channelResults.shift() ?? tableResult(null)
+      if (table === 'profiles') return tableResult({ id: 'user-1', username: 'alice', avatar_url: null })
+      if (table === 'group_members') return tableResult({ role: 'user' })
+      if (table === 'channel_read_state') return tableResult({ last_read_at: null })
+      throw new Error(`unexpected table:${table}`)
+    })
+    mockCreateClient.mockResolvedValueOnce(supabase)
+
+    const element = await ChannelPage({ params: { channelId: 'ch-1' }, searchParams: { thread: 'root-1' } })
+    render(element)
+
+    expect(mockRedirect).not.toHaveBeenCalledWith('/channels/ch-hidden')
+    expect(screen.getByTestId('channel-shell')).toBeInTheDocument()
+  })
+
+  it('redirects promoted thread links only after target channel is visible under RLS', async () => {
+    const channelResults = [
+      tableResult({ id: 'ch-visible' }),
+    ]
+    const supabase = makeSupabase()
+    supabase.from = vi.fn((table: string) => {
+      if (table === 'messages') return tableResult({ promoted_to_channel_id: 'ch-visible' })
+      if (table === 'channels') return channelResults.shift() ?? tableResult(null)
+      throw new Error(`unexpected table:${table}`)
+    })
+    mockCreateClient.mockResolvedValueOnce(supabase)
+
+    await expect(ChannelPage({ params: { channelId: 'ch-1' }, searchParams: { thread: 'root-1' } }))
+      .rejects.toThrow('redirect:/channels/ch-visible')
+  })
+
   it('lets the channel route fill the desktop app surface width', async () => {
     const element = await ChannelPage({ params: { channelId: 'ch-1' } })
     const { container } = render(element)
