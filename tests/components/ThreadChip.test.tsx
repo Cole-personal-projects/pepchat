@@ -44,6 +44,32 @@ describe('ThreadChip', () => {
     expect(screen.getByTestId('thread-chip-msg-1')).toHaveTextContent('1 reply · Today at 11:56 AM')
   })
 
+  it('renders yesterday last reply time', () => {
+    render(
+      <ThreadChip
+        rootId="msg-1"
+        replyCount={2}
+        lastReplyAt="2024-01-14T23:10:00"
+        onOpen={vi.fn()}
+      />
+    )
+
+    expect(screen.getByTestId('thread-chip-msg-1')).toHaveTextContent('2 replies · Yesterday at 11:10 PM')
+  })
+
+  it('renders older last reply time with month and day', () => {
+    render(
+      <ThreadChip
+        rootId="msg-1"
+        replyCount={2}
+        lastReplyAt="2024-01-10T09:05:00"
+        onOpen={vi.fn()}
+      />
+    )
+
+    expect(screen.getByTestId('thread-chip-msg-1')).toHaveTextContent('2 replies · Jan 10 at 9:05 AM')
+  })
+
   it('calls onOpen with the root id when clicked', () => {
     const onOpen = vi.fn()
     render(<ThreadChip rootId="msg-1" replyCount={1} lastReplyAt={null} onOpen={onOpen} />)
