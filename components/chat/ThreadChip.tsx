@@ -14,20 +14,20 @@ interface ThreadChipProps {
   onOpen: (rootId: string) => void
 }
 
-function formatRelativeTime(iso?: string | null) {
+function formatThreadLastReplyTime(iso?: string | null) {
   if (!iso) return 'just now'
-  const timestamp = new Date(iso).getTime()
+  const date = new Date(iso)
+  const timestamp = date.getTime()
   if (!Number.isFinite(timestamp)) return 'just now'
 
-  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000))
-  if (seconds < 60) return 'just now'
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  if (days < 7) return `${days}d ago`
-  return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' })
+  const now = new Date()
+  const yesterday = new Date(now)
+  yesterday.setDate(yesterday.getDate() - 1)
+  const time = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+
+  if (date.toDateString() === now.toDateString()) return `Today at ${time}`
+  if (date.toDateString() === yesterday.toDateString()) return `Yesterday at ${time}`
+  return `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${time}`
 }
 
 export default function ThreadChip({
@@ -44,7 +44,7 @@ export default function ThreadChip({
 
   const visibleAuthors = authors.slice(0, 3)
   const replyLabel = `${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}`
-  const timeLabel = formatRelativeTime(lastReplyAt)
+  const timeLabel = formatThreadLastReplyTime(lastReplyAt)
   const unread = hasUnread ?? computedUnread
 
   return (
@@ -80,7 +80,7 @@ export default function ThreadChip({
         </span>
       )}
       <span className="truncate">
-        {replyLabel} · last reply {timeLabel}
+        {replyLabel} · {timeLabel}
       </span>
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M9 18l6-6-6-6" />

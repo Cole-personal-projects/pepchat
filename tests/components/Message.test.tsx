@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render as rtlRender, screen, fireEvent } from '@testing-library/react'
 import Message from '@/components/chat/Message'
 import { ChannelMessageActionsProvider, type MessageActions } from '@/components/chat/MessageActionsContext'
@@ -11,6 +11,7 @@ vi.mock('@/components/chat/MessageAttachments', () => ({ default: () => null }))
 vi.mock('@/components/chat/MessageContent', () => ({
   MessageContent: ({ content }: { content: string }) => <span>{content}</span>,
 }))
+vi.mock('@/lib/hooks/useThreadUnread', () => ({ useThreadUnread: () => false }))
 
 const BASE_MSG: MessageWithProfile = {
   id: 'msg-1',
@@ -75,6 +76,15 @@ function render(ui: React.ReactElement, actions: Partial<MessageActions> = {}) {
 }
 
 describe('Message — ungrouped', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2024-01-15T12:05:00'))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('shows message header', () => {
     render(<Message {...BASE_PROPS} />)
     expect(screen.getByTestId('message-header')).toBeInTheDocument()
@@ -101,6 +111,23 @@ describe('Message — ungrouped', () => {
   it('renders message content', () => {
     render(<Message {...BASE_PROPS} />)
     expect(screen.getByText('Hello world')).toBeInTheDocument()
+  })
+
+  it('does not render a thread summary for messages with no replies', () => {
+    render(<Message {...BASE_PROPS} />)
+    expect(screen.queryByTestId('thread-chip-msg-1')).not.toBeInTheDocument()
+  })
+
+  it('renders thread summary only when the message has replies', () => {
+    const msg: MessageWithProfile = {
+      ...BASE_MSG,
+      thread_reply_count: 1,
+      thread_last_reply_at: '2024-01-15T11:56:00',
+    }
+
+    render(<Message {...BASE_PROPS} msg={msg} />)
+
+    expect(screen.getByTestId('thread-chip-msg-1')).toHaveTextContent('1 reply · Today at 11:56 AM')
   })
 })
 
