@@ -89,6 +89,28 @@ export default function ThreadPanel({
     window.dispatchEvent(new CustomEvent('thread-read', { detail: { rootId } }))
   }, [loading, open, replies, rootId, rootMessage?.thread_last_reply_at])
 
+  const threadMessageActions = useMemo<MessageActions>(() => ({
+    startEdit: () => {},
+    cancelEdit: () => {},
+    changeEditContent: () => {},
+    submitEdit: async () => {},
+    delete: async () => {},
+    react: async () => {},
+    reply: () => {},
+    openThread: () => {},
+    jumpToMessage: () => {},
+    pin: async () => {},
+    toggleSaved: () => {},
+    openProfile: () => {},
+    openActions: () => {},
+    openContextMenu: () => {},
+    togglePicker: () => {},
+    closePicker: () => {},
+    markUnread: () => {},
+    report: () => {},
+    muteUser: () => {},
+  }), [])
+
   if (!open || !rootMessage) return null
 
   function handleDragMove(clientY: number) {
@@ -115,28 +137,6 @@ export default function ThreadPanel({
     atReactionLimit: false,
     showThreadChip: false,
   }
-
-  const threadMessageActions = useMemo<MessageActions>(() => ({
-    startEdit: () => {},
-    cancelEdit: () => {},
-    changeEditContent: () => {},
-    submitEdit: async () => {},
-    delete: async () => {},
-    react: async () => {},
-    reply: () => {},
-    openThread: () => {},
-    jumpToMessage: () => {},
-    pin: async () => {},
-    toggleSaved: () => {},
-    openProfile: () => {},
-    openActions: () => {},
-    openContextMenu: () => {},
-    togglePicker: () => {},
-    closePicker: () => {},
-    markUnread: () => {},
-    report: () => {},
-    muteUser: () => {},
-  }), [])
 
   return (
     <ChannelMessageActionsProvider value={threadMessageActions}>

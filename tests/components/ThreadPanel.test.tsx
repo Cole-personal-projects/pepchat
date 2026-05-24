@@ -107,6 +107,15 @@ describe('ThreadPanel', () => {
     expect(screen.queryByTestId('thread-panel')).not.toBeInTheDocument()
   })
 
+  it('can transition from closed to open without changing hook order', async () => {
+    const { rerender } = render(<ThreadPanel {...BASE_PROPS} open={false} />)
+
+    rerender(<ThreadPanel {...BASE_PROPS} open />)
+
+    await waitFor(() => expect(screen.getByTestId('thread-panel')).toBeInTheDocument())
+    expect(screen.getByTestId('message-root-1')).toHaveTextContent('Root message')
+  })
+
   it('renders header, root message, fetched replies, and thread composer', async () => {
     render(<ThreadPanel {...BASE_PROPS} />)
 
