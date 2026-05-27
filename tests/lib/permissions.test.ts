@@ -95,6 +95,30 @@ describe('PERMISSIONS.canAccessChannel', () => {
   })
 })
 
+describe('PERMISSIONS.canStartVoiceRoom', () => {
+  it.each([
+    ['admin', true],
+    ['moderator', true],
+    ['user', false],
+    ['noob', false],
+  ] as [Role, boolean][])('%s → %s', (role: Role, expected: boolean) => {
+    expect(PERMISSIONS.canStartVoiceRoom(role)).toBe(expected)
+  })
+})
+
+describe('PERMISSIONS.canJoinVoiceRoom', () => {
+  it.each(['admin', 'moderator', 'user'] as Role[])('%s can join any accessible channel', (role: Role) => {
+    expect(PERMISSIONS.canJoinVoiceRoom(role, 'general')).toBe(true)
+    expect(PERMISSIONS.canJoinVoiceRoom(role, 'welcome')).toBe(true)
+  })
+
+  it('applies noob channel-access semantics', () => {
+    expect(PERMISSIONS.canJoinVoiceRoom('noob', 'welcome')).toBe(true)
+    expect(PERMISSIONS.canJoinVoiceRoom('noob', 'rules', true)).toBe(true)
+    expect(PERMISSIONS.canJoinVoiceRoom('noob', 'general')).toBe(false)
+  })
+})
+
 describe('PERMISSIONS.canManageGroup', () => {
   it('allows admin', () => expect(PERMISSIONS.canManageGroup('admin')).toBe(true))
   it.each(['moderator', 'user', 'noob'] as Role[])(
