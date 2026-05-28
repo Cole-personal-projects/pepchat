@@ -11,6 +11,7 @@ type MockRoomInstance = {
   startAudio: ReturnType<typeof vi.fn>
   localParticipant: {
     setMicrophoneEnabled: ReturnType<typeof vi.fn>
+    audioTrackPublications: Map<string, { track?: { stop: ReturnType<typeof vi.fn> } }>
   }
   on: (event: string, handler: Handler) => MockRoomInstance
 }
@@ -26,6 +27,7 @@ const livekitMock = vi.hoisted(() => {
     startAudio = vi.fn().mockResolvedValue(undefined)
     localParticipant = {
       setMicrophoneEnabled: vi.fn().mockResolvedValue(undefined),
+      audioTrackPublications: new Map([['microphone', { track: { stop: vi.fn() } }]]),
     }
 
     constructor() {
@@ -107,7 +109,7 @@ describe('useVoiceRoomConnection', () => {
     expect(result.current.error).toBe('Voice is unavailable.')
   })
 
-  it('disconnects and stops tracks on leave', async () => {
+  it('disconnects and directly stops local audio tracks on leave', async () => {
     const { result } = renderHook(() => useVoiceRoomConnection())
 
     await act(async () => {
@@ -119,6 +121,8 @@ describe('useVoiceRoomConnection', () => {
       await result.current.leave()
     })
 
+    const publication = room.localParticipant.audioTrackPublications.get('microphone')
+    expect(publication?.track?.stop).toHaveBeenCalledTimes(1)
     expect(room.disconnect).toHaveBeenCalledWith(true)
     expect(result.current.status).toBe('idle')
   })

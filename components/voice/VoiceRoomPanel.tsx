@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useState } from 'react'
-import { startVoiceRoom, mintVoiceToken, leaveVoiceRoom } from '@/app/(app)/voice/actions'
+import { useCallback, useEffect, useState } from 'react'
+import { startVoiceRoom, getCurrentVoiceRoom, mintVoiceToken, leaveVoiceRoom } from '@/app/(app)/voice/actions'
 import { PERMISSIONS, type Role } from '@/lib/permissions'
 import { useVoiceRoomConnection } from '@/components/voice/useVoiceRoomConnection'
 
@@ -45,6 +45,26 @@ export default function VoiceRoomPanel({
   const canJoin = userRole ? PERMISSIONS.canJoinVoiceRoom(userRole, channelName, sourceNoobAccess) : false
   const busy = actionStatus !== 'idle' || connection.status === 'joining' || connection.status === 'leaving'
   const joined = connection.status === 'connected'
+
+  useEffect(() => {
+    if (!enabled || !canJoin) return
+
+    let cancelled = false
+    void getCurrentVoiceRoom(channelId)
+      .then((result) => {
+        if (cancelled) return
+        if ('ok' in result && result.ok) {
+          setRoom(result.room)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setError(UNAVAILABLE_ERROR)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [canJoin, channelId, enabled])
 
   const handleStart = useCallback(async () => {
     setError(null)
@@ -90,9 +110,13 @@ export default function VoiceRoomPanel({
     if (!room) return
     setError(null)
     setActionStatus('leaving')
-    await connection.leave()
     try {
-      await leaveVoiceRoom(room.id)
+      const result = await leaveVoiceRoom(room.id)
+      if (!('ok' in result) || !result.ok) {
+        setError(UNAVAILABLE_ERROR)
+        return
+      }
+      await connection.leave()
     } catch {
       setError(UNAVAILABLE_ERROR)
     } finally {

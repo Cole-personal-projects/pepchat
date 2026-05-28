@@ -2,11 +2,12 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import VoiceRoomPanel from '@/components/voice/VoiceRoomPanel'
-import { startVoiceRoom, mintVoiceToken, leaveVoiceRoom } from '@/app/(app)/voice/actions'
+import { startVoiceRoom, getCurrentVoiceRoom, mintVoiceToken, leaveVoiceRoom } from '@/app/(app)/voice/actions'
 import { useVoiceRoomConnection } from '@/components/voice/useVoiceRoomConnection'
 
 vi.mock('@/app/(app)/voice/actions', () => ({
   startVoiceRoom: vi.fn(),
+  getCurrentVoiceRoom: vi.fn(),
   mintVoiceToken: vi.fn(),
   leaveVoiceRoom: vi.fn(),
 }))
@@ -55,6 +56,7 @@ describe('VoiceRoomPanel', () => {
     vi.clearAllMocks()
     mockConnection()
     vi.mocked(startVoiceRoom).mockResolvedValue({ ok: true, room })
+    vi.mocked(getCurrentVoiceRoom).mockResolvedValue({ ok: true, room: null })
     vi.mocked(mintVoiceToken).mockResolvedValue({
       ok: true,
       provider: 'livekit',
@@ -85,6 +87,24 @@ describe('VoiceRoomPanel', () => {
 
     expect(screen.queryByRole('button', { name: 'Start voice room' })).not.toBeInTheDocument()
     expect(screen.getByText('No voice room active.')).toBeInTheDocument()
+  })
+
+  it('discovers an open room so an authorized user can join without starting it', async () => {
+    const user = userEvent.setup()
+    const connection = mockConnection()
+    vi.mocked(getCurrentVoiceRoom).mockResolvedValue({ ok: true, room })
+
+    renderPanel('user')
+
+    await user.click(await screen.findByRole('button', { name: 'Join voice' }))
+
+    expect(getCurrentVoiceRoom).toHaveBeenCalledWith('channel-1')
+    expect(startVoiceRoom).not.toHaveBeenCalled()
+    expect(mintVoiceToken).toHaveBeenCalledWith('voice-room-1')
+    expect(connection.connect).toHaveBeenCalledWith({
+      livekitUrl: 'wss://voice.example.test',
+      token: 'ephemeral-token',
+    })
   })
 
   it('starts a room and mints a token before connecting to LiveKit', async () => {
@@ -133,17 +153,56 @@ describe('VoiceRoomPanel', () => {
     expect(screen.queryByText('specific permission detail')).not.toBeInTheDocument()
   })
 
-  it('leaves by disconnecting locally and calling the server action', async () => {
+  it('lets an authorized non-admin join an already-open room discovered from the server', async () => {
+    const user = userEvent.setup()
+    const connection = mockConnection()
+    vi.mocked(getCurrentVoiceRoom).mockResolvedValue({ ok: true, room })
+
+    renderPanel('user')
+    await user.click(await screen.findByRole('button', { name: 'Join voice' }))
+
+    expect(startVoiceRoom).not.toHaveBeenCalled()
+    expect(getCurrentVoiceRoom).toHaveBeenCalledWith('channel-1')
+    expect(mintVoiceToken).toHaveBeenCalledWith('voice-room-1')
+    expect(connection.connect).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not disconnect locally when the server leave action fails', async () => {
     const user = userEvent.setup()
     const connection = mockConnection({ status: 'connected' })
+    vi.mocked(leaveVoiceRoom).mockResolvedValue({ error: 'specific server detail' })
 
     renderPanel('admin')
     await user.click(screen.getByRole('button', { name: 'Start voice room' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Leave' })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'Leave' }))
 
-    expect(connection.leave).toHaveBeenCalledTimes(1)
     expect(leaveVoiceRoom).toHaveBeenCalledWith('voice-room-1')
+    expect(connection.leave).not.toHaveBeenCalled()
+    expect(await screen.findByRole('alert')).toHaveTextContent('Voice is unavailable.')
+    expect(screen.queryByText('specific server detail')).not.toBeInTheDocument()
+  })
+
+  it('leaves by calling the server action before disconnecting locally', async () => {
+    const user = userEvent.setup()
+    const connection = mockConnection({ status: 'connected' })
+    const order: string[] = []
+    vi.mocked(leaveVoiceRoom).mockImplementation(async () => {
+      order.push('server')
+      return { ok: true }
+    })
+    connection.leave.mockImplementation(async () => {
+      order.push('local')
+    })
+
+    renderPanel('admin')
+    await user.click(screen.getByRole('button', { name: 'Start voice room' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Leave' })).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Leave' }))
+
+    expect(leaveVoiceRoom).toHaveBeenCalledWith('voice-room-1')
+    expect(connection.leave).toHaveBeenCalledTimes(1)
+    expect(order).toEqual(['server', 'local'])
   })
 
   it('toggles the microphone mute control when connected', async () => {

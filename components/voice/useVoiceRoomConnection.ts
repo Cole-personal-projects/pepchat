@@ -30,6 +30,12 @@ function isAudioTrack(track: RemoteTrack): boolean {
   return track.kind === Track.Kind.Audio
 }
 
+function stopLocalAudioTracks(room: Room) {
+  room.localParticipant.audioTrackPublications?.forEach((publication) => {
+    publication.track?.stop()
+  })
+}
+
 export function useVoiceRoomConnection(): UseVoiceRoomConnectionResult {
   const roomRef = useRef<Room | null>(null)
   const remoteAudioRef = useRef<Set<RemoteAudioElement>>(new Set())
@@ -53,6 +59,7 @@ export function useVoiceRoomConnection(): UseVoiceRoomConnectionResult {
     const room = roomRef.current
     roomRef.current = null
     if (room) {
+      stopLocalAudioTracks(room)
       await room.disconnect(true)
     }
   }, [cleanupRemoteAudio])

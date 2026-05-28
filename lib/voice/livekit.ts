@@ -1,4 +1,4 @@
-import { AccessToken, TrackSource } from 'livekit-server-sdk'
+export { deriveProviderRoomName } from '@/lib/voice/providerRoomName'
 
 const GENERIC_VOICE_DENIAL = 'Cannot join this room.'
 const DEFAULT_TTL_SECONDS = 5 * 60
@@ -22,11 +22,6 @@ export type MintLiveKitTokenResult =
       expiresAt: string
     }
   | { error: string }
-
-export function deriveProviderRoomName(voiceRoomId: string): string {
-  if (!voiceRoomId) throw new Error('voice room id is required')
-  return `sidebar:voice:${voiceRoomId}`
-}
 
 function ttlSeconds(input?: number): number {
   if (!Number.isFinite(input) || !input || input <= 0) return DEFAULT_TTL_SECONDS
@@ -71,6 +66,31 @@ function isValidProviderRoomName(providerRoomName: string): boolean {
   return Boolean(trimmed) && trimmed !== '*'
 }
 
+function base64Url(input: string | Uint8Array): string {
+  const bytes = typeof input === 'string' ? new TextEncoder().encode(input) : input
+  let binary = ''
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte)
+  })
+  return btoa(binary).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
+}
+
+async function signHs256(payload: Record<string, unknown>, secret: string): Promise<string> {
+  const header = { alg: 'HS256', typ: 'JWT' }
+  const encodedHeader = base64Url(JSON.stringify(header))
+  const encodedPayload = base64Url(JSON.stringify(payload))
+  const signingInput = `${encodedHeader}.${encodedPayload}`
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  )
+  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(signingInput))
+  return `${signingInput}.${base64Url(new Uint8Array(signature))}`
+}
+
 export async function mintLiveKitToken(
   input: MintLiveKitTokenInput,
   options: { env?: LiveKitEnv } = {},
@@ -84,26 +104,30 @@ export async function mintLiveKitToken(
 
   try {
     const ttl = ttlSeconds(input.ttlSeconds)
-    const accessToken = new AccessToken(env.apiKey, env.apiSecret, {
-      identity: input.userId,
-      name: input.displayName,
-      ttl,
-    })
-    accessToken.addGrant({
-      room: input.providerRoomName,
-      roomJoin: true,
-      canPublish: true,
-      canPublishData: false,
-      canPublishSources: [TrackSource.MICROPHONE],
-      canSubscribe: true,
-    })
+    const nowSeconds = Math.floor(Date.now() / 1000)
+    const expiresAtSeconds = nowSeconds + ttl
+    const token = await signHs256({
+      exp: expiresAtSeconds,
+      iss: env.apiKey,
+      nbf: nowSeconds,
+      sub: input.userId,
+      ...(input.displayName ? { name: input.displayName } : {}),
+      video: {
+        room: input.providerRoomName,
+        roomJoin: true,
+        canPublish: true,
+        canPublishData: false,
+        canPublishSources: ['microphone'],
+        canSubscribe: true,
+      },
+    }, env.apiSecret)
 
     return {
       ok: true,
       provider: 'livekit',
       livekitUrl: env.url,
-      token: await accessToken.toJwt(),
-      expiresAt: new Date(Date.now() + ttl * 1000).toISOString(),
+      token,
+      expiresAt: new Date(expiresAtSeconds * 1000).toISOString(),
     }
   } catch {
     return { error: GENERIC_VOICE_DENIAL }

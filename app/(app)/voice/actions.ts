@@ -3,33 +3,27 @@
 import { withAuth } from '@/lib/actions/withAuth'
 import { PERMISSIONS } from '@/lib/permissions'
 import { gateGroupRole } from '@/lib/permissions/gate'
-import { createAdminClient } from '@/lib/supabase/admin'
-import { mintLiveKitToken } from '@/lib/voice/livekit'
-import {
-  createOrReuseVoiceRoom,
-  getVoiceRoomParticipantCount,
-  markVoiceParticipantLeft,
-  resolveVoiceChannel,
-  resolveVoiceRoom,
-  upsertVoiceParticipant,
-} from '@/lib/voice/rooms'
 
 const VOICE_DENIED = 'Cannot join this room.'
 
 type VoiceActionError = { error: string }
 
+type VoiceRoomSummary = {
+  id: string
+  channelId: string
+  groupId: string
+  status: 'open' | 'closed'
+  participantCount: number
+}
+
 type StartVoiceRoomResult =
   | {
       ok: true
-      room: {
-        id: string
-        channelId: string
-        groupId: string
-        status: 'open' | 'closed'
-        participantCount: number
-      }
+      room: VoiceRoomSummary
     }
   | VoiceActionError
+
+type CurrentVoiceRoomResult = { ok: true; room: VoiceRoomSummary | null } | VoiceActionError
 
 type MintVoiceTokenResult =
   | {
@@ -47,16 +41,22 @@ function denied(): VoiceActionError {
   return { error: VOICE_DENIED }
 }
 
-function createVoiceAdminClient() {
+async function createVoiceAdminClient() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error('voice admin client is not configured')
   }
+  const { createAdminClient } = await import('@/lib/supabase/admin')
   return createAdminClient()
+}
+
+async function voiceRooms() {
+  return import('@/lib/voice/rooms')
 }
 
 export const startVoiceRoom = withAuth(
   async function startVoiceRoomBody({ supabase, user }, channelId: string): Promise<StartVoiceRoomResult> {
     try {
+      const { createOrReuseVoiceRoom, getVoiceRoomParticipantCount, resolveVoiceChannel } = await voiceRooms()
       const channel = await resolveVoiceChannel(supabase, channelId)
       if (!channel) return denied()
 
@@ -69,13 +69,49 @@ export const startVoiceRoom = withAuth(
       if ('error' in gate) return denied()
       if (!PERMISSIONS.canAccessChannel(gate.membership.role, channel.name, channel.noobAccess)) return denied()
 
-      const adminClient = createVoiceAdminClient()
+      const adminClient = await createVoiceAdminClient()
       const room = await createOrReuseVoiceRoom(adminClient, {
         channelId: channel.id,
         groupId: channel.groupId,
         createdBy: user.id,
       })
       if ('error' in room) return denied()
+
+      return {
+        ok: true,
+        room: {
+          id: room.id,
+          channelId: room.channelId,
+          groupId: room.groupId,
+          status: room.status,
+          participantCount: await getVoiceRoomParticipantCount(adminClient, room.id),
+        },
+      }
+    } catch {
+      return denied()
+    }
+  },
+  { unauthenticated: () => denied() },
+)
+
+export const getCurrentVoiceRoom = withAuth(
+  async function getCurrentVoiceRoomBody({ supabase, user }, channelId: string): Promise<CurrentVoiceRoomResult> {
+    try {
+      const { getOpenVoiceRoomForChannel, getVoiceRoomParticipantCount, resolveVoiceChannel } = await voiceRooms()
+      const channel = await resolveVoiceChannel(supabase, channelId)
+      if (!channel) return denied()
+
+      const gate = await gateGroupRole(supabase, {
+        groupId: channel.groupId,
+        userId: user.id,
+        predicate: (role) => PERMISSIONS.canJoinVoiceRoom(role, channel.name, channel.noobAccess),
+        deniedMessage: VOICE_DENIED,
+      })
+      if ('error' in gate) return denied()
+
+      const adminClient = await createVoiceAdminClient()
+      const room = await getOpenVoiceRoomForChannel(adminClient, channel.id)
+      if (!room) return { ok: true, room: null }
 
       return {
         ok: true,
@@ -101,6 +137,8 @@ export const mintVoiceToken = withAuth(
     _clientInput?: { providerRoomName?: string },
   ): Promise<MintVoiceTokenResult> {
     try {
+      const { mintLiveKitToken } = await import('@/lib/voice/livekit')
+      const { resolveVoiceRoom, upsertVoiceParticipant } = await voiceRooms()
       const room = await resolveVoiceRoom(supabase, roomId)
       if (!room || room.status !== 'open') return denied()
 
@@ -112,7 +150,7 @@ export const mintVoiceToken = withAuth(
       })
       if ('error' in gate) return denied()
 
-      const adminClient = createVoiceAdminClient()
+      const adminClient = await createVoiceAdminClient()
       const participant = await upsertVoiceParticipant(adminClient, { roomId: room.id, userId: user.id })
       if ('error' in participant) return denied()
 
@@ -132,6 +170,7 @@ export const mintVoiceToken = withAuth(
 export const leaveVoiceRoom = withAuth(
   async function leaveVoiceRoomBody({ supabase, user }, roomId: string): Promise<LeaveVoiceRoomResult> {
     try {
+      const { markVoiceParticipantLeft, resolveVoiceRoom } = await voiceRooms()
       const room = await resolveVoiceRoom(supabase, roomId)
       if (!room) return denied()
 
@@ -143,7 +182,7 @@ export const leaveVoiceRoom = withAuth(
       })
       if ('error' in gate) return denied()
 
-      const result = await markVoiceParticipantLeft(createVoiceAdminClient(), { roomId: room.id, userId: user.id })
+      const result = await markVoiceParticipantLeft(await createVoiceAdminClient(), { roomId: room.id, userId: user.id })
       return 'error' in result ? denied() : { ok: true }
     } catch {
       return denied()
