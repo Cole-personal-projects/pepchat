@@ -43,6 +43,14 @@ export const PERMISSIONS = {
     return true
   },
 
+  /** Can start a channel voice room. Voice room creation is limited to group managers. */
+  canStartVoiceRoom: (role: Role) =>
+    (['admin', 'moderator'] as Role[]).includes(role),
+
+  /** Can join a channel voice room under the same access rules as channel reads. */
+  canJoinVoiceRoom: (role: Role, channelName: string, noobAccess = false) =>
+    PERMISSIONS.canAccessChannel(role, channelName, noobAccess),
+
   /** Can delete the group, update group settings. Admin only. */
   canManageGroup: (role: Role) => role === 'admin',
 
