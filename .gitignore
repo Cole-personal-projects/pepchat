@@ -45,6 +45,8 @@ PROJECT_STATE_LOCAL.md
 
 # Local design/spec/prototype artifacts (kept outside git)
 /*.jsx
+/specs/
+/spec/
 /admin-dashboard-prompt.md
 /group-avatar-prompt.md
 

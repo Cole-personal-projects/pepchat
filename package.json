@@ -21,6 +21,7 @@
     "@supabase/supabase-js": "^2.105.4",
     "dompurify": "^3.4.4",
     "emoji-mart": "^5.6.0",
+    "livekit-client": "^2.19.0",
     "livekit-server-sdk": "^2.15.3",
     "marked": "^18.0.3",
     "next": "14.2.35",

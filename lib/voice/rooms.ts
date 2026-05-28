@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { randomUUID } from 'crypto'
-import { deriveProviderRoomName } from '@/lib/voice/livekit'
+import { deriveProviderRoomName } from '@/lib/voice/providerRoomName'
 
 export type VoiceChannel = {
   id: string
@@ -91,7 +90,7 @@ export async function resolveVoiceRoom(supabase: SupabaseClient, roomId: string)
   return mapRoom(data as VoiceRoomRow)
 }
 
-async function findOpenRoom(adminClient: SupabaseClient, channelId: string): Promise<VoiceRoom | null> {
+export async function getOpenVoiceRoomForChannel(adminClient: SupabaseClient, channelId: string): Promise<VoiceRoom | null> {
   const { data, error } = await adminClient
     .from('voice_rooms')
     .select('id, channel_id, group_id, status, provider_room_name')
@@ -107,10 +106,10 @@ export async function createOrReuseVoiceRoom(
   adminClient: SupabaseClient,
   input: { channelId: string; groupId: string; createdBy: string },
 ): Promise<VoiceRoom | { error: string }> {
-  const existing = await findOpenRoom(adminClient, input.channelId)
+  const existing = await getOpenVoiceRoomForChannel(adminClient, input.channelId)
   if (existing) return existing
 
-  const id = randomUUID()
+  const id = crypto.randomUUID()
   const { data, error } = await adminClient
     .from('voice_rooms')
     .insert({
@@ -126,7 +125,7 @@ export async function createOrReuseVoiceRoom(
     .single()
 
   if (error && isUniqueViolation(error)) {
-    const racedRoom = await findOpenRoom(adminClient, input.channelId)
+    const racedRoom = await getOpenVoiceRoomForChannel(adminClient, input.channelId)
     if (racedRoom) return racedRoom
   }
 

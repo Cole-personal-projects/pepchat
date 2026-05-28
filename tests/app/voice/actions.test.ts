@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { leaveVoiceRoom, mintVoiceToken, startVoiceRoom } from '@/app/(app)/voice/actions'
+import { getCurrentVoiceRoom, leaveVoiceRoom, mintVoiceToken, startVoiceRoom } from '@/app/(app)/voice/actions'
 
 const {
   mockCreateClient,
@@ -7,6 +7,7 @@ const {
   mockResolveVoiceChannel,
   mockResolveVoiceRoom,
   mockCreateOrReuseVoiceRoom,
+  mockGetOpenVoiceRoomForChannel,
   mockGetVoiceRoomParticipantCount,
   mockUpsertVoiceParticipant,
   mockMarkVoiceParticipantLeft,
@@ -17,6 +18,7 @@ const {
   mockResolveVoiceChannel: vi.fn(),
   mockResolveVoiceRoom: vi.fn(),
   mockCreateOrReuseVoiceRoom: vi.fn(),
+  mockGetOpenVoiceRoomForChannel: vi.fn(),
   mockGetVoiceRoomParticipantCount: vi.fn(),
   mockUpsertVoiceParticipant: vi.fn(),
   mockMarkVoiceParticipantLeft: vi.fn(),
@@ -29,6 +31,7 @@ vi.mock('@/lib/voice/rooms', () => ({
   resolveVoiceChannel: mockResolveVoiceChannel,
   resolveVoiceRoom: mockResolveVoiceRoom,
   createOrReuseVoiceRoom: mockCreateOrReuseVoiceRoom,
+  getOpenVoiceRoomForChannel: mockGetOpenVoiceRoomForChannel,
   getVoiceRoomParticipantCount: mockGetVoiceRoomParticipantCount,
   upsertVoiceParticipant: mockUpsertVoiceParticipant,
   markVoiceParticipantLeft: mockMarkVoiceParticipantLeft,
@@ -110,6 +113,7 @@ describe('voice actions', () => {
     mockResolveVoiceChannel.mockResolvedValue(channel)
     mockResolveVoiceRoom.mockResolvedValue(room)
     mockCreateOrReuseVoiceRoom.mockResolvedValue(createdRoom)
+    mockGetOpenVoiceRoomForChannel.mockResolvedValue(createdRoom)
     mockGetVoiceRoomParticipantCount.mockResolvedValue(0)
     mockUpsertVoiceParticipant.mockResolvedValue({ ok: true })
     mockMarkVoiceParticipantLeft.mockResolvedValue({ ok: true })
@@ -174,6 +178,59 @@ describe('voice actions', () => {
       await expect(startVoiceRoom('channel-1')).resolves.toEqual({ error: GENERIC })
       expect(mockCreateOrReuseVoiceRoom).not.toHaveBeenCalled()
     }
+  })
+
+  it('allows authorized users to discover the current open room without provider metadata', async () => {
+    setupUserClient({ role: 'user' })
+    mockGetOpenVoiceRoomForChannel.mockResolvedValue(createdRoom)
+    mockGetVoiceRoomParticipantCount.mockResolvedValue(2)
+
+    await expect(getCurrentVoiceRoom('channel-1')).resolves.toEqual({
+      ok: true,
+      room: { id: 'room-1', channelId: 'channel-1', groupId: 'group-1', status: 'open', participantCount: 2 },
+    })
+
+    expect(mockGetOpenVoiceRoomForChannel).toHaveBeenCalledWith(expect.anything(), 'channel-1')
+    expect(mockCreateOrReuseVoiceRoom).not.toHaveBeenCalled()
+    const result = await getCurrentVoiceRoom('channel-1')
+    expect(JSON.stringify(result)).not.toContain('providerRoomName')
+    expect(JSON.stringify(result)).not.toContain('sidebar:voice')
+  })
+
+  it('returns null when authorized room discovery finds no open room', async () => {
+    setupUserClient({ role: 'user' })
+    mockGetOpenVoiceRoomForChannel.mockResolvedValue(null)
+
+    await expect(getCurrentVoiceRoom('channel-1')).resolves.toEqual({ ok: true, room: null })
+  })
+
+  it('denies unauthorized current-room discovery before admin reads', async () => {
+    setupUserClient({ role: null })
+
+    await expect(getCurrentVoiceRoom('channel-1')).resolves.toEqual({ error: GENERIC })
+    expect(mockGetOpenVoiceRoomForChannel).not.toHaveBeenCalled()
+  })
+
+
+  it('lets authorized non-admin users discover an already-open room for a channel', async () => {
+    setupUserClient({ role: 'user' })
+    mockGetVoiceRoomParticipantCount.mockResolvedValue(3)
+
+    await expect(getCurrentVoiceRoom('channel-1')).resolves.toEqual({
+      ok: true,
+      room: { id: 'room-1', channelId: 'channel-1', groupId: 'group-1', status: 'open', participantCount: 3 },
+    })
+
+    expect(mockGetOpenVoiceRoomForChannel).toHaveBeenCalledWith(expect.anything(), 'channel-1')
+    expect(mockCreateOrReuseVoiceRoom).not.toHaveBeenCalled()
+    expect(mockMintLiveKitToken).not.toHaveBeenCalled()
+  })
+
+  it('returns null current room without leaking room existence details when none is open', async () => {
+    setupUserClient({ role: 'user' })
+    mockGetOpenVoiceRoomForChannel.mockResolvedValue(null)
+
+    await expect(getCurrentVoiceRoom('channel-1')).resolves.toEqual({ ok: true, room: null })
   })
 
   it('lets users mint tokens for open accessible rooms and omits provider secrets from output', async () => {
