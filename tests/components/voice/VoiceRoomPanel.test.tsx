@@ -52,7 +52,6 @@ function renderPanel(role: 'admin' | 'moderator' | 'user' | 'noob' = 'admin') {
 
 describe('VoiceRoomPanel', () => {
   beforeEach(() => {
-    vi.stubEnv('NEXT_PUBLIC_ENABLE_VOICE_ROOMS', 'true')
     vi.clearAllMocks()
     mockConnection()
     vi.mocked(startVoiceRoom).mockResolvedValue({ ok: true, room })
@@ -67,13 +66,13 @@ describe('VoiceRoomPanel', () => {
     vi.mocked(leaveVoiceRoom).mockResolvedValue({ ok: true })
   })
 
-  it('hides all voice UI when the feature flag is off', () => {
+  it('shows voice UI even when the feature flag is off', () => {
     vi.stubEnv('NEXT_PUBLIC_ENABLE_VOICE_ROOMS', 'false')
 
-    const { container } = renderPanel('admin')
+    renderPanel('admin')
 
-    expect(container).toBeEmptyDOMElement()
-    expect(screen.queryByLabelText('Voice room')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Voice room')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Start voice room' })).toBeInTheDocument()
   })
 
   it('shows start control for admins and moderators', () => {

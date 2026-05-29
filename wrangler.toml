@@ -13,4 +13,3 @@ pages_build_output_dir = ".vercel/output/static"
 # LIVEKIT_URL
 # LIVEKIT_API_KEY
 # LIVEKIT_API_SECRET
-# NEXT_PUBLIC_ENABLE_VOICE_ROOMS
