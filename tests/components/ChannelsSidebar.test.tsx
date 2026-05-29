@@ -2,8 +2,19 @@ import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import ChannelsSidebar from '@/components/sidebar/ChannelsSidebar'
 import { deleteChannel, moveChannel, updateChannelSettings } from '@/app/(app)/channels/actions'
-import { getCurrentVoiceRoom, joinVoiceChannel } from '@/app/(app)/voice/actions'
+import { getCurrentVoiceRoom, joinVoiceChannel, leaveVoiceRoom } from '@/app/(app)/voice/actions'
 import type { Channel, Group, Profile } from '@/lib/types'
+
+const { mockVoiceRoomConnection } = vi.hoisted(() => ({
+  mockVoiceRoomConnection: {
+    status: 'idle' as 'idle' | 'joining' | 'connected' | 'leaving' | 'error',
+    muted: false,
+    error: null as string | null,
+    connect: vi.fn().mockResolvedValue({ ok: true }),
+    leave: vi.fn().mockResolvedValue({ ok: true }),
+    toggleMute: vi.fn(),
+  },
+}))
 
 vi.mock('next/link', () => ({
   default: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
@@ -34,14 +45,7 @@ vi.mock('@/app/(app)/voice/actions', () => ({
 }))
 
 vi.mock('@/components/voice/useVoiceRoomConnection', () => ({
-  useVoiceRoomConnection: () => ({
-    status: 'idle',
-    muted: false,
-    error: null,
-    connect: vi.fn(),
-    leave: vi.fn(),
-    toggleMute: vi.fn(),
-  }),
+  useVoiceRoomConnection: () => mockVoiceRoomConnection,
 }))
 
 const GROUP: Group = {
@@ -373,6 +377,21 @@ describe('ChannelsSidebar voice channels', () => {
       token: 'voice-token',
       expiresAt: '2024-01-01T01:00:00Z',
     })
+    vi.mocked(leaveVoiceRoom).mockResolvedValue({ ok: true })
+    Object.assign(mockVoiceRoomConnection, {
+      status: 'idle',
+      muted: false,
+      error: null,
+      connect: vi.fn().mockImplementation(async () => {
+        mockVoiceRoomConnection.status = 'connected'
+        return { ok: true }
+      }),
+      leave: vi.fn().mockImplementation(async () => {
+        mockVoiceRoomConnection.status = 'idle'
+        return { ok: true }
+      }),
+      toggleMute: vi.fn(),
+    })
   })
 
   it('renders voice channels in a distinct sidebar section and omits them from text channels', async () => {
@@ -404,6 +423,36 @@ describe('ChannelsSidebar voice channels', () => {
 
     await waitFor(() => expect(joinVoiceChannel).toHaveBeenCalledWith('voice-lounge'))
     expect(joinVoiceChannel).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows connected participant, mute, and leave controls after a successful join', async () => {
+    render(<ChannelsSidebar {...BASE_PROPS} channels={CHANNELS_WITH_VOICE} userRole="admin" />)
+
+    const voiceButton = screen.getByRole('button', { name: /join lounge voice/i })
+    await waitFor(() => expect(voiceButton).toBeEnabled())
+    fireEvent.click(voiceButton)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /connected to lounge voice/i })).toBeDisabled())
+    expect(screen.getAllByText('Connected')).toHaveLength(2)
+    expect(screen.getByTestId('voice-participants-voice-lounge')).toHaveTextContent('1 connected')
+    expect(screen.getByRole('button', { name: 'Mute' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Leave' })).toBeInTheDocument()
+  })
+
+  it('wires connected mute and leave controls to the active voice room', async () => {
+    render(<ChannelsSidebar {...BASE_PROPS} channels={CHANNELS_WITH_VOICE} userRole="admin" />)
+
+    const voiceButton = screen.getByRole('button', { name: /join lounge voice/i })
+    await waitFor(() => expect(voiceButton).toBeEnabled())
+    fireEvent.click(voiceButton)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mute' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Mute' }))
+    expect(mockVoiceRoomConnection.toggleMute).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Leave' }))
+    await waitFor(() => expect(leaveVoiceRoom).toHaveBeenCalledWith('room-1'))
+    expect(mockVoiceRoomConnection.leave).toHaveBeenCalledTimes(1)
   })
 })
 
