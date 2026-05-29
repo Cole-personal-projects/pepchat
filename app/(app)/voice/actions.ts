@@ -41,14 +41,6 @@ function denied(): VoiceActionError {
   return { error: VOICE_DENIED }
 }
 
-async function createVoiceAdminClient() {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('voice admin client is not configured')
-  }
-  const { createAdminClient } = await import('@/lib/supabase/admin')
-  return createAdminClient()
-}
-
 async function voiceRooms() {
   return import('@/lib/voice/rooms')
 }
@@ -69,8 +61,7 @@ export const startVoiceRoom = withAuth(
       if ('error' in gate) return denied()
       if (!PERMISSIONS.canAccessChannel(gate.membership.role, channel.name, channel.noobAccess)) return denied()
 
-      const adminClient = await createVoiceAdminClient()
-      const room = await createOrReuseVoiceRoom(adminClient, {
+      const room = await createOrReuseVoiceRoom(supabase, {
         channelId: channel.id,
         groupId: channel.groupId,
         createdBy: user.id,
@@ -84,7 +75,7 @@ export const startVoiceRoom = withAuth(
           channelId: room.channelId,
           groupId: room.groupId,
           status: room.status,
-          participantCount: await getVoiceRoomParticipantCount(adminClient, room.id),
+          participantCount: await getVoiceRoomParticipantCount(supabase, room.id),
         },
       }
     } catch {
@@ -109,8 +100,7 @@ export const getCurrentVoiceRoom = withAuth(
       })
       if ('error' in gate) return denied()
 
-      const adminClient = await createVoiceAdminClient()
-      const room = await getOpenVoiceRoomForChannel(adminClient, channel.id)
+      const room = await getOpenVoiceRoomForChannel(supabase, channel.id)
       if (!room) return { ok: true, room: null }
 
       return {
@@ -120,7 +110,7 @@ export const getCurrentVoiceRoom = withAuth(
           channelId: room.channelId,
           groupId: room.groupId,
           status: room.status,
-          participantCount: await getVoiceRoomParticipantCount(adminClient, room.id),
+          participantCount: await getVoiceRoomParticipantCount(supabase, room.id),
         },
       }
     } catch {
@@ -150,8 +140,7 @@ export const mintVoiceToken = withAuth(
       })
       if ('error' in gate) return denied()
 
-      const adminClient = await createVoiceAdminClient()
-      const participant = await upsertVoiceParticipant(adminClient, { roomId: room.id, userId: user.id })
+      const participant = await upsertVoiceParticipant(supabase, { roomId: room.id, userId: user.id })
       if ('error' in participant) return denied()
 
       const token = await mintLiveKitToken({
@@ -182,7 +171,7 @@ export const leaveVoiceRoom = withAuth(
       })
       if ('error' in gate) return denied()
 
-      const result = await markVoiceParticipantLeft(await createVoiceAdminClient(), { roomId: room.id, userId: user.id })
+      const result = await markVoiceParticipantLeft(supabase, { roomId: room.id, userId: user.id })
       return 'error' in result ? denied() : { ok: true }
     } catch {
       return denied()
