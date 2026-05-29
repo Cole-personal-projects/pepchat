@@ -8,6 +8,7 @@ import Avatar from '@/components/ui/Avatar'
 import MembersPanel from '@/components/sidebar/MembersPanel'
 import ChannelRow from '@/components/sidebar/ChannelRow'
 import CategorySection from '@/components/sidebar/CategorySection'
+import VoiceChannelsSection from '@/components/sidebar/VoiceChannelsSection'
 import Modal from '@/components/ui/Modal'
 import { logout } from '@/app/(auth)/actions'
 import { deleteChannel, moveChannel, updateChannelSettings } from '@/app/(app)/channels/actions'
@@ -103,15 +104,17 @@ export default function ChannelsSidebar({
   const visibleChannels = userRole === 'noob'
     ? channels.filter((c) => c.noob_access || c.name === 'welcome')
     : channels
+  const textChannels = visibleChannels.filter(channel => (channel.kind ?? 'text') !== 'voice')
+  const voiceChannels = visibleChannels.filter(channel => channel.kind === 'voice')
   const normalizedChannelSearch = channelSearch.trim().toLowerCase()
   const filteredChannels = useMemo(() => {
-    if (!normalizedChannelSearch) return visibleChannels
+    if (!normalizedChannelSearch) return textChannels
 
-    return visibleChannels.filter(channel => {
+    return textChannels.filter(channel => {
       const values = [channel.name, channel.description ?? ''].map(value => value.toLowerCase())
       return values.some(value => value.includes(normalizedChannelSearch))
     })
-  }, [normalizedChannelSearch, visibleChannels])
+  }, [normalizedChannelSearch, textChannels])
 
   /** Channels grouped into the uncategorized bucket + ordered category sections. */
   const sections = useMemo(() => {
@@ -374,7 +377,7 @@ export default function ChannelsSidebar({
               </p>
             )}
 
-            {visibleChannels.length > 0 && (
+            {textChannels.length > 0 && (
               <div className="px-2 pb-2">
                 <div className="relative">
                   <input
@@ -400,7 +403,7 @@ export default function ChannelsSidebar({
               </div>
             )}
 
-            {visibleChannels.length > 0 && filteredChannels.length === 0 && (
+            {textChannels.length > 0 && filteredChannels.length === 0 && (
               <p className="px-3 py-2 text-xs leading-relaxed text-[var(--text-muted)]">
                 No channels match your search.
               </p>
@@ -450,6 +453,9 @@ export default function ChannelsSidebar({
                 </CategorySection>
               )
             })}
+
+            {/* Voice channel rows */}
+            <VoiceChannelsSection channels={voiceChannels} onMobileClose={onMobileClose} />
 
             {/* Members panel (admin / moderator only) */}
             {(userRole === 'admin' || userRole === 'moderator') && (

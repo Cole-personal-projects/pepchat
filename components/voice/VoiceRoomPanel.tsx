@@ -9,7 +9,7 @@ type VoiceRoomSummary = {
   id: string
   channelId: string
   groupId: string
-  status: 'open' | 'closed'
+  status: 'open' | 'idle' | 'closed'
   participantCount: number
 }
 

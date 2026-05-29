@@ -77,6 +77,7 @@ export interface Channel {
   name: string
   description: string | null
   noob_access?: boolean
+  kind?: 'text' | 'voice'
   position: number
   kind?: ChannelKind
   category_id?: string | null
