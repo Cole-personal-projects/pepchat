@@ -25,10 +25,6 @@ interface VoiceRoomPanelProps {
 const JOIN_ERROR = 'Cannot join this room.'
 const UNAVAILABLE_ERROR = 'Voice is unavailable.'
 
-function voiceFeatureEnabled() {
-  return process.env.NEXT_PUBLIC_ENABLE_VOICE_ROOMS === 'true'
-}
-
 export default function VoiceRoomPanel({
   channelId,
   channelName,
@@ -40,14 +36,13 @@ export default function VoiceRoomPanel({
   const [error, setError] = useState<string | null>(null)
   const connection = useVoiceRoomConnection()
 
-  const enabled = voiceFeatureEnabled()
   const canStart = userRole ? PERMISSIONS.canStartVoiceRoom(userRole) : false
   const canJoin = userRole ? PERMISSIONS.canJoinVoiceRoom(userRole, channelName, sourceNoobAccess) : false
   const busy = actionStatus !== 'idle' || connection.status === 'joining' || connection.status === 'leaving'
   const joined = connection.status === 'connected'
 
   useEffect(() => {
-    if (!enabled || !canJoin) return
+    if (!canJoin) return
 
     let cancelled = false
     void getCurrentVoiceRoom(channelId)
@@ -64,7 +59,7 @@ export default function VoiceRoomPanel({
     return () => {
       cancelled = true
     }
-  }, [canJoin, channelId, enabled])
+  }, [canJoin, channelId])
 
   const handleStart = useCallback(async () => {
     setError(null)
@@ -125,8 +120,6 @@ export default function VoiceRoomPanel({
   }, [connection, room])
 
   const visibleError = error ?? connection.error
-
-  if (!enabled) return null
 
   return (
     <section
