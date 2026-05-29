@@ -3,7 +3,6 @@ import { getCurrentVoiceRoom, leaveVoiceRoom, mintVoiceToken, startVoiceRoom } f
 
 const {
   mockCreateClient,
-  mockCreateAdminClient,
   mockResolveVoiceChannel,
   mockResolveVoiceRoom,
   mockCreateOrReuseVoiceRoom,
@@ -14,7 +13,6 @@ const {
   mockMintLiveKitToken,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
-  mockCreateAdminClient: vi.fn(),
   mockResolveVoiceChannel: vi.fn(),
   mockResolveVoiceRoom: vi.fn(),
   mockCreateOrReuseVoiceRoom: vi.fn(),
@@ -26,7 +24,6 @@ const {
 }))
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: mockCreateClient }))
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: mockCreateAdminClient }))
 vi.mock('@/lib/voice/rooms', () => ({
   resolveVoiceChannel: mockResolveVoiceChannel,
   resolveVoiceRoom: mockResolveVoiceRoom,
@@ -106,10 +103,8 @@ describe('voice actions', () => {
     process.env = {
       ...ORIGINAL_ENV,
       NEXT_PUBLIC_SUPABASE_URL: 'https://supabase.example.com',
-      SUPABASE_SERVICE_ROLE_KEY: 'service-role',
     }
     setupUserClient()
-    mockCreateAdminClient.mockReturnValue({ from: vi.fn() })
     mockResolveVoiceChannel.mockResolvedValue(channel)
     mockResolveVoiceRoom.mockResolvedValue(room)
     mockCreateOrReuseVoiceRoom.mockResolvedValue(createdRoom)
@@ -136,7 +131,6 @@ describe('voice actions', () => {
     await expect(startVoiceRoom('channel-1')).resolves.toEqual({ error: GENERIC })
     await expect(mintVoiceToken('room-1')).resolves.toEqual({ error: GENERIC })
     await expect(leaveVoiceRoom('room-1')).resolves.toEqual({ error: GENERIC })
-    expect(mockCreateAdminClient).not.toHaveBeenCalled()
     expect(mockMintLiveKitToken).not.toHaveBeenCalled()
   })
 
@@ -156,7 +150,6 @@ describe('voice actions', () => {
       vi.clearAllMocks()
       setupUserClient({ role })
       mockResolveVoiceChannel.mockResolvedValue(channel)
-      mockCreateAdminClient.mockReturnValue({ from: vi.fn() })
       mockCreateOrReuseVoiceRoom.mockResolvedValue(createdRoom)
       mockGetVoiceRoomParticipantCount.mockResolvedValue(2)
 
@@ -263,7 +256,6 @@ describe('voice actions', () => {
     vi.clearAllMocks()
     setupUserClient({ role: 'noob' })
     mockResolveVoiceRoom.mockResolvedValue({ ...room, channelName: 'welcome', noobAccess: false })
-    mockCreateAdminClient.mockReturnValue({ from: vi.fn() })
     mockUpsertVoiceParticipant.mockResolvedValue({ ok: true })
     mockMintLiveKitToken.mockResolvedValue({ ok: true, provider: 'livekit', livekitUrl: 'https://voice.example.com', token: 'token.jwt', expiresAt: 'soon' })
     await expect(mintVoiceToken('room-1')).resolves.toMatchObject({ ok: true })
@@ -271,7 +263,6 @@ describe('voice actions', () => {
     vi.clearAllMocks()
     setupUserClient({ role: 'noob' })
     mockResolveVoiceRoom.mockResolvedValue({ ...room, channelName: 'rules', noobAccess: true })
-    mockCreateAdminClient.mockReturnValue({ from: vi.fn() })
     mockUpsertVoiceParticipant.mockResolvedValue({ ok: true })
     mockMintLiveKitToken.mockResolvedValue({ ok: true, provider: 'livekit', livekitUrl: 'https://voice.example.com', token: 'token.jwt', expiresAt: 'soon' })
     await expect(mintVoiceToken('room-1')).resolves.toMatchObject({ ok: true })
@@ -286,16 +277,13 @@ describe('voice actions', () => {
     expect(mockMintLiveKitToken).not.toHaveBeenCalled()
   })
 
-  it('fails closed when admin client setup or participant writes fail', async () => {
-    mockCreateAdminClient.mockImplementation(() => { throw new Error('missing service role') })
-    await expect(startVoiceRoom('channel-1')).resolves.toEqual({ error: GENERIC })
-    await expect(mintVoiceToken('room-1')).resolves.toEqual({ error: GENERIC })
-    expect(mockMintLiveKitToken).not.toHaveBeenCalled()
+  it('does not require a service-role key for voice room writes and fails closed when participant writes fail', async () => {
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY
+    await expect(startVoiceRoom('channel-1')).resolves.toMatchObject({ ok: true })
 
     vi.clearAllMocks()
     setupUserClient({ role: 'user' })
     mockResolveVoiceRoom.mockResolvedValue(room)
-    mockCreateAdminClient.mockReturnValue({ from: vi.fn() })
     mockUpsertVoiceParticipant.mockResolvedValue({ error: 'write failed' })
     await expect(mintVoiceToken('room-1')).resolves.toEqual({ error: GENERIC })
     expect(mockMintLiveKitToken).not.toHaveBeenCalled()
