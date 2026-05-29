@@ -1,7 +1,8 @@
-import { beforeEach, describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
+import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import ChannelsSidebar from '@/components/sidebar/ChannelsSidebar'
 import { deleteChannel, moveChannel, updateChannelSettings } from '@/app/(app)/channels/actions'
+import { getCurrentVoiceRoom, joinVoiceChannel } from '@/app/(app)/voice/actions'
 import type { Channel, Group, Profile } from '@/lib/types'
 
 vi.mock('next/link', () => ({
@@ -24,6 +25,23 @@ vi.mock('@/app/(app)/channels/actions', () => ({
   deleteChannel: vi.fn(),
   moveChannel: vi.fn(),
   updateChannelSettings: vi.fn(),
+}))
+
+vi.mock('@/app/(app)/voice/actions', () => ({
+  getCurrentVoiceRoom: vi.fn(),
+  joinVoiceChannel: vi.fn(),
+  leaveVoiceRoom: vi.fn(),
+}))
+
+vi.mock('@/components/voice/useVoiceRoomConnection', () => ({
+  useVoiceRoomConnection: () => ({
+    status: 'idle',
+    muted: false,
+    error: null,
+    connect: vi.fn(),
+    leave: vi.fn(),
+    toggleMute: vi.fn(),
+  }),
 }))
 
 const GROUP: Group = {
@@ -49,9 +67,14 @@ const PROFILE_NO_DISPLAY: Profile = {
 }
 
 const CHANNELS: Channel[] = [
-  { id: 'ch-active', group_id: 'grp-1', name: 'general',       description: null, position: 0, created_at: '2024-01-01T00:00:00Z' },
-  { id: 'ch-unread', group_id: 'grp-1', name: 'announcements', description: null, position: 1, created_at: '2024-01-01T00:00:00Z' },
-  { id: 'ch-read',   group_id: 'grp-1', name: 'random',        description: null, position: 2, created_at: '2024-01-01T00:00:00Z' },
+  { id: 'ch-active', group_id: 'grp-1', name: 'general',       description: null, position: 0, created_at: '2024-01-01T00:00:00Z', kind: 'text' },
+  { id: 'ch-unread', group_id: 'grp-1', name: 'announcements', description: null, position: 1, created_at: '2024-01-01T00:00:00Z', kind: 'text' },
+  { id: 'ch-read',   group_id: 'grp-1', name: 'random',        description: null, position: 2, created_at: '2024-01-01T00:00:00Z', kind: 'text' },
+]
+
+const CHANNELS_WITH_VOICE: Channel[] = [
+  ...CHANNELS,
+  { id: 'voice-lounge', group_id: 'grp-1', name: 'Lounge', description: null, position: 3, created_at: '2024-01-01T00:00:00Z', kind: 'voice' },
 ]
 
 const BASE_PROPS = {
@@ -60,6 +83,8 @@ const BASE_PROPS = {
   profile: PROFILE,
   userRole: 'user' as const,
 }
+
+afterEach(() => cleanup())
 
 describe('ChannelsSidebar layout', () => {
   it('renders at 236px width', () => {
@@ -115,6 +140,15 @@ describe('ChannelsSidebar channel rows', () => {
     vi.mocked(deleteChannel).mockResolvedValue(undefined as never)
     vi.mocked(moveChannel).mockResolvedValue(undefined)
     vi.mocked(updateChannelSettings).mockResolvedValue({ ok: true })
+    vi.mocked(getCurrentVoiceRoom).mockResolvedValue({ ok: true, room: null })
+    vi.mocked(joinVoiceChannel).mockResolvedValue({
+      ok: true,
+      room: { id: 'room-1', channelId: 'voice-lounge', groupId: 'grp-1', status: 'open', participantCount: 1 },
+      provider: 'livekit',
+      livekitUrl: 'wss://voice.example',
+      token: 'voice-token',
+      expiresAt: '2024-01-01T01:00:00Z',
+    })
   })
 
   it('shows dot indicator for unread channel', () => {
@@ -324,6 +358,52 @@ describe('ChannelsSidebar channel rows', () => {
     expect(formData.get('name')).toBe('welcome-chat')
     expect(formData.get('description')).toBe('Start here')
     expect(formData.get('noob_access')).toBe('on')
+  })
+})
+
+describe('ChannelsSidebar voice channels', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(getCurrentVoiceRoom).mockResolvedValue({ ok: true, room: null })
+    vi.mocked(joinVoiceChannel).mockResolvedValue({
+      ok: true,
+      room: { id: 'room-1', channelId: 'voice-lounge', groupId: 'grp-1', status: 'open', participantCount: 1 },
+      provider: 'livekit',
+      livekitUrl: 'wss://voice.example',
+      token: 'voice-token',
+      expiresAt: '2024-01-01T01:00:00Z',
+    })
+  })
+
+  it('renders voice channels in a distinct sidebar section and omits them from text channels', async () => {
+    render(<ChannelsSidebar {...BASE_PROPS} channels={CHANNELS_WITH_VOICE} userRole="admin" />)
+
+    expect(screen.getByText('Voice Channels')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /join lounge voice/i })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /#lounge/i })).not.toBeInTheDocument()
+    await waitFor(() => expect(getCurrentVoiceRoom).toHaveBeenCalledWith('voice-lounge'))
+  })
+
+  it('shows active occupancy nested below a voice channel', async () => {
+    vi.mocked(getCurrentVoiceRoom).mockResolvedValueOnce({
+      ok: true,
+      room: { id: 'room-2', channelId: 'voice-lounge', groupId: 'grp-1', status: 'open', participantCount: 2 },
+    })
+
+    render(<ChannelsSidebar {...BASE_PROPS} channels={CHANNELS_WITH_VOICE} userRole="admin" />)
+
+    await waitFor(() => expect(screen.getByTestId('voice-participants-voice-lounge')).toHaveTextContent('2 connected'))
+  })
+
+  it('joins a voice channel directly from a sidebar click', async () => {
+    render(<ChannelsSidebar {...BASE_PROPS} channels={CHANNELS_WITH_VOICE} userRole="admin" />)
+
+    const voiceButton = screen.getByRole('button', { name: /join lounge voice/i })
+    await waitFor(() => expect(voiceButton).toBeEnabled())
+    fireEvent.click(voiceButton)
+
+    await waitFor(() => expect(joinVoiceChannel).toHaveBeenCalledWith('voice-lounge'))
+    expect(joinVoiceChannel).toHaveBeenCalledTimes(1)
   })
 })
 

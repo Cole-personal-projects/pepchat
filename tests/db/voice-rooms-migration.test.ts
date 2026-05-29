@@ -7,6 +7,10 @@ const authenticatedWritesMigration = readFileSync(
   join(process.cwd(), 'supabase/migrations/20260529041000_voice_room_authenticated_writes.sql'),
   'utf8',
 )
+const voiceChannelLifecycleMigration = readFileSync(
+  join(process.cwd(), 'supabase/migrations/20260529090000_voice_channel_lifecycle.sql'),
+  'utf8',
+)
 
 describe('voice rooms migration security posture', () => {
   it('creates the voice room tables with one-open-room and one-active-participant constraints', () => {
@@ -45,5 +49,25 @@ describe('voice rooms migration security posture', () => {
     expect(authenticatedWritesMigration).toContain('user_id = auth.uid()')
     expect(authenticatedWritesMigration).toContain("vr.status = 'open'")
     expect(authenticatedWritesMigration).toContain('create policy "Members can update their active voice participation"')
+  })
+
+  it('adds persistent voice channel and idle lifecycle schema support safely', () => {
+    expect(voiceChannelLifecycleMigration).toContain('add column if not exists kind text not null default \'text\'')
+    expect(voiceChannelLifecycleMigration).toContain("check (kind in ('text', 'voice'))")
+    expect(voiceChannelLifecycleMigration).toContain("drop constraint if exists voice_rooms_status_check")
+    expect(voiceChannelLifecycleMigration).toContain("check (status in ('open', 'idle', 'closed'))")
+    expect(voiceChannelLifecycleMigration).toContain('active_participant_count')
+    expect(voiceChannelLifecycleMigration).toContain('voice_rooms_one_live_per_channel_idx')
+    expect(voiceChannelLifecycleMigration).toContain("where status in ('open', 'idle')")
+  })
+
+  it('allows authenticated users to open sessions only for accessible persistent voice channels', () => {
+    expect(voiceChannelLifecycleMigration).toContain('create policy "Members can open sessions for accessible voice channels"')
+    expect(voiceChannelLifecycleMigration).toContain("c.kind = 'voice'")
+    expect(voiceChannelLifecycleMigration).toContain("gm.role in ('admin', 'moderator', 'user')")
+    expect(voiceChannelLifecycleMigration).toContain("gm.role = 'noob' and (c.name = 'welcome' or c.noob_access = true)")
+    expect(voiceChannelLifecycleMigration).toContain('create policy "Members can update lifecycle for accessible voice rooms"')
+    expect(voiceChannelLifecycleMigration).toContain('revoke update on public.voice_rooms from authenticated')
+    expect(voiceChannelLifecycleMigration).toContain('grant update (status, closed_at) on public.voice_rooms to authenticated')
   })
 })

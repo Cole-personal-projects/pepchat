@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getCurrentVoiceRoom, leaveVoiceRoom, mintVoiceToken, startVoiceRoom } from '@/app/(app)/voice/actions'
+import {
+  getCurrentVoiceRoom,
+  heartbeatVoiceRoom,
+  joinVoiceChannel,
+  leaveVoiceRoom,
+  listVoiceChannels,
+  mintVoiceToken,
+  startVoiceRoom,
+} from '@/app/(app)/voice/actions'
 
 const {
   mockCreateClient,
@@ -8,6 +16,10 @@ const {
   mockCreateOrReuseVoiceRoom,
   mockGetOpenVoiceRoomForChannel,
   mockGetVoiceRoomParticipantCount,
+  mockListAccessibleVoiceChannelsWithOccupancy,
+  mockCleanupStaleVoiceParticipants,
+  mockCloseVoiceRoomIfEmpty,
+  mockTouchVoiceParticipant,
   mockUpsertVoiceParticipant,
   mockMarkVoiceParticipantLeft,
   mockMintLiveKitToken,
@@ -18,6 +30,10 @@ const {
   mockCreateOrReuseVoiceRoom: vi.fn(),
   mockGetOpenVoiceRoomForChannel: vi.fn(),
   mockGetVoiceRoomParticipantCount: vi.fn(),
+  mockListAccessibleVoiceChannelsWithOccupancy: vi.fn(),
+  mockCleanupStaleVoiceParticipants: vi.fn(),
+  mockCloseVoiceRoomIfEmpty: vi.fn(),
+  mockTouchVoiceParticipant: vi.fn(),
   mockUpsertVoiceParticipant: vi.fn(),
   mockMarkVoiceParticipantLeft: vi.fn(),
   mockMintLiveKitToken: vi.fn(),
@@ -30,6 +46,10 @@ vi.mock('@/lib/voice/rooms', () => ({
   createOrReuseVoiceRoom: mockCreateOrReuseVoiceRoom,
   getOpenVoiceRoomForChannel: mockGetOpenVoiceRoomForChannel,
   getVoiceRoomParticipantCount: mockGetVoiceRoomParticipantCount,
+  listAccessibleVoiceChannelsWithOccupancy: mockListAccessibleVoiceChannelsWithOccupancy,
+  cleanupStaleVoiceParticipants: mockCleanupStaleVoiceParticipants,
+  closeVoiceRoomIfEmpty: mockCloseVoiceRoomIfEmpty,
+  touchVoiceParticipant: mockTouchVoiceParticipant,
   upsertVoiceParticipant: mockUpsertVoiceParticipant,
   markVoiceParticipantLeft: mockMarkVoiceParticipantLeft,
 }))
@@ -110,6 +130,27 @@ describe('voice actions', () => {
     mockCreateOrReuseVoiceRoom.mockResolvedValue(createdRoom)
     mockGetOpenVoiceRoomForChannel.mockResolvedValue(createdRoom)
     mockGetVoiceRoomParticipantCount.mockResolvedValue(0)
+    mockListAccessibleVoiceChannelsWithOccupancy.mockResolvedValue([
+      {
+        channelId: 'voice-channel-1',
+        groupId: 'group-1',
+        name: 'General Voice',
+        noobAccess: false,
+        room: null,
+        participantCount: 0,
+      },
+      {
+        channelId: 'voice-channel-2',
+        groupId: 'group-1',
+        name: 'Raid Voice',
+        noobAccess: false,
+        room: { id: 'room-2', status: 'open' },
+        participantCount: 3,
+      },
+    ])
+    mockCleanupStaleVoiceParticipants.mockResolvedValue({ ok: true })
+    mockCloseVoiceRoomIfEmpty.mockResolvedValue({ ok: true, closed: true })
+    mockTouchVoiceParticipant.mockResolvedValue({ ok: true })
     mockUpsertVoiceParticipant.mockResolvedValue({ ok: true })
     mockMarkVoiceParticipantLeft.mockResolvedValue({ ok: true })
     mockMintLiveKitToken.mockResolvedValue({
@@ -197,6 +238,38 @@ describe('voice actions', () => {
     await expect(getCurrentVoiceRoom('channel-1')).resolves.toEqual({ ok: true, room: null })
   })
 
+
+  it('lists persistent voice channels with occupancy and keeps idle channels visible', async () => {
+    setupUserClient({ role: 'user' })
+
+    await expect(listVoiceChannels('group-1')).resolves.toEqual({
+      ok: true,
+      channels: [
+        {
+          channelId: 'voice-channel-1',
+          groupId: 'group-1',
+          name: 'General Voice',
+          noobAccess: false,
+          room: null,
+          participantCount: 0,
+        },
+        {
+          channelId: 'voice-channel-2',
+          groupId: 'group-1',
+          name: 'Raid Voice',
+          noobAccess: false,
+          room: { id: 'room-2', status: 'open' },
+          participantCount: 3,
+        },
+      ],
+    })
+
+    expect(mockListAccessibleVoiceChannelsWithOccupancy).toHaveBeenCalledWith(expect.anything(), {
+      groupId: 'group-1',
+      role: 'user',
+    })
+  })
+
   it('denies unauthorized current-room discovery before admin reads', async () => {
     setupUserClient({ role: null })
 
@@ -245,6 +318,40 @@ describe('voice actions', () => {
     const result = await mintVoiceToken('room-1')
     expect(JSON.stringify(result)).not.toContain('LIVEKIT_API_SECRET')
     expect(JSON.stringify(result)).not.toContain('test-secret')
+  })
+
+
+  it('lets authorized users join a persistent voice channel directly and mint a token for the server session', async () => {
+    setupUserClient({ role: 'user' })
+
+    await expect(joinVoiceChannel('channel-1')).resolves.toEqual({
+      ok: true,
+      room: { id: 'room-1', channelId: 'channel-1', groupId: 'group-1', status: 'open', participantCount: 0 },
+      provider: 'livekit',
+      livekitUrl: 'https://voice.example.com',
+      token: 'token.jwt',
+      expiresAt: '2026-05-26T00:05:00.000Z',
+    })
+
+    expect(mockCleanupStaleVoiceParticipants).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ channelId: 'channel-1' }))
+    expect(mockCreateOrReuseVoiceRoom).toHaveBeenCalledWith(expect.anything(), {
+      channelId: 'channel-1',
+      groupId: 'group-1',
+      createdBy: 'user-1',
+    })
+    expect(mockUpsertVoiceParticipant).toHaveBeenCalledWith(expect.anything(), { roomId: 'room-1', userId: 'user-1' })
+    expect(mockMintLiveKitToken).toHaveBeenCalledWith({
+      providerRoomName: 'sidebar:voice:room-1',
+      userId: 'user-1',
+    })
+  })
+
+  it('refreshes participant heartbeat for an authorized active room member', async () => {
+    setupUserClient({ role: 'user' })
+
+    await expect(heartbeatVoiceRoom('room-1')).resolves.toEqual({ ok: true })
+
+    expect(mockTouchVoiceParticipant).toHaveBeenCalledWith(expect.anything(), { roomId: 'room-1', userId: 'user-1' })
   })
 
   it('enforces noob channel access for token minting', async () => {
@@ -315,5 +422,6 @@ describe('voice actions', () => {
     await expect(leaveVoiceRoom('room-1')).resolves.toEqual({ ok: true })
 
     expect(mockMarkVoiceParticipantLeft).toHaveBeenCalledWith(expect.anything(), { roomId: 'room-1', userId: 'user-1' })
+    expect(mockCloseVoiceRoomIfEmpty).toHaveBeenCalledWith(expect.anything(), { roomId: 'room-1' })
   })
 })

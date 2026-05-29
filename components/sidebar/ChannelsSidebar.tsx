@@ -6,6 +6,7 @@ import { useMemo, useState, useTransition } from 'react'
 import dynamic from 'next/dynamic'
 import Avatar from '@/components/ui/Avatar'
 import MembersPanel from '@/components/sidebar/MembersPanel'
+import VoiceChannelsSection from '@/components/sidebar/VoiceChannelsSection'
 import Modal from '@/components/ui/Modal'
 import { logout } from '@/app/(auth)/actions'
 import { deleteChannel, moveChannel, updateChannelSettings } from '@/app/(app)/channels/actions'
@@ -55,15 +56,17 @@ export default function ChannelsSidebar({
   const visibleChannels = userRole === 'noob'
     ? channels.filter((c) => c.noob_access || c.name === 'welcome')
     : channels
+  const textChannels = visibleChannels.filter(channel => (channel.kind ?? 'text') !== 'voice')
+  const voiceChannels = visibleChannels.filter(channel => channel.kind === 'voice')
   const normalizedChannelSearch = channelSearch.trim().toLowerCase()
   const filteredChannels = useMemo(() => {
-    if (!normalizedChannelSearch) return visibleChannels
+    if (!normalizedChannelSearch) return textChannels
 
-    return visibleChannels.filter(channel => {
+    return textChannels.filter(channel => {
       const values = [channel.name, channel.description ?? ''].map(value => value.toLowerCase())
       return values.some(value => value.includes(normalizedChannelSearch))
     })
-  }, [normalizedChannelSearch, visibleChannels])
+  }, [normalizedChannelSearch, textChannels])
 
   function handleDelete(channelId: string) {
     if (!group) return
@@ -216,7 +219,7 @@ export default function ChannelsSidebar({
               </p>
             )}
 
-            {visibleChannels.length > 0 && (
+            {textChannels.length > 0 && (
               <div className="px-2 pb-2">
                 <div className="relative">
                   <input
@@ -242,7 +245,7 @@ export default function ChannelsSidebar({
               </div>
             )}
 
-            {visibleChannels.length > 0 && filteredChannels.length === 0 && (
+            {textChannels.length > 0 && filteredChannels.length === 0 && (
               <p className="px-3 py-2 text-xs leading-relaxed text-[var(--text-muted)]">
                 No channels match your search.
               </p>
@@ -262,7 +265,7 @@ export default function ChannelsSidebar({
               const isActive  = channel.id === activeChannelId
               const isUnread  = !isActive && unreadChannelIds.has(channel.id)
               const unreadCount = unreadCountsByChannelId.get(channel.id) ?? 0
-              const allIdx    = channels.findIndex((c) => c.id === channel.id)
+              const allIdx    = textChannels.findIndex((c) => c.id === channel.id)
               const channelLabel = [
                 `#${channel.name}`,
                 isActive ? 'current channel' : null,
@@ -407,7 +410,7 @@ export default function ChannelsSidebar({
                         </svg>
                       </button>
                       <button
-                        disabled={allIdx === channels.length - 1 || isPending}
+                        disabled={allIdx === textChannels.length - 1 || isPending}
                         aria-label={`Move #${channel.name} down`}
                         onClick={() => handleMove(channel.id, 'down')}
                         className="p-1 md:p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/10 disabled:opacity-30 disabled:cursor-default transition-colors"
@@ -435,6 +438,9 @@ export default function ChannelsSidebar({
                 </div>
               )
             })}
+
+            {/* Voice channel rows */}
+            <VoiceChannelsSection channels={voiceChannels} onMobileClose={onMobileClose} />
 
             {/* Members panel (admin / moderator only) */}
             {(userRole === 'admin' || userRole === 'moderator') && (
