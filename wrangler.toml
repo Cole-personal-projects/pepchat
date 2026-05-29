@@ -6,5 +6,11 @@ compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = ".vercel/output/static"
 
 [vars]
-# Non-secret environment variables go here.
-# Secrets are set via `wrangler pages secret put` or the CF dashboard.
+# Non-secret environment variables go here. Cloudflare Dashboard locks these
+# because this Pages project is configured from wrangler.toml.
+NEXT_PUBLIC_ENABLE_VOICE_ROOMS = "true"
+LIVEKIT_URL = "wss://sidebarchat-xc8zxi2a.livekit.cloud"
+
+# Secrets are set via `wrangler pages secret put` or the CF dashboard:
+# LIVEKIT_API_KEY
+# LIVEKIT_API_SECRET
