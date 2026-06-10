@@ -10,6 +10,7 @@ import ChannelRow from '@/components/sidebar/ChannelRow'
 import CategorySection from '@/components/sidebar/CategorySection'
 import VoiceChannelsSection from '@/components/sidebar/VoiceChannelsSection'
 import UserStatusMenu from '@/components/status/UserStatusMenu'
+import EventsPanel from '@/components/events/EventsPanel'
 import Modal from '@/components/ui/Modal'
 import { logout } from '@/app/(auth)/actions'
 import { deleteChannel, moveChannel, updateChannelSettings } from '@/app/(app)/channels/actions'
@@ -331,6 +332,15 @@ export default function ChannelsSidebar({
       <div style={{ flex: 1, overflowY: 'auto', padding: '10px 6px' }}>
         {group ? (
           <>
+            {/* Scheduled events */}
+            <EventsPanel
+              groupId={group.id}
+              currentUserId={profile.id}
+              voiceChannels={voiceChannels}
+              canCreate={Boolean(userRole && userRole !== 'noob')}
+              onMobileClose={onMobileClose}
+            />
+
             {/* Section label */}
             <div style={{
               display: 'flex',

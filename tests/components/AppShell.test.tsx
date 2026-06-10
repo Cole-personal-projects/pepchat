@@ -30,6 +30,14 @@ vi.mock('@/components/ui/NetworkStatusBanner', () => ({ default: () => null }))
 vi.mock('@/components/ui/MotionSurface', () => ({
   default: ({ children }: { children: React.ReactNode }) => <div data-testid="motion-surface">{children}</div>,
 }))
+vi.mock('@/components/onboarding/OnboardingGate', () => ({ default: () => null }))
+vi.mock('@/components/onboarding/WelcomeTour', () => ({
+  default: () => null,
+  hasSeenWelcomeTour: () => true,
+}))
+vi.mock('@/lib/hooks/useChannelCategories', () => ({
+  useChannelCategories: () => ({ categories: [], loading: false, refetch: vi.fn() }),
+}))
 
 vi.mock('@/lib/hooks/useGroups', () => ({
   useGroups: () => ({

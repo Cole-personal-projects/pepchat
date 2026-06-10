@@ -31,6 +31,9 @@ vi.mock('@/components/voice/useVoiceRoomConnection', () => ({
 vi.mock('@/components/status/UserStatusMenu', () => ({
   default: () => <span>online</span>,
 }))
+vi.mock('@/components/events/EventsPanel', () => ({
+  default: () => null,
+}))
 vi.mock('@/app/(app)/channels/actions', () => ({
   deleteChannel: vi.fn(),
   moveChannel: vi.fn(),

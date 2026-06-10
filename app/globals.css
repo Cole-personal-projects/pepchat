@@ -383,6 +383,30 @@ a, button, [role="button"], .channel-row, .dm-entry {
   font-weight: 600;
 }
 
+/* Discord-style ||spoiler||: hidden until hovered or focused. */
+.spoiler {
+  background: #1a1b1e;
+  color: transparent;
+  border-radius: 4px;
+  padding: 0 3px;
+  cursor: pointer;
+  user-select: none;
+  transition: color 120ms ease, background 120ms ease;
+}
+
+.spoiler:hover,
+.spoiler:focus,
+.spoiler:active {
+  color: inherit;
+  background: rgba(255, 255, 255, 0.08);
+  user-select: text;
+}
+
+.spoiler:hover .mention-token,
+.spoiler:focus .mention-token {
+  color: var(--accent);
+}
+
 .mobile-bottom-nav {
   display: none;
 }
