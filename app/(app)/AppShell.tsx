@@ -10,6 +10,8 @@ import GroupSettingsModal from '@/components/modals/GroupSettingsModal'
 import CreateChannelModal from '@/components/modals/CreateChannelModal'
 import NotificationTray from '@/components/notifications/NotificationTray'
 import { MobileSidebarContext } from '@/lib/context/MobileSidebarContext'
+import OnboardingGate from '@/components/onboarding/OnboardingGate'
+import WelcomeTour, { hasSeenWelcomeTour } from '@/components/onboarding/WelcomeTour'
 import InstallBanner from '@/components/ui/InstallBanner'
 import NetworkStatusBanner from '@/components/ui/NetworkStatusBanner'
 import MotionSurface from '@/components/ui/MotionSurface'
@@ -72,10 +74,14 @@ export default function AppShell({ profile, children }: AppShellProps) {
     }
   }, [groupsLoading, groups, activeGroupId, pathname])
 
+  const [showWelcomeTour, setShowWelcomeTour] = useState(false)
+
   useEffect(() => {
     if (!groupsLoading && groups.length === 0 && !promptedFirstGroup) {
       setPromptedFirstGroup(true)
-      setShowCreate(true)
+      // First-run: show the tour once, then the create-group prompt.
+      if (!hasSeenWelcomeTour()) setShowWelcomeTour(true)
+      else setShowCreate(true)
     }
   }, [groupsLoading, groups.length, promptedFirstGroup])
 
@@ -202,6 +208,17 @@ export default function AppShell({ profile, children }: AppShellProps) {
           </nav>
         </main>
       </div>
+
+      <WelcomeTour
+        open={showWelcomeTour}
+        onFinish={() => {
+          setShowWelcomeTour(false)
+          setShowCreate(true)
+        }}
+      />
+
+      {/* Per-server onboarding gate (rules + role questions) */}
+      {activeGroupId && <OnboardingGate groupId={activeGroupId} userId={profile.id} />}
 
       <CreateGroupModal open={showCreate} onClose={() => setShowCreate(false)} onSuccess={refetch} />
       <JoinGroupModal   open={showJoin}   onClose={() => setShowJoin(false)}   onSuccess={refetch} />
