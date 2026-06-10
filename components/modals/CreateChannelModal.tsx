@@ -8,6 +8,7 @@ interface CreateChannelModalProps {
   open: boolean
   onClose: () => void
   groupId: string
+  canCreatePersistentVoiceChannel?: boolean
 }
 
 /** Modal for creating a new text channel inside a group. */
@@ -15,6 +16,7 @@ export default function CreateChannelModal({
   open,
   onClose,
   groupId,
+  canCreatePersistentVoiceChannel = false,
 }: CreateChannelModalProps) {
   const [error, setError] = useState('')
   const [isPending, startTransition] = useTransition()
@@ -42,6 +44,43 @@ export default function CreateChannelModal({
         Channel names are lowercase with no spaces. Add a topic when the channel has a clear purpose.
       </p>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {canCreatePersistentVoiceChannel && (
+          <fieldset className="flex flex-col gap-2 rounded border border-black/20 bg-[var(--bg-primary)] p-3 text-sm text-[var(--text-primary)]">
+            <legend className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)] px-1">
+              Channel Type
+            </legend>
+            <label className="flex items-start gap-3">
+              <input
+                type="radio"
+                name="kind"
+                value="text"
+                defaultChecked
+                className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
+              />
+              <span>
+                <span className="block font-semibold">Text</span>
+                <span className="block text-xs text-[var(--text-muted)]">
+                  A persistent chat channel for messages.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-3">
+              <input
+                type="radio"
+                name="kind"
+                value="voice"
+                className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
+              />
+              <span>
+                <span className="block font-semibold">Persistent voice</span>
+                <span className="block text-xs text-[var(--text-muted)]">
+                  An admin-created voice channel that stays available when empty.
+                </span>
+              </span>
+            </label>
+          </fieldset>
+        )}
+
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor="ch-name"

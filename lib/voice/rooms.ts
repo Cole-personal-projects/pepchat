@@ -6,6 +6,7 @@ export type VoiceChannel = {
   groupId: string
   name: string
   noobAccess: boolean
+  isEphemeral: boolean
 }
 
 export type VoiceRoom = {
@@ -16,6 +17,7 @@ export type VoiceRoom = {
   providerRoomName: string
   channelName?: string
   noobAccess?: boolean
+  isEphemeral?: boolean
 }
 
 type ChannelRow = {
@@ -23,6 +25,7 @@ type ChannelRow = {
   group_id: string
   name: string
   noob_access?: boolean | null
+  is_ephemeral?: boolean | null
 }
 
 type VoiceRoomRow = {
@@ -34,6 +37,7 @@ type VoiceRoomRow = {
   channels?: {
     name?: string | null
     noob_access?: boolean | null
+    is_ephemeral?: boolean | null
   } | null
 }
 
@@ -45,6 +49,7 @@ function mapChannel(row: ChannelRow): VoiceChannel {
     groupId: row.group_id,
     name: row.name,
     noobAccess: Boolean(row.noob_access),
+    isEphemeral: Boolean(row.is_ephemeral),
   }
 }
 
@@ -57,6 +62,7 @@ function mapRoom(row: VoiceRoomRow): VoiceRoom {
     providerRoomName: row.provider_room_name,
     channelName: row.channels?.name ?? undefined,
     noobAccess: row.channels?.noob_access ?? undefined,
+    isEphemeral: row.channels?.is_ephemeral ?? undefined,
   }
 }
 
@@ -69,7 +75,7 @@ export async function resolveVoiceChannel(supabase: SupabaseClient, channelId: s
 
   const { data, error } = await supabase
     .from('channels')
-    .select('id, group_id, name, noob_access')
+    .select('id, group_id, name, noob_access, is_ephemeral')
     .eq('id', channelId)
     .single()
 
@@ -82,7 +88,7 @@ export async function resolveVoiceRoom(supabase: SupabaseClient, roomId: string)
 
   const { data, error } = await supabase
     .from('voice_rooms')
-    .select('id, channel_id, group_id, status, provider_room_name, channels(name, noob_access)')
+    .select('id, channel_id, group_id, status, provider_room_name, channels(name, noob_access, is_ephemeral)')
     .eq('id', roomId)
     .single()
 

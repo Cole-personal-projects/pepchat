@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createChannel, deleteChannel, moveChannel, updateChannelSettings } from '@/app/(app)/channels/actions'
 
-const { mockCreateClient, mockRedirect } = vi.hoisted(() => ({
+const { mockCreateClient, mockCreateAdminClient, mockRedirect } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
+  mockCreateAdminClient: vi.fn(),
   mockRedirect: vi.fn((path: string) => {
     throw new Error(`redirect:${path}`)
   }),
@@ -10,6 +11,9 @@ const { mockCreateClient, mockRedirect } = vi.hoisted(() => ({
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: mockCreateClient,
+}))
+vi.mock('@/lib/supabase/admin', () => ({
+  createAdminClient: mockCreateAdminClient,
 }))
 
 vi.mock('next/navigation', () => ({
@@ -19,12 +23,19 @@ vi.mock('next/navigation', () => ({
 type QueryResult = { data?: unknown; error?: { message: string; code?: string } | null }
 type Builder = Record<string, ReturnType<typeof vi.fn>>
 
-function makeFormData(input: { name?: string; description?: string; groupId?: string; noobAccess?: boolean } = {}) {
+function makeFormData(input: {
+  name?: string
+  description?: string
+  groupId?: string
+  noobAccess?: boolean
+  kind?: 'text' | 'voice'
+} = {}) {
   const formData = new FormData()
   if (input.name !== undefined) formData.set('name', input.name)
   if (input.description !== undefined) formData.set('description', input.description)
   if (input.groupId !== undefined) formData.set('group_id', input.groupId)
   if (input.noobAccess) formData.set('noob_access', 'on')
+  if (input.kind !== undefined) formData.set('kind', input.kind)
   return formData
 }
 
@@ -117,6 +128,19 @@ function setupClient(builders: Builder[], userId: string | null = 'user-1') {
   return { from, getUser, tableCalls }
 }
 
+function setupAdminClient(builders: Builder[]) {
+  let index = 0
+  const from = vi.fn((table: string) => {
+    const builder = builders[index]
+    index += 1
+    if (!builder) throw new Error(`Missing admin mock builder for ${table}`)
+    return builder
+  })
+
+  mockCreateAdminClient.mockReturnValue({ from })
+  return { from }
+}
+
 const CHANNEL_DENIED = 'You do not have permission to manage channels.'
 
 describe('channel actions — auth behavior', () => {
@@ -200,6 +224,56 @@ describe('channel actions — createChannel', () => {
       position: 3,
     })
     expect(mockRedirect).toHaveBeenCalledWith('/channels/ch-new')
+  })
+
+  it.each(['moderator', 'user', 'noob'] as const)(
+    'denies %s persistent voice channel creation before reading existing channel positions',
+    async (role) => {
+      const gate = makeGateBuilder(role)
+      const duplicate = makeSelectBuilder({ data: null })
+      const existing = makeListBuilder({ data: [{ position: 0 }] })
+      setupClient([gate, duplicate, existing])
+
+      await expect(createChannel(makeFormData({
+        name: 'Common Room',
+        groupId: 'group-1',
+        kind: 'voice',
+      }))).resolves.toEqual({
+        error: CHANNEL_DENIED,
+      })
+
+      expect(gate.select).toHaveBeenCalledWith('role')
+      expect(gate.eq).toHaveBeenCalledWith('group_id', 'group-1')
+      expect(gate.eq).toHaveBeenCalledWith('user_id', 'user-1')
+      expect(existing.select).not.toHaveBeenCalled()
+    },
+  )
+
+  it('allows admins to create persistent voice channels through the server-only admin client with is_ephemeral false', async () => {
+    const gate = makeGateBuilder('admin')
+    setupClient([gate])
+    const duplicate = makeSelectBuilder({ data: null })
+    const existing = makeListBuilder({ data: [{ position: 2 }] })
+    const insert = makeInsertBuilder({ data: { id: 'voice-new' } })
+    setupAdminClient([duplicate, existing, insert])
+
+    await expect(createChannel(makeFormData({
+      name: 'Common Room',
+      description: ' Hang out ',
+      groupId: 'group-1',
+      kind: 'voice',
+    }))).rejects.toThrow('redirect:/channels/voice-new')
+
+    expect(insert.insert).toHaveBeenCalledWith({
+      group_id: 'group-1',
+      name: 'common-room',
+      description: 'Hang out',
+      noob_access: false,
+      position: 3,
+      is_ephemeral: false,
+    })
+    expect(mockCreateAdminClient).toHaveBeenCalledOnce()
+    expect(mockRedirect).toHaveBeenCalledWith('/channels/voice-new')
   })
 })
 

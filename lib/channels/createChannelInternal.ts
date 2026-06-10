@@ -2,11 +2,15 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 export const CHANNEL_MANAGE_DENIED = 'You do not have permission to manage channels.'
 
+export type ChannelKind = 'text' | 'voice'
+
 export type ChannelInput = {
   groupId: string
   name: string
   description?: string | null
   noobAccess?: boolean
+  kind?: ChannelKind
+  isEphemeral?: boolean
 }
 
 export type NormalizedChannelInput = {
@@ -14,14 +18,20 @@ export type NormalizedChannelInput = {
   name: string
   description: string | null
   noobAccess: boolean
+  kind: ChannelKind
+  isEphemeral: boolean
 }
 
 export type CreateChannelInternalResult =
-  | { ok: true; channel: { id: string; group_id: string; name: string; description: string | null; noob_access: boolean; position: number } }
+  | { ok: true; channel: { id: string; group_id: string; name: string; description: string | null; noob_access: boolean; position: number; is_ephemeral?: boolean } }
   | { error: string }
 
 export function normalizeChannelName(name: string): string {
-  return name.trim().toLowerCase().replace(/\s+/g, '-')
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
 }
 
 export async function validateChannelInput(
@@ -31,9 +41,12 @@ export async function validateChannelInput(
   const name = normalizeChannelName(input.name ?? '')
   const description = (input.description ?? '').trim()
   const groupId = input.groupId
+  const kind = input.kind ?? 'text'
+  const isEphemeral = kind === 'voice' ? Boolean(input.isEphemeral) : false
 
   if (!name) return { error: 'Channel name is required.' }
   if (!groupId) return { error: 'Missing group.' }
+  if (kind !== 'text' && kind !== 'voice') return { error: 'Invalid channel type.' }
   if (name.length > 80) return { error: 'Channel name must be 80 characters or fewer.' }
   if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) {
     return { error: 'Channel name may only contain lowercase letters, numbers, and hyphens.' }
@@ -57,6 +70,8 @@ export async function validateChannelInput(
       name,
       description: description || null,
       noobAccess: Boolean(input.noobAccess),
+      kind,
+      isEphemeral,
     },
   }
 }
@@ -67,7 +82,7 @@ export async function createChannelInternal(
 ): Promise<CreateChannelInternalResult> {
   const validation = await validateChannelInput(supabase, input)
   if ('error' in validation) return validation
-  const { groupId, name, description, noobAccess } = validation.value
+  const { groupId, name, description, noobAccess, kind, isEphemeral } = validation.value
 
   const { data: existingPositions } = await supabase
     .from('channels')
@@ -78,16 +93,19 @@ export async function createChannelInternal(
 
   const nextPosition = existingPositions && existingPositions.length > 0 ? existingPositions[0].position + 1 : 0
 
+  const insertPayload = {
+    group_id: groupId,
+    name,
+    description,
+    noob_access: noobAccess,
+    position: nextPosition,
+    ...(kind === 'voice' ? { is_ephemeral: isEphemeral } : {}),
+  }
+
   const { data: channel, error } = await supabase
     .from('channels')
-    .insert({
-      group_id: groupId,
-      name,
-      description,
-      noob_access: noobAccess,
-      position: nextPosition,
-    })
-    .select('id, group_id, name, description, noob_access, position')
+    .insert(insertPayload)
+    .select('id, group_id, name, description, noob_access, position, is_ephemeral')
     .single()
 
   if (error || !channel) return { error: error?.message ?? 'Failed to create channel.' }

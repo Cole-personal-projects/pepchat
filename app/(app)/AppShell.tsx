@@ -214,6 +214,7 @@ export default function AppShell({ profile, children }: AppShellProps) {
           open={showNewChannel}
           onClose={() => setShowNewChannel(false)}
           groupId={activeGroupId}
+          canCreatePersistentVoiceChannel={PERMISSIONS.canCreatePersistentVoiceChannel(userRole ?? 'noob')}
         />
       )}
     </MobileSidebarContext.Provider>

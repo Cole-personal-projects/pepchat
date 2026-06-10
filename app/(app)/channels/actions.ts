@@ -1,9 +1,10 @@
 'use server'
 
 import { withAuth } from '@/lib/actions/withAuth'
-import { createChannelInternal, CHANNEL_MANAGE_DENIED, normalizeChannelName } from '@/lib/channels/createChannelInternal'
+import { createChannelInternal, CHANNEL_MANAGE_DENIED, normalizeChannelName, type ChannelKind } from '@/lib/channels/createChannelInternal'
 import { gateGroupRole } from '@/lib/permissions/gate'
 import { PERMISSIONS } from '@/lib/permissions'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 
 /** Creates a text channel inside a group. Channel manager only. */
@@ -14,6 +15,8 @@ export const createChannel = withAuth(
   ): Promise<{ error: string } | never> {
     const name = formData.get('name') as string
     const groupId = formData.get('group_id') as string
+    const requestedKind = formData.get('kind')
+    const kind: ChannelKind = requestedKind === 'voice' ? 'voice' : 'text'
 
     if (!normalizeChannelName(name ?? '')) return { error: 'Channel name is required.' }
     if (!groupId) return { error: 'Missing group.' }
@@ -21,16 +24,21 @@ export const createChannel = withAuth(
     const gateResult = await gateGroupRole(supabase, {
       groupId,
       userId: user.id,
-      predicate: PERMISSIONS.canManageChannels,
+      predicate: kind === 'voice'
+        ? PERMISSIONS.canCreatePersistentVoiceChannel
+        : PERMISSIONS.canManageChannels,
       deniedMessage: CHANNEL_MANAGE_DENIED,
     })
     if ('error' in gateResult) return gateResult
 
-    const result = await createChannelInternal(supabase, {
+    const writeClient = kind === 'voice' ? createAdminClient() : supabase
+    const result = await createChannelInternal(writeClient, {
       groupId,
       name,
       description: formData.get('description') as string | null,
       noobAccess: formData.get('noob_access') === 'on',
+      kind,
+      isEphemeral: false,
     })
 
     if ('error' in result) return result
