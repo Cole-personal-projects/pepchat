@@ -16,6 +16,21 @@ vi.mock('next/navigation', () => ({
 }))
 
 vi.mock('@/app/(auth)/actions', () => ({ logout: vi.fn() }))
+vi.mock('@/app/(app)/voice/actions', () => ({
+  getCurrentVoiceRoom: vi.fn().mockResolvedValue({ ok: true, room: null }),
+  joinVoiceChannel: vi.fn(),
+  leaveVoiceRoom: vi.fn(),
+  createTempVoiceRoom: vi.fn(),
+}))
+vi.mock('@/components/voice/useVoiceRoomConnection', () => ({
+  useVoiceRoomConnection: () => ({
+    status: 'idle', error: null, muted: false,
+    connect: vi.fn(), leave: vi.fn(), toggleMute: vi.fn(),
+  }),
+}))
+vi.mock('@/components/status/UserStatusMenu', () => ({
+  default: () => <span>online</span>,
+}))
 vi.mock('@/app/(app)/channels/actions', () => ({
   deleteChannel: vi.fn(),
   moveChannel: vi.fn(),

@@ -9,6 +9,7 @@ import MembersPanel from '@/components/sidebar/MembersPanel'
 import ChannelRow from '@/components/sidebar/ChannelRow'
 import CategorySection from '@/components/sidebar/CategorySection'
 import VoiceChannelsSection from '@/components/sidebar/VoiceChannelsSection'
+import UserStatusMenu from '@/components/status/UserStatusMenu'
 import Modal from '@/components/ui/Modal'
 import { logout } from '@/app/(auth)/actions'
 import { deleteChannel, moveChannel, updateChannelSettings } from '@/app/(app)/channels/actions'
@@ -485,6 +486,33 @@ export default function ChannelsSidebar({
           </p>
         )}
 
+        {/* Friends entry */}
+        <Link
+          href="/friends"
+          data-testid="friends-link"
+          onClick={onMobileClose}
+          className="channel-row"
+          style={{
+            margin: '10px 0 0',
+            padding: '6px 10px',
+            borderRadius: 6,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            textDecoration: 'none',
+            color: 'var(--text-muted)',
+            fontSize: 14,
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg>
+          Friends
+        </Link>
+
         {/* DM section — always visible below channel list */}
         <DMSection currentUserId={profile.id} />
       </div>
@@ -686,48 +714,40 @@ export default function ChannelsSidebar({
           background: 'var(--bg-deepest)',
         }}
       >
-        <Link
-          href="/settings/profile"
+        <div
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: 10,
             flex: 1,
             minWidth: 0,
-            textDecoration: 'none',
-            cursor: 'pointer',
           }}
         >
-          <Avatar user={profile} size={34} showStatus status="online" />
+          <Link href="/settings/profile" style={{ flexShrink: 0, display: 'flex', textDecoration: 'none' }}>
+            <Avatar user={profile} size={34} showStatus status="online" />
+          </Link>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div
+            <Link
+              href="/settings/profile"
               data-testid="user-footer-name"
               style={{
+                display: 'block',
                 fontSize: 13,
                 fontWeight: 600,
                 color: 'var(--text-primary)',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
+                textDecoration: 'none',
               }}
             >
               {displayName}
-            </div>
-            <div
-              data-testid="user-footer-status"
-              style={{
-                fontSize: 11,
-                color: 'var(--text-muted)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 5,
-              }}
-            >
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#6aa08a', flexShrink: 0 }} />
-              online
+            </Link>
+            <div data-testid="user-footer-status">
+              <UserStatusMenu userId={profile.id} />
             </div>
           </div>
-        </Link>
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
           {userRole === 'admin' && (
             <a
