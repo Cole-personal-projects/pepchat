@@ -11,6 +11,8 @@ const ephemeralChannelsMigration = readFileSync(
   join(process.cwd(), 'supabase/migrations/20260609000000_voice_ephemeral_channels.sql'),
   'utf8',
 )
+const schema = readFileSync(join(process.cwd(), 'schema.sql'), 'utf8')
+const channelsTableDefinition = schema.match(/create table if not exists public\.channels \([\s\S]*?\n\);/)?.[0] ?? ''
 
 describe('voice rooms migration security posture', () => {
   it('creates the voice room tables with one-open-room and one-active-participant constraints', () => {
@@ -59,7 +61,9 @@ describe('voice rooms migration security posture', () => {
     )
     expect(ephemeralChannelsMigration).toContain('create index if not exists channels_ephemeral_voice_idx')
     expect(ephemeralChannelsMigration).toContain('on public.channels(group_id)')
-    expect(ephemeralChannelsMigration).toContain("where kind = 'voice' and is_ephemeral = true")
+    expect(ephemeralChannelsMigration).toContain('where is_ephemeral = true')
+    expect(ephemeralChannelsMigration).not.toContain("where kind = 'voice'")
+    expect(channelsTableDefinition).not.toMatch(/\n\s+kind\s+/)
     expect(ephemeralChannelsMigration).not.toMatch(/create\s+policy/i)
     expect(ephemeralChannelsMigration).not.toMatch(/for\s+(insert|update|delete)\s+to\s+authenticated/i)
   })
