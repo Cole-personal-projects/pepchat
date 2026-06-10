@@ -14,6 +14,10 @@ const ephemeralChannelsMigration = readFileSync(
 const schema = readFileSync(join(process.cwd(), 'schema.sql'), 'utf8')
 const channelsTableDefinition = schema.match(/create table if not exists public\.channels \([\s\S]*?\n\);/)?.[0] ?? ''
 
+function policyBlock(sql: string, policyName: string) {
+  return sql.match(new RegExp(`create policy "${policyName}"[\\s\\S]*?\\n  \\);`))?.[0] ?? ''
+}
+
 describe('voice rooms migration security posture', () => {
   it('creates the voice room tables with one-open-room and one-active-participant constraints', () => {
     expect(initialMigration).toContain('create table if not exists public.voice_rooms')
@@ -42,11 +46,14 @@ describe('voice rooms migration security posture', () => {
     expect(initialMigration).toContain('Intentionally no INSERT/UPDATE/DELETE policies for anon/authenticated roles')
   })
 
-  it('adds authenticated write policies for gated voice room lifecycle actions', () => {
-    expect(authenticatedWritesMigration).toContain('create policy "Managers can create voice rooms for accessible channels"')
-    expect(authenticatedWritesMigration).toContain('for insert')
-    expect(authenticatedWritesMigration).toContain("gm.role in ('admin', 'moderator')")
-    expect(authenticatedWritesMigration).toContain('created_by = auth.uid()')
+  it('allows only admins to directly create persistent voice rooms through authenticated RLS', () => {
+    const createPolicy = policyBlock(authenticatedWritesMigration, 'Admins can create voice rooms for accessible channels')
+
+    expect(createPolicy).toContain('for insert')
+    expect(createPolicy).toContain('created_by = auth.uid()')
+    expect(createPolicy).toContain("gm.role = 'admin'")
+    expect(createPolicy).not.toContain("gm.role in ('admin', 'moderator')")
+    expect(authenticatedWritesMigration).not.toContain('create policy "Managers can create voice rooms for accessible channels"')
     expect(authenticatedWritesMigration).toContain('create policy "Members can join accessible voice rooms"')
     expect(authenticatedWritesMigration).toContain('user_id = auth.uid()')
     expect(authenticatedWritesMigration).toContain("vr.status = 'open'")
