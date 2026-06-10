@@ -14,6 +14,21 @@ vi.mock('@/app/(app)/members/actions', () => ({
   kickMember: (...args: any[]) => kickMemberMock(...args),
 }))
 
+vi.mock('@/app/(app)/roles/actions', () => ({
+  assignMemberRole: vi.fn().mockResolvedValue({ ok: true }),
+  removeMemberRole: vi.fn().mockResolvedValue({ ok: true }),
+}))
+
+vi.mock('@/lib/hooks/useGroupRoles', () => ({
+  useGroupRoles: () => ({
+    roles: [],
+    memberRoles: [],
+    roleIdsByUserId: new Map(),
+    loading: false,
+    refetch: vi.fn(),
+  }),
+}))
+
 // Mutable so tests can swap out the resolved data between calls
 let fetchResult = {
   data: [

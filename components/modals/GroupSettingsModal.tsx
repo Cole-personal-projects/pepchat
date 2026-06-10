@@ -8,8 +8,9 @@ import { leaveGroup, deleteGroup, uploadGroupIcon, removeGroupIcon, updateGroupD
 import type { Group } from '@/lib/types'
 
 const AvatarCropModal = dynamic(() => import('@/components/profile/AvatarCropModal'), { ssr: false })
+const RolesManager = dynamic(() => import('@/components/roles/RolesManager'), { ssr: false })
 
-type NavItem = 'overview' | 'invite' | 'moderation' | 'danger'
+type NavItem = 'overview' | 'roles' | 'invite' | 'moderation' | 'danger'
 
 type ManagedInvite = {
   id: string
@@ -223,6 +224,7 @@ export default function GroupSettingsModal({ open, onClose, group, isOwner, onIc
 
   const navItems: { id: NavItem; label: string; testId: string }[] = [
     { id: 'overview', label: 'Overview',   testId: 'nav-overview' },
+    { id: 'roles',    label: 'Roles',      testId: 'nav-roles' },
     { id: 'invite',   label: 'Invite Link', testId: 'nav-invite' },
     { id: 'moderation', label: 'Moderation', testId: 'nav-moderation' },
     { id: 'danger',   label: 'Danger Zone', testId: 'nav-danger' },
@@ -256,6 +258,12 @@ export default function GroupSettingsModal({ open, onClose, group, isOwner, onIc
               <p className="text-[var(--danger)] text-sm bg-[var(--danger)]/10 border border-[var(--danger)]/20 rounded-lg px-3 py-2 mb-4">
                 {error}
               </p>
+            )}
+
+            {nav === 'roles' && (
+              <div data-testid="roles-pane">
+                <RolesManager groupId={group.id} />
+              </div>
             )}
 
             {nav === 'overview' && (
