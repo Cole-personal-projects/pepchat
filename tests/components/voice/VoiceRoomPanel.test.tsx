@@ -75,10 +75,17 @@ describe('VoiceRoomPanel', () => {
     expect(screen.getByRole('button', { name: 'Start voice room' })).toBeInTheDocument()
   })
 
-  it('shows start control for admins and moderators', () => {
-    renderPanel('moderator')
+  it('shows start control for admins only', () => {
+    renderPanel('admin')
 
     expect(screen.getByRole('button', { name: 'Start voice room' })).toBeInTheDocument()
+  })
+
+  it('does not show start control for moderators', () => {
+    renderPanel('moderator')
+
+    expect(screen.queryByRole('button', { name: 'Start voice room' })).not.toBeInTheDocument()
+    expect(screen.getByText('No voice room active.')).toBeInTheDocument()
   })
 
   it('does not show start control for regular users', () => {

@@ -7,6 +7,16 @@ const authenticatedWritesMigration = readFileSync(
   join(process.cwd(), 'supabase/migrations/20260529041000_voice_room_authenticated_writes.sql'),
   'utf8',
 )
+const ephemeralChannelsMigration = readFileSync(
+  join(process.cwd(), 'supabase/migrations/20260609000000_voice_ephemeral_channels.sql'),
+  'utf8',
+)
+const schema = readFileSync(join(process.cwd(), 'schema.sql'), 'utf8')
+const channelsTableDefinition = schema.match(/create table if not exists public\.channels \([\s\S]*?\n\);/)?.[0] ?? ''
+
+function policyBlock(sql: string, policyName: string) {
+  return sql.match(new RegExp(`create policy "${policyName}"[\\s\\S]*?\\n  \\);`))?.[0] ?? ''
+}
 
 describe('voice rooms migration security posture', () => {
   it('creates the voice room tables with one-open-room and one-active-participant constraints', () => {
@@ -36,14 +46,32 @@ describe('voice rooms migration security posture', () => {
     expect(initialMigration).toContain('Intentionally no INSERT/UPDATE/DELETE policies for anon/authenticated roles')
   })
 
-  it('adds authenticated write policies for gated voice room lifecycle actions', () => {
-    expect(authenticatedWritesMigration).toContain('create policy "Managers can create voice rooms for accessible channels"')
-    expect(authenticatedWritesMigration).toContain('for insert')
-    expect(authenticatedWritesMigration).toContain("gm.role in ('admin', 'moderator')")
-    expect(authenticatedWritesMigration).toContain('created_by = auth.uid()')
+  it('allows only admins to directly create persistent voice rooms through authenticated RLS', () => {
+    const createPolicy = policyBlock(authenticatedWritesMigration, 'Admins can create voice rooms for accessible channels')
+
+    expect(createPolicy).toContain('for insert')
+    expect(createPolicy).toContain('created_by = auth.uid()')
+    expect(createPolicy).toContain("gm.role = 'admin'")
+    expect(createPolicy).not.toContain("gm.role in ('admin', 'moderator')")
+    expect(authenticatedWritesMigration).not.toContain('create policy "Managers can create voice rooms for accessible channels"')
     expect(authenticatedWritesMigration).toContain('create policy "Members can join accessible voice rooms"')
     expect(authenticatedWritesMigration).toContain('user_id = auth.uid()')
     expect(authenticatedWritesMigration).toContain("vr.status = 'open'")
     expect(authenticatedWritesMigration).toContain('create policy "Members can update their active voice participation"')
+  })
+
+  it('adds idempotent channel columns for ephemeral voice rooms without channel write policies', () => {
+    expect(ephemeralChannelsMigration).toContain('alter table public.channels')
+    expect(ephemeralChannelsMigration).toContain('add column if not exists is_ephemeral boolean not null default false')
+    expect(ephemeralChannelsMigration).toContain(
+      'add column if not exists created_by uuid references public.profiles(id) on delete set null',
+    )
+    expect(ephemeralChannelsMigration).toContain('create index if not exists channels_ephemeral_voice_idx')
+    expect(ephemeralChannelsMigration).toContain('on public.channels(group_id)')
+    expect(ephemeralChannelsMigration).toContain('where is_ephemeral = true')
+    expect(ephemeralChannelsMigration).not.toContain("where kind = 'voice'")
+    expect(channelsTableDefinition).not.toMatch(/\n\s+kind\s+/)
+    expect(ephemeralChannelsMigration).not.toMatch(/create\s+policy/i)
+    expect(ephemeralChannelsMigration).not.toMatch(/for\s+(insert|update|delete)\s+to\s+authenticated/i)
   })
 })

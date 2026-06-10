@@ -98,11 +98,33 @@ describe('PERMISSIONS.canAccessChannel', () => {
 describe('PERMISSIONS.canStartVoiceRoom', () => {
   it.each([
     ['admin', true],
-    ['moderator', true],
+    ['moderator', false],
     ['user', false],
     ['noob', false],
   ] as [Role, boolean][])('%s → %s', (role: Role, expected: boolean) => {
     expect(PERMISSIONS.canStartVoiceRoom(role)).toBe(expected)
+  })
+})
+
+describe('PERMISSIONS.canCreateTempVoiceChannel', () => {
+  it.each([
+    ['admin', true],
+    ['moderator', true],
+    ['user', true],
+    ['noob', false],
+  ] as [Role, boolean][])('%s → %s', (role: Role, expected: boolean) => {
+    expect(PERMISSIONS.canCreateTempVoiceChannel(role)).toBe(expected)
+  })
+})
+
+describe('PERMISSIONS.canCreatePersistentVoiceChannel', () => {
+  it.each([
+    ['admin', true],
+    ['moderator', false],
+    ['user', false],
+    ['noob', false],
+  ] as [Role, boolean][])('%s → %s', (role: Role, expected: boolean) => {
+    expect(PERMISSIONS.canCreatePersistentVoiceChannel(role)).toBe(expected)
   })
 })
 

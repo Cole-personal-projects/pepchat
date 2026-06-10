@@ -6,7 +6,8 @@ alter table public.voice_rooms enable row level security;
 alter table public.voice_room_participants enable row level security;
 
 drop policy if exists "Managers can create voice rooms for accessible channels" on public.voice_rooms;
-create policy "Managers can create voice rooms for accessible channels"
+drop policy if exists "Admins can create voice rooms for accessible channels" on public.voice_rooms;
+create policy "Admins can create voice rooms for accessible channels"
   on public.voice_rooms
   for insert
   to authenticated
@@ -19,7 +20,7 @@ create policy "Managers can create voice rooms for accessible channels"
       where c.id = voice_rooms.channel_id
         and c.group_id = voice_rooms.group_id
         and gm.user_id = auth.uid()
-        and gm.role in ('admin', 'moderator')
+        and gm.role = 'admin'
         and (
           gm.role in ('admin', 'moderator', 'user')
           or (gm.role = 'noob' and (c.name = 'welcome' or c.noob_access = true))

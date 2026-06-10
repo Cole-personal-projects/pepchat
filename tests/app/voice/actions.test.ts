@@ -145,8 +145,8 @@ describe('voice actions', () => {
     expect(mockMintLiveKitToken).not.toHaveBeenCalled()
   })
 
-  it('allows admins and moderators, but not users or noobs, to start voice rooms', async () => {
-    for (const role of ['admin', 'moderator'] as const) {
+  it('allows admins, but not moderators, users, or noobs, to start voice rooms', async () => {
+    for (const role of ['admin'] as const) {
       vi.clearAllMocks()
       setupUserClient({ role })
       mockResolveVoiceChannel.mockResolvedValue(channel)
@@ -164,7 +164,7 @@ describe('voice actions', () => {
       })
     }
 
-    for (const role of ['user', 'noob'] as const) {
+    for (const role of ['moderator', 'user', 'noob'] as const) {
       vi.clearAllMocks()
       setupUserClient({ role })
       mockResolveVoiceChannel.mockResolvedValue(role === 'noob' ? welcomeChannel : channel)

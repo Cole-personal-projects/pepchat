@@ -43,9 +43,15 @@ export const PERMISSIONS = {
     return true
   },
 
-  /** Can start a channel voice room. Voice room creation is limited to group managers. */
-  canStartVoiceRoom: (role: Role) =>
-    (['admin', 'moderator'] as Role[]).includes(role),
+  /** Can create an ephemeral (temporary) voice chat. Everyone except noobs. */
+  canCreateTempVoiceChannel: (role: Role) =>
+    (['admin', 'moderator', 'user'] as Role[]).includes(role),
+
+  /** Can create a persistent voice channel ("Common Room"). Admin only. */
+  canCreatePersistentVoiceChannel: (role: Role) => role === 'admin',
+
+  /** Can start a persistent channel voice room. Persistent voice creation is admin-only. */
+  canStartVoiceRoom: (role: Role) => PERMISSIONS.canCreatePersistentVoiceChannel(role),
 
   /** Can join a channel voice room under the same access rules as channel reads. */
   canJoinVoiceRoom: (role: Role, channelName: string, noobAccess = false) =>
