@@ -3,7 +3,7 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import ChannelShell from '@/components/chat/ChannelShell'
 import type { MessageWithProfile, Profile } from '@/lib/types'
 
-const { mockChatHeader, mockMessageList, mockMessageInput, mockPinnedMessagesPanel, mockThreadPanel } = vi.hoisted(() => ({
+const { mockChatHeader, mockMessageList, mockMessageInput, mockPinnedMessagesPanel, mockThreadPanel, mockVoiceRoomPanel } = vi.hoisted(() => ({
   mockChatHeader: vi.fn(({ pinnedPanelOpen, onTogglePinnedPanel }: any) => (
     <button type="button" data-testid="toggle-pins" aria-pressed={pinnedPanelOpen} onClick={onTogglePinnedPanel}>
       Toggle pins
@@ -18,6 +18,7 @@ const { mockChatHeader, mockMessageList, mockMessageInput, mockPinnedMessagesPan
   mockMessageInput: vi.fn((_props: any) => <div data-testid="message-input" />),
   mockPinnedMessagesPanel: vi.fn(({ open }: any) => <div data-testid="pinned-panel">{String(open)}</div>),
   mockThreadPanel: vi.fn(({ open }: any) => <div data-testid="thread-panel">{String(open)}</div>),
+  mockVoiceRoomPanel: vi.fn((_props: any) => <div data-testid="voice-room-panel" />),
 }))
 
 vi.mock('@/components/chat/ChatHeader', () => ({ default: (props: any) => mockChatHeader(props) }))
@@ -27,6 +28,7 @@ vi.mock('@/components/chat/TypingIndicator', () => ({ default: () => <div data-t
 vi.mock('@/components/chat/PresencePanel', () => ({ default: () => <div data-testid="presence-panel" /> }))
 vi.mock('@/components/chat/PinnedMessagesPanel', () => ({ default: (props: any) => mockPinnedMessagesPanel(props) }))
 vi.mock('@/components/chat/ThreadPanel', () => ({ default: (props: any) => mockThreadPanel(props) }))
+vi.mock('@/components/voice/VoiceRoomPanel', () => ({ default: (props: any) => mockVoiceRoomPanel(props) }))
 
 vi.mock('@/lib/hooks/useMessages', () => ({
   useMessages: (_channelId: string, initialMessages: MessageWithProfile[]) => ({
@@ -118,6 +120,21 @@ describe('ChannelShell — message links', () => {
     )
 
     expect(container.firstElementChild).toHaveClass('flex-1', 'min-w-0', 'min-h-0', 'overflow-hidden')
+  })
+
+  it('does not render the old chat-column voice room panel', () => {
+    render(
+      <ChannelShell
+        channelId="ch-1"
+        channelName="general"
+        initialMessages={[MESSAGE]}
+        profile={PROFILE}
+        userRole="user"
+      />
+    )
+
+    expect(mockVoiceRoomPanel).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('voice-room-panel')).not.toBeInTheDocument()
   })
 
   it('passes the URL hash message id to MessageList for highlighting on mount', async () => {

@@ -12,7 +12,6 @@ import TypingIndicator from '@/components/chat/TypingIndicator'
 import PresencePanel from '@/components/chat/PresencePanel'
 import PinnedMessagesPanel from '@/components/chat/PinnedMessagesPanel'
 import ThreadPanel from '@/components/chat/ThreadPanel'
-import VoiceRoomPanel from '@/components/voice/VoiceRoomPanel'
 import { toggleReaction } from '@/app/(app)/reactions/actions'
 import { pinMessage, unpinMessage } from '@/app/(app)/messages/actions'
 import { fetchThreadRoot } from '@/app/(app)/messages/thread-actions'
@@ -218,14 +217,6 @@ export default function ChannelShell({
           pinnedCount={pinnedCount}
           pinnedPanelOpen={pinnedPanelOpen && !threadPanelOpen}
           onTogglePinnedPanel={handleTogglePinnedPanel}
-        />
-        <VoiceRoomPanel
-          channelId={channelId}
-          channelName={channelName}
-          userRole={userRole}
-          sourceNoobAccess={sourceNoobAccess}
-          profileId={profile.id}
-          userId={userId ?? profile.id}
         />
         <MessageList
           messages={messages}
