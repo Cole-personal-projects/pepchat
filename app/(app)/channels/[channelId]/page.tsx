@@ -1,8 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ChannelShell from '@/components/chat/ChannelShell'
+import ForumShell from '@/components/forum/ForumShell'
 import { MESSAGE_SELECT } from '@/lib/queries'
-import type { MessageWithProfile, Profile } from '@/lib/types'
+import type { ForumTag, MessageWithProfile, Profile } from '@/lib/types'
 import type { Role } from '@/lib/permissions'
 
 export default async function ChannelPage({
@@ -72,6 +73,44 @@ export default async function ChannelPage({
     .eq('channel_id', params.channelId)
     .eq('user_id', user.id)
     .maybeSingle()
+
+  // Forum channels render a post grid instead of the message list.
+  if (channel.kind === 'forum') {
+    const [postsResult, tagsResult, postTagsResult] = await Promise.all([
+      supabase
+        .from('messages')
+        .select(MESSAGE_SELECT)
+        .eq('channel_id', params.channelId)
+        .is('thread_root_id', null)
+        .order('created_at', { ascending: false })
+        .limit(100),
+      supabase
+        .from('forum_tags')
+        .select('*')
+        .eq('channel_id', params.channelId)
+        .order('position', { ascending: true }),
+      supabase
+        .from('forum_post_tags')
+        .select('tag_id, root_message_id'),
+    ])
+
+    return (
+      <div className="flex flex-1 min-w-0 min-h-0 flex-col overflow-hidden">
+        <ForumShell
+          channelId={params.channelId}
+          groupId={channel.group_id}
+          channelName={channel.name}
+          channelTopic={channel.description}
+          profile={profile as Profile}
+          userRole={userRole}
+          userId={user.id}
+          initialPosts={(postsResult.data ?? []) as unknown as MessageWithProfile[]}
+          tags={(tagsResult.data ?? []) as ForumTag[]}
+          initialPostTags={(postTagsResult.data ?? []) as Array<{ tag_id: string; root_message_id: string }>}
+        />
+      </div>
+    )
+  }
 
   // Fetch last 50 messages (descending, then reverse for chronological display)
   const { data: messages } = await supabase

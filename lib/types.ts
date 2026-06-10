@@ -153,6 +153,8 @@ export interface Message {
   content: string
   reply_to_id: string | null
   thread_root_id?: string | null
+  /** Forum posts: required title on the thread root message. */
+  thread_title?: string | null
   thread_reply_count?: number
   thread_last_reply_at?: string | null
   mirrored_from_thread_id?: string | null
