@@ -99,6 +99,7 @@ async function createVoiceChannelRow(
     .insert({
       group_id: input.groupId,
       name: normalizeChannelName(input.name),
+      channel_kind: 'ephemeral_voice',
       is_ephemeral: true,
       created_by: input.userId,
       noob_access: false,

@@ -224,6 +224,7 @@ describe('voice actions', () => {
       expect(insertBuilder.insert).toHaveBeenCalledWith({
         group_id: 'group-1',
         name: 'alice-room',
+        channel_kind: 'ephemeral_voice',
         is_ephemeral: true,
         created_by: 'user-1',
         noob_access: false,
@@ -255,6 +256,7 @@ describe('voice actions', () => {
 
     expect(insertBuilder.insert).toHaveBeenCalledWith(expect.objectContaining({
       name: 'alice-s-display-s-room',
+      channel_kind: 'ephemeral_voice',
       is_ephemeral: true,
       created_by: 'user-1',
     }))

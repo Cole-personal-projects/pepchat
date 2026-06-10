@@ -222,6 +222,8 @@ describe('channel actions — createChannel', () => {
       description: 'Start here',
       noob_access: true,
       position: 3,
+      channel_kind: 'text',
+      is_ephemeral: false,
     })
     expect(mockRedirect).toHaveBeenCalledWith('/channels/ch-new')
   })
@@ -270,6 +272,7 @@ describe('channel actions — createChannel', () => {
       description: 'Hang out',
       noob_access: false,
       position: 3,
+      channel_kind: 'persistent_voice',
       is_ephemeral: false,
     })
     expect(mockCreateAdminClient).toHaveBeenCalledOnce()

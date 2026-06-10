@@ -100,7 +100,10 @@ create table if not exists public.channels (
   group_id    uuid references public.groups(id) on delete cascade not null,
   name        text not null,
   description text,
+  channel_kind text not null default 'text' check (channel_kind in ('text', 'persistent_voice', 'ephemeral_voice')),
   noob_access boolean not null default false,
+  is_ephemeral boolean not null default false,
+  created_by uuid references public.profiles(id) on delete set null,
   position    int not null default 0,
   created_at  timestamptz default now() not null
 );
@@ -595,15 +598,37 @@ create policy "Members can view channels in their groups"
 
 create policy "Admins and moderators can create channels"
   on public.channels for insert to authenticated
-  with check (public.can_manage_channels(group_id));
+  with check (
+    public.can_manage_channels(group_id)
+    and (
+      channel_kind = 'text'
+      or (channel_kind = 'persistent_voice' and public.is_group_admin(group_id))
+      or (channel_kind = 'ephemeral_voice' and public.is_group_admin(group_id) and created_by = auth.uid())
+    )
+  );
 
 create policy "Admins and moderators can update channels"
   on public.channels for update to authenticated
-  using (public.can_manage_channels(group_id));
+  using (public.can_manage_channels(group_id))
+  with check (
+    public.can_manage_channels(group_id)
+    and (
+      channel_kind = 'text'
+      or (channel_kind = 'persistent_voice' and public.is_group_admin(group_id))
+      or (channel_kind = 'ephemeral_voice' and public.is_group_admin(group_id) and created_by = auth.uid())
+    )
+  );
 
 create policy "Admins and moderators can delete channels"
   on public.channels for delete to authenticated
-  using (public.can_manage_channels(group_id));
+  using (
+    public.can_manage_channels(group_id)
+    and (
+      channel_kind = 'text'
+      or (channel_kind = 'persistent_voice' and public.is_group_admin(group_id))
+      or (channel_kind = 'ephemeral_voice' and public.is_group_admin(group_id))
+    )
+  );
 
 -- ────────────────────────────────────────────────────────────
 -- 8. POLICIES — messages

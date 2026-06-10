@@ -60,18 +60,39 @@ describe('voice rooms migration security posture', () => {
     expect(authenticatedWritesMigration).toContain('create policy "Members can update their active voice participation"')
   })
 
-  it('adds idempotent channel columns for ephemeral voice rooms without channel write policies', () => {
+  it('persists channel kind so text, persistent voice, and ephemeral voice are distinguishable', () => {
     expect(ephemeralChannelsMigration).toContain('alter table public.channels')
+    expect(ephemeralChannelsMigration).toContain("add column if not exists channel_kind text not null default 'text'")
+    expect(ephemeralChannelsMigration).toContain("channel_kind in ('text', 'persistent_voice', 'ephemeral_voice')")
     expect(ephemeralChannelsMigration).toContain('add column if not exists is_ephemeral boolean not null default false')
     expect(ephemeralChannelsMigration).toContain(
       'add column if not exists created_by uuid references public.profiles(id) on delete set null',
     )
+    expect(ephemeralChannelsMigration).toContain("set channel_kind = 'ephemeral_voice'")
+    expect(ephemeralChannelsMigration).toContain("where is_ephemeral = true")
     expect(ephemeralChannelsMigration).toContain('create index if not exists channels_ephemeral_voice_idx')
     expect(ephemeralChannelsMigration).toContain('on public.channels(group_id)')
-    expect(ephemeralChannelsMigration).toContain('where is_ephemeral = true')
-    expect(ephemeralChannelsMigration).not.toContain("where kind = 'voice'")
-    expect(channelsTableDefinition).not.toMatch(/\n\s+kind\s+/)
-    expect(ephemeralChannelsMigration).not.toMatch(/create\s+policy/i)
-    expect(ephemeralChannelsMigration).not.toMatch(/for\s+(insert|update|delete)\s+to\s+authenticated/i)
+    expect(ephemeralChannelsMigration).toContain("where channel_kind = 'ephemeral_voice'")
+    expect(channelsTableDefinition).toMatch(/\n\s+channel_kind\s+text\s+not\s+null\s+default\s+'text'/)
+  })
+
+  it('keeps moderator direct channel writes text-only while persistent voice requires admin', () => {
+    const createPolicy = policyBlock(schema, 'Admins and moderators can create channels')
+    const updatePolicy = policyBlock(schema, 'Admins and moderators can update channels')
+    const deletePolicy = policyBlock(schema, 'Admins and moderators can delete channels')
+
+    expect(createPolicy).toContain("channel_kind = 'text'")
+    expect(createPolicy).toContain("channel_kind = 'persistent_voice'")
+    expect(createPolicy).toContain('public.is_group_admin(group_id)')
+    expect(createPolicy).toContain("channel_kind = 'ephemeral_voice'")
+    expect(createPolicy).toContain('created_by = auth.uid()')
+    expect(createPolicy).not.toMatch(/with check \(public\.can_manage_channels\(group_id\)\);/)
+    expect(updatePolicy).toContain('with check')
+    expect(updatePolicy).toContain("channel_kind = 'text'")
+    expect(updatePolicy).toContain("channel_kind = 'persistent_voice'")
+    expect(updatePolicy).toContain('public.is_group_admin(group_id)')
+    expect(deletePolicy).toContain("channel_kind = 'text'")
+    expect(deletePolicy).toContain("channel_kind = 'persistent_voice'")
+    expect(deletePolicy).toContain('public.is_group_admin(group_id)')
   })
 })

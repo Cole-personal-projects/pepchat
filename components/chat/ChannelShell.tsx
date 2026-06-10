@@ -20,12 +20,14 @@ import { createClient } from '@/lib/supabase/client'
 import { PERMISSIONS } from '@/lib/permissions'
 import type { MessageWithProfile, Profile } from '@/lib/types'
 import type { Role } from '@/lib/permissions'
+import type { ChannelKind } from '@/lib/channels/createChannelInternal'
 
 interface ChannelShellProps {
   channelId: string
   groupId?: string
   channelName: string
   channelTopic?: string | null
+  channelKind?: ChannelKind
   sourceNoobAccess?: boolean
   initialMessages: MessageWithProfile[]
   profile: Profile
@@ -44,6 +46,7 @@ export default function ChannelShell({
   groupId,
   channelName,
   channelTopic,
+  channelKind = 'text',
   sourceNoobAccess = false,
   initialMessages,
   profile,
@@ -219,14 +222,16 @@ export default function ChannelShell({
           pinnedPanelOpen={pinnedPanelOpen && !threadPanelOpen}
           onTogglePinnedPanel={handleTogglePinnedPanel}
         />
-        <VoiceRoomPanel
-          channelId={channelId}
-          channelName={channelName}
-          userRole={userRole}
-          sourceNoobAccess={sourceNoobAccess}
-          profileId={profile.id}
-          userId={userId ?? profile.id}
-        />
+        {channelKind !== 'text' ? (
+          <VoiceRoomPanel
+            channelId={channelId}
+            channelName={channelName}
+            userRole={userRole}
+            sourceNoobAccess={sourceNoobAccess}
+            profileId={profile.id}
+            userId={userId ?? profile.id}
+          />
+        ) : null}
         <MessageList
           messages={messages}
           hasMore={hasMore}

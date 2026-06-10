@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { ChannelKind } from '@/lib/channels/createChannelInternal'
 import { deriveProviderRoomName } from '@/lib/voice/providerRoomName'
 
 export type VoiceChannel = {
@@ -7,6 +8,7 @@ export type VoiceChannel = {
   name: string
   noobAccess: boolean
   isEphemeral: boolean
+  channelKind: ChannelKind
 }
 
 export type VoiceRoom = {
@@ -18,6 +20,7 @@ export type VoiceRoom = {
   channelName?: string
   noobAccess?: boolean
   isEphemeral?: boolean
+  channelKind?: ChannelKind
 }
 
 type ChannelRow = {
@@ -26,6 +29,7 @@ type ChannelRow = {
   name: string
   noob_access?: boolean | null
   is_ephemeral?: boolean | null
+  channel_kind?: ChannelKind | null
 }
 
 type VoiceRoomRow = {
@@ -38,6 +42,7 @@ type VoiceRoomRow = {
     name?: string | null
     noob_access?: boolean | null
     is_ephemeral?: boolean | null
+    channel_kind?: ChannelKind | null
   } | null
 }
 
@@ -50,6 +55,7 @@ function mapChannel(row: ChannelRow): VoiceChannel {
     name: row.name,
     noobAccess: Boolean(row.noob_access),
     isEphemeral: Boolean(row.is_ephemeral),
+    channelKind: row.channel_kind ?? 'text',
   }
 }
 
@@ -63,6 +69,7 @@ function mapRoom(row: VoiceRoomRow): VoiceRoom {
     channelName: row.channels?.name ?? undefined,
     noobAccess: row.channels?.noob_access ?? undefined,
     isEphemeral: row.channels?.is_ephemeral ?? undefined,
+    channelKind: row.channels?.channel_kind ?? undefined,
   }
 }
 
@@ -75,8 +82,9 @@ export async function resolveVoiceChannel(supabase: SupabaseClient, channelId: s
 
   const { data, error } = await supabase
     .from('channels')
-    .select('id, group_id, name, noob_access, is_ephemeral')
+    .select('id, group_id, name, noob_access, is_ephemeral, channel_kind')
     .eq('id', channelId)
+    .in('channel_kind', ['persistent_voice', 'ephemeral_voice'])
     .single()
 
   if (error || !data) return null
@@ -88,7 +96,7 @@ export async function resolveVoiceRoom(supabase: SupabaseClient, roomId: string)
 
   const { data, error } = await supabase
     .from('voice_rooms')
-    .select('id, channel_id, group_id, status, provider_room_name, channels(name, noob_access, is_ephemeral)')
+    .select('id, channel_id, group_id, status, provider_room_name, channels(name, noob_access, is_ephemeral, channel_kind)')
     .eq('id', roomId)
     .single()
 

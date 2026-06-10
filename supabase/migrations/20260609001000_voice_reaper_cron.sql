@@ -12,7 +12,8 @@ begin
   with empty_temp as (
     select c.id
     from public.channels c
-    where c.is_ephemeral = true
+    where c.channel_kind = 'ephemeral_voice'
+      and c.is_ephemeral = true
       and c.created_at < now() - interval '45 seconds'
       and not exists (
         select 1

@@ -28,14 +28,14 @@ describe('voice reaper cron migration', () => {
     expect(migration).toContain('select public.reap_empty_ephemeral_voice_channels();')
   })
 
-  it('reaps only empty ephemeral channels older than the stale grace window', () => {
+  it('reaps only empty ephemeral voice channels older than the stale grace window', () => {
     const sql = normalized(migration)
 
     expect(sql).toContain('delete from public.channels c')
+    expect(sql).toContain("c.channel_kind = 'ephemeral_voice'")
     expect(sql).toContain('c.is_ephemeral = true')
     expect(sql).toContain("c.created_at < now() - interval '45 seconds'")
     expect(sql).toContain('return v_deleted')
-    expect(sql).not.toContain('c.kind')
   })
 
   it('spares occupied channels by treating recently seen active participants as non-empty', () => {

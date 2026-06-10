@@ -91,6 +91,7 @@ export default async function ChannelPage({
         groupId={channel.group_id}
         channelName={channel.name}
         channelTopic={channel.description}
+        channelKind={channel.channel_kind ?? 'text'}
         sourceNoobAccess={Boolean(channel.noob_access)}
         initialMessages={initialMessages}
         profile={profile as Profile}

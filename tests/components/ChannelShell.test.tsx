@@ -3,7 +3,7 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import ChannelShell from '@/components/chat/ChannelShell'
 import type { MessageWithProfile, Profile } from '@/lib/types'
 
-const { mockChatHeader, mockMessageList, mockMessageInput, mockPinnedMessagesPanel, mockThreadPanel } = vi.hoisted(() => ({
+const { mockChatHeader, mockMessageList, mockMessageInput, mockPinnedMessagesPanel, mockThreadPanel, mockVoiceRoomPanel } = vi.hoisted(() => ({
   mockChatHeader: vi.fn(({ pinnedPanelOpen, onTogglePinnedPanel }: any) => (
     <button type="button" data-testid="toggle-pins" aria-pressed={pinnedPanelOpen} onClick={onTogglePinnedPanel}>
       Toggle pins
@@ -18,6 +18,7 @@ const { mockChatHeader, mockMessageList, mockMessageInput, mockPinnedMessagesPan
   mockMessageInput: vi.fn((_props: any) => <div data-testid="message-input" />),
   mockPinnedMessagesPanel: vi.fn(({ open }: any) => <div data-testid="pinned-panel">{String(open)}</div>),
   mockThreadPanel: vi.fn(({ open }: any) => <div data-testid="thread-panel">{String(open)}</div>),
+  mockVoiceRoomPanel: vi.fn((_props: any) => <div data-testid="voice-room-panel" />),
 }))
 
 vi.mock('@/components/chat/ChatHeader', () => ({ default: (props: any) => mockChatHeader(props) }))
@@ -27,6 +28,7 @@ vi.mock('@/components/chat/TypingIndicator', () => ({ default: () => <div data-t
 vi.mock('@/components/chat/PresencePanel', () => ({ default: () => <div data-testid="presence-panel" /> }))
 vi.mock('@/components/chat/PinnedMessagesPanel', () => ({ default: (props: any) => mockPinnedMessagesPanel(props) }))
 vi.mock('@/components/chat/ThreadPanel', () => ({ default: (props: any) => mockThreadPanel(props) }))
+vi.mock('@/components/voice/VoiceRoomPanel', () => ({ default: (props: any) => mockVoiceRoomPanel(props) }))
 
 vi.mock('@/lib/hooks/useMessages', () => ({
   useMessages: (_channelId: string, initialMessages: MessageWithProfile[]) => ({
@@ -243,5 +245,33 @@ describe('ChannelShell — message links', () => {
     expect(mockMessageInput).toHaveBeenLastCalledWith(
       expect.objectContaining({ draftStorageKey: 'sidebar:draft:channel:ch-1' })
     )
+  })
+
+  it('renders voice controls only for persisted voice channel kinds', () => {
+    const { rerender } = render(
+      <ChannelShell
+        channelId="ch-1"
+        channelName="general"
+        channelKind="text"
+        initialMessages={[MESSAGE]}
+        profile={PROFILE}
+        userRole="user"
+      />
+    )
+
+    expect(mockVoiceRoomPanel).not.toHaveBeenCalled()
+
+    rerender(
+      <ChannelShell
+        channelId="ch-1"
+        channelName="general"
+        channelKind="persistent_voice"
+        initialMessages={[MESSAGE]}
+        profile={PROFILE}
+        userRole="user"
+      />
+    )
+
+    expect(mockVoiceRoomPanel).toHaveBeenCalledWith(expect.objectContaining({ channelId: 'ch-1' }))
   })
 })

@@ -16,7 +16,7 @@ export const createChannel = withAuth(
     const name = formData.get('name') as string
     const groupId = formData.get('group_id') as string
     const requestedKind = formData.get('kind')
-    const kind: ChannelKind = requestedKind === 'voice' ? 'voice' : 'text'
+    const kind: ChannelKind = requestedKind === 'voice' ? 'persistent_voice' : 'text'
 
     if (!normalizeChannelName(name ?? '')) return { error: 'Channel name is required.' }
     if (!groupId) return { error: 'Missing group.' }
@@ -24,14 +24,14 @@ export const createChannel = withAuth(
     const gateResult = await gateGroupRole(supabase, {
       groupId,
       userId: user.id,
-      predicate: kind === 'voice'
+      predicate: kind === 'persistent_voice'
         ? PERMISSIONS.canCreatePersistentVoiceChannel
         : PERMISSIONS.canManageChannels,
       deniedMessage: CHANNEL_MANAGE_DENIED,
     })
     if ('error' in gateResult) return gateResult
 
-    const writeClient = kind === 'voice' ? createAdminClient() : supabase
+    const writeClient = kind === 'persistent_voice' ? createAdminClient() : supabase
     const result = await createChannelInternal(writeClient, {
       groupId,
       name,
