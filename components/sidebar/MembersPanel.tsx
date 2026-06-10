@@ -1,15 +1,17 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useMembersList } from '@/lib/hooks/useMembersList'
+import { useGroupRoles } from '@/lib/hooks/useGroupRoles'
 import { assignRole, kickMember } from '@/app/(app)/members/actions'
+import { assignMemberRole, removeMemberRole } from '@/app/(app)/roles/actions'
 import Avatar from '@/components/ui/Avatar'
 import RolePill from '@/components/ui/RolePill'
 import { PERMISSIONS, type Role } from '@/lib/permissions'
-import type { Profile } from '@/lib/types'
+import type { GroupRole, Profile } from '@/lib/types'
 
 const ProfileCard = dynamic(() => import('@/components/profile/ProfileCard'), { ssr: false })
 
@@ -29,14 +31,42 @@ interface MembersPanelProps {
  */
 export default function MembersPanel({ groupId, currentUserId, currentUserRole }: MembersPanelProps) {
   const { members, loading } = useMembersList(groupId)
+  const { roles, roleIdsByUserId } = useGroupRoles(groupId)
   const [expanded, setExpanded] = useState(true)
   const [memberSearch, setMemberSearch] = useState('')
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState('')
   const [profileCard, setProfileCard] = useState<{ userId: string; anchor: HTMLElement } | null>(null)
+  const [roleMenuUserId, setRoleMenuUserId] = useState<string | null>(null)
 
   const canManage = PERMISSIONS.canAssignRoles(currentUserRole)
   const canKick   = PERMISSIONS.canKickMembers(currentUserRole)
+
+  const customRoles = useMemo(() => roles.filter(role => !role.is_default), [roles])
+
+  /** Highest (by position) role with a color/hoist for display. */
+  const roleDisplay = useMemo(() => {
+    const byId = new Map(roles.map(role => [role.id, role]))
+    return (userId: string): { color: string | null; hoistedRole: GroupRole | null; assigned: GroupRole[] } => {
+      const ids = roleIdsByUserId.get(userId)
+      const assigned = ids
+        ? [...ids].map(id => byId.get(id)).filter((r): r is GroupRole => Boolean(r)).sort((a, b) => b.position - a.position)
+        : []
+      const colored = assigned.find(role => role.color)
+      const hoisted = assigned.find(role => role.hoist)
+      return { color: colored?.color ?? null, hoistedRole: hoisted ?? null, assigned }
+    }
+  }, [roles, roleIdsByUserId])
+
+  function handleToggleMemberRole(userId: string, role: GroupRole, hasRole: boolean) {
+    setError('')
+    startTransition(async () => {
+      const result = hasRole
+        ? await removeMemberRole(groupId, userId, role.id)
+        : await assignMemberRole(groupId, userId, role.id)
+      if (result && 'error' in result) setError(result.error)
+    })
+  }
   const router = useRouter()
   const normalizedMemberSearch = memberSearch.trim().toLowerCase()
   const filteredMembers = normalizedMemberSearch
@@ -144,7 +174,40 @@ export default function MembersPanel({ groupId, currentUserId, currentUserRole }
           </p>
         ) : (
         <ul className="pb-2 space-y-0.5">
-          {filteredMembers.map((member) => {
+          {(() => {
+            // Discord-style hoisting: members appear under their highest
+            // hoisted role; everyone else lands in the trailing bucket.
+            const hoistedRoles = customRoles.filter(role => role.hoist)
+            const grouped: Array<{ key: string; header: string | null; color: string | null; members: typeof filteredMembers }> = []
+            const placed = new Set<string>()
+
+            for (const role of hoistedRoles) {
+              const bucket = filteredMembers.filter(member =>
+                !placed.has(member.user_id) && roleIdsByUserId.get(member.user_id)?.has(role.id),
+              )
+              if (bucket.length === 0) continue
+              bucket.forEach(member => placed.add(member.user_id))
+              grouped.push({ key: role.id, header: role.name, color: role.color, members: bucket })
+            }
+
+            const rest = filteredMembers.filter(member => !placed.has(member.user_id))
+            if (rest.length > 0 || grouped.length === 0) {
+              grouped.push({ key: 'rest', header: grouped.length > 0 ? 'Members' : null, color: null, members: rest })
+            }
+
+            return grouped.map(section => (
+              <li key={section.key}>
+                {section.header && (
+                  <p
+                    data-testid={`member-group-${section.key}`}
+                    className="px-4 pb-0.5 pt-2 text-[10px] font-bold uppercase tracking-wide"
+                    style={{ color: section.color ?? 'var(--text-faint)' }}
+                  >
+                    {section.header} — {section.members.length}
+                  </p>
+                )}
+                <ul className="space-y-0.5">
+          {section.members.map((member) => {
             const isSelf = member.user_id === currentUserId
             const isTargetAdmin = member.role === 'admin'
             const canKickTarget = canKick && !isSelf && (
@@ -152,9 +215,11 @@ export default function MembersPanel({ groupId, currentUserId, currentUserRole }
               (currentUserRole === 'moderator' && (member.role === 'user' || member.role === 'noob'))
             )
             const memberName = (member.profiles as any)?.display_name ?? member.profiles?.username ?? member.user_id
+            const display = roleDisplay(member.user_id)
+            const memberRoleIds = roleIdsByUserId.get(member.user_id) ?? new Set<string>()
 
             return (
-              <li key={member.user_id} className="group/member flex items-center gap-2 px-3 py-1 hover:bg-white/5 rounded mx-1">
+              <li key={member.user_id} className="group/member relative flex items-center gap-2 px-3 py-1 hover:bg-white/5 rounded mx-1">
                 <button
                   className="rounded-full flex-shrink-0 focus:outline-none"
                   onClick={e => setProfileCard({ userId: member.user_id, anchor: e.currentTarget })}
@@ -170,11 +235,63 @@ export default function MembersPanel({ groupId, currentUserId, currentUserRole }
                   />
                 </button>
                 <div className="flex-1 min-w-0 cursor-pointer" onClick={e => setProfileCard({ userId: member.user_id, anchor: e.currentTarget })}>
-                  <p className="text-sm truncate">{memberName}</p>
+                  <p
+                    className="text-sm truncate"
+                    data-testid={`member-name-${member.user_id}`}
+                    style={display.color ? { color: display.color } : undefined}
+                  >
+                    {memberName}
+                  </p>
                   {(member.profiles as any)?.display_name && (
                     <p className="text-xs text-[var(--text-muted)] truncate">@{member.profiles?.username}</p>
                   )}
                 </div>
+
+                {/* Custom role assignment */}
+                {canManage && customRoles.length > 0 && (
+                  <div className="relative flex-shrink-0">
+                    <button
+                      type="button"
+                      data-testid={`member-roles-btn-${member.user_id}`}
+                      aria-label={`Manage ${memberName}'s roles`}
+                      onClick={() => setRoleMenuUserId(current => current === member.user_id ? null : member.user_id)}
+                      className="flex md:hidden md:group-hover/member:flex items-center justify-center w-7 h-7 md:w-5 md:h-5 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/10 transition-colors"
+                      title="Manage roles"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0 .656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </button>
+                    {roleMenuUserId === member.user_id && (
+                      <div
+                        data-testid={`member-roles-menu-${member.user_id}`}
+                        className="absolute right-0 top-6 z-30 w-44 rounded-lg border border-white/10 bg-[var(--bg-primary)] p-1 shadow-xl"
+                      >
+                        {customRoles.map(role => {
+                          const hasRole = memberRoleIds.has(role.id)
+                          return (
+                            <button
+                              key={role.id}
+                              type="button"
+                              data-testid={`toggle-role-${role.id}-${member.user_id}`}
+                              disabled={isPending}
+                              onClick={() => handleToggleMemberRole(member.user_id, role, hasRole)}
+                              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-[var(--text-primary)] hover:bg-white/10 disabled:opacity-50"
+                            >
+                              <span
+                                aria-hidden="true"
+                                className="h-2 w-2 flex-shrink-0 rounded-full"
+                                style={{ background: role.color ?? '#99aab5' }}
+                              />
+                              <span className="min-w-0 flex-1 truncate">{role.name}</span>
+                              {hasRole && <span aria-hidden="true">✓</span>}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Role badge / dropdown */}
                 {canManage && !isSelf && !isTargetAdmin ? (
@@ -223,6 +340,10 @@ export default function MembersPanel({ groupId, currentUserId, currentUserRole }
               </li>
             )
           })}
+                </ul>
+              </li>
+            ))
+          })()}
         </ul>
         )}
         </>

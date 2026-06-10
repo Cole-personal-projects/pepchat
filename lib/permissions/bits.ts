@@ -135,6 +135,41 @@ export function hasBits(permissions: bigint, bit: bigint): boolean {
   return (permissions & bit) === bit
 }
 
+export interface PermissionMetadata {
+  bit: bigint
+  name: PermissionBitName
+  label: string
+  description: string
+  category: 'General' | 'Membership' | 'Text' | 'Voice' | 'Events'
+}
+
+/** Display metadata for the role editor permission grid. */
+export const PERMISSION_METADATA: PermissionMetadata[] = [
+  { bit: PermissionBits.ADMINISTRATOR, name: 'ADMINISTRATOR', label: 'Administrator', description: 'Every permission and bypasses channel overwrites. Dangerous.', category: 'General' },
+  { bit: PermissionBits.MANAGE_GROUP, name: 'MANAGE_GROUP', label: 'Manage Server', description: 'Change the server name, icon, and settings.', category: 'General' },
+  { bit: PermissionBits.MANAGE_ROLES, name: 'MANAGE_ROLES', label: 'Manage Roles', description: 'Create, edit, and assign roles below their own.', category: 'General' },
+  { bit: PermissionBits.MANAGE_CHANNELS, name: 'MANAGE_CHANNELS', label: 'Manage Channels', description: 'Create, edit, reorder, and delete channels and categories.', category: 'General' },
+  { bit: PermissionBits.MANAGE_ONBOARDING, name: 'MANAGE_ONBOARDING', label: 'Manage Onboarding', description: 'Configure rules screening and onboarding questions.', category: 'General' },
+  { bit: PermissionBits.KICK_MEMBERS, name: 'KICK_MEMBERS', label: 'Kick Members', description: 'Remove members from the server.', category: 'Membership' },
+  { bit: PermissionBits.CREATE_INVITES, name: 'CREATE_INVITES', label: 'Create Invites', description: 'Generate and revoke invite links.', category: 'Membership' },
+  { bit: PermissionBits.VIEW_CHANNELS, name: 'VIEW_CHANNELS', label: 'View Channels', description: 'See channels (unless denied per channel).', category: 'Text' },
+  { bit: PermissionBits.SEND_MESSAGES, name: 'SEND_MESSAGES', label: 'Send Messages', description: 'Post messages in text channels.', category: 'Text' },
+  { bit: PermissionBits.ATTACH_FILES, name: 'ATTACH_FILES', label: 'Attach Files', description: 'Upload images, GIFs, and files.', category: 'Text' },
+  { bit: PermissionBits.ADD_REACTIONS, name: 'ADD_REACTIONS', label: 'Add Reactions', description: 'React to messages with emoji.', category: 'Text' },
+  { bit: PermissionBits.MENTION_EVERYONE, name: 'MENTION_EVERYONE', label: 'Mention Everyone', description: 'Use @everyone and role mentions.', category: 'Text' },
+  { bit: PermissionBits.MANAGE_MESSAGES, name: 'MANAGE_MESSAGES', label: 'Manage Messages', description: 'Delete or moderate other members’ messages.', category: 'Text' },
+  { bit: PermissionBits.PIN_MESSAGES, name: 'PIN_MESSAGES', label: 'Pin Messages', description: 'Pin and unpin messages.', category: 'Text' },
+  { bit: PermissionBits.MANAGE_THREADS, name: 'MANAGE_THREADS', label: 'Manage Threads', description: 'Promote, archive, and moderate threads.', category: 'Text' },
+  { bit: PermissionBits.CONNECT, name: 'CONNECT', label: 'Connect', description: 'Join voice channels.', category: 'Voice' },
+  { bit: PermissionBits.SPEAK, name: 'SPEAK', label: 'Speak', description: 'Transmit audio in voice channels.', category: 'Voice' },
+  { bit: PermissionBits.CREATE_VOICE_ROOMS, name: 'CREATE_VOICE_ROOMS', label: 'Create Voice Rooms', description: 'Spawn temporary join-to-create rooms.', category: 'Voice' },
+  { bit: PermissionBits.MUTE_MEMBERS, name: 'MUTE_MEMBERS', label: 'Mute Members', description: 'Server-mute others in voice.', category: 'Voice' },
+  { bit: PermissionBits.DEAFEN_MEMBERS, name: 'DEAFEN_MEMBERS', label: 'Deafen Members', description: 'Server-deafen others in voice.', category: 'Voice' },
+  { bit: PermissionBits.MOVE_MEMBERS, name: 'MOVE_MEMBERS', label: 'Move Members', description: 'Move members between voice channels.', category: 'Voice' },
+  { bit: PermissionBits.CREATE_EVENTS, name: 'CREATE_EVENTS', label: 'Create Events', description: 'Schedule server events.', category: 'Events' },
+  { bit: PermissionBits.MANAGE_EVENTS, name: 'MANAGE_EVENTS', label: 'Manage Events', description: 'Edit and cancel any event.', category: 'Events' },
+]
+
 /** Group-scoped check mirroring has_permission(group, null, bit). */
 export function hasGroupPermission(context: GroupPermissionContext, bit: bigint): boolean {
   const permissions = resolveGroupPermissions(context)
