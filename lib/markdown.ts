@@ -8,6 +8,33 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;')
 }
 
+// Discord-style ||spoiler|| syntax.
+marked.use({
+  extensions: [
+    {
+      name: 'spoiler',
+      level: 'inline',
+      start(src: string) {
+        const index = src.indexOf('||')
+        return index === -1 ? undefined : index
+      },
+      tokenizer(src: string) {
+        const match = /^\|\|([\s\S]+?)\|\|/.exec(src)
+        if (!match) return undefined
+        return {
+          type: 'spoiler',
+          raw: match[0],
+          text: match[1],
+          tokens: this.lexer.inlineTokens(match[1]),
+        }
+      },
+      renderer(token) {
+        return `<span class="spoiler" tabindex="0">${this.parser.parseInline(token.tokens ?? [])}</span>`
+      },
+    },
+  ],
+})
+
 marked.use({
   gfm: true,
   breaks: true,
@@ -44,8 +71,8 @@ marked.use({
 })
 
 const PURIFY_CONFIG = {
-  ALLOWED_TAGS: ['strong', 'em', 'code', 'pre', 'a', 'del', 'blockquote', 'br', 'span', 'div', 'p'],
-  ALLOWED_ATTR: ['href', 'target', 'rel', 'class'],
+  ALLOWED_TAGS: ['strong', 'em', 'code', 'pre', 'a', 'del', 'blockquote', 'br', 'span', 'div', 'p', 'ul', 'ol', 'li'],
+  ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'tabindex'],
   FORBID_TAGS: ['img', 'script', 'style', 'iframe', 'form', 'input'],
   FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover'],
 }

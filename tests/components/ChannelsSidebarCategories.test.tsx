@@ -53,6 +53,10 @@ vi.mock('@/components/status/UserStatusMenu', () => ({
   default: () => <span>online</span>,
 }))
 
+vi.mock('@/components/events/EventsPanel', () => ({
+  default: () => null,
+}))
+
 const GROUP: Group = {
   id: 'grp-1', name: 'Design', description: null, icon_url: null,
   owner_id: 'u1', invite_code: 'abc', created_at: '2024-01-01T00:00:00Z',
