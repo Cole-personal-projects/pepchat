@@ -7,6 +7,10 @@ const authenticatedWritesMigration = readFileSync(
   join(process.cwd(), 'supabase/migrations/20260529041000_voice_room_authenticated_writes.sql'),
   'utf8',
 )
+const ephemeralChannelsMigration = readFileSync(
+  join(process.cwd(), 'supabase/migrations/20260609000000_voice_ephemeral_channels.sql'),
+  'utf8',
+)
 
 describe('voice rooms migration security posture', () => {
   it('creates the voice room tables with one-open-room and one-active-participant constraints', () => {
@@ -45,5 +49,18 @@ describe('voice rooms migration security posture', () => {
     expect(authenticatedWritesMigration).toContain('user_id = auth.uid()')
     expect(authenticatedWritesMigration).toContain("vr.status = 'open'")
     expect(authenticatedWritesMigration).toContain('create policy "Members can update their active voice participation"')
+  })
+
+  it('adds idempotent channel columns for ephemeral voice rooms without channel write policies', () => {
+    expect(ephemeralChannelsMigration).toContain('alter table public.channels')
+    expect(ephemeralChannelsMigration).toContain('add column if not exists is_ephemeral boolean not null default false')
+    expect(ephemeralChannelsMigration).toContain(
+      'add column if not exists created_by uuid references public.profiles(id) on delete set null',
+    )
+    expect(ephemeralChannelsMigration).toContain('create index if not exists channels_ephemeral_voice_idx')
+    expect(ephemeralChannelsMigration).toContain('on public.channels(group_id)')
+    expect(ephemeralChannelsMigration).toContain("where kind = 'voice' and is_ephemeral = true")
+    expect(ephemeralChannelsMigration).not.toMatch(/create\s+policy/i)
+    expect(ephemeralChannelsMigration).not.toMatch(/for\s+(insert|update|delete)\s+to\s+authenticated/i)
   })
 })
