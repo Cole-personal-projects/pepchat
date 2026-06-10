@@ -86,6 +86,25 @@ export default function CreateChannelModal({
           />
         </div>
 
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor="ch-kind"
+            className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]"
+          >
+            Channel Type
+          </label>
+          <select
+            id="ch-kind"
+            name="kind"
+            defaultValue="text"
+            className="rounded border border-black/20 bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+          >
+            <option value="text"># Text — messages, threads, and media</option>
+            <option value="voice">🔊 Voice — talk together</option>
+            <option value="forum">💬 Forum — organized posts with tags</option>
+          </select>
+        </div>
+
         {categories.length > 0 && (
           <div className="flex flex-col gap-1.5">
             <label

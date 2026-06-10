@@ -27,6 +27,8 @@ export const createChannel = withAuth(
     if ('error' in gateResult) return gateResult
 
     const categoryId = (formData.get('category_id') as string | null) || null
+    const rawKind = (formData.get('kind') as string | null) || 'text'
+    const kind = (['text', 'voice', 'forum'].includes(rawKind) ? rawKind : 'text') as 'text' | 'voice' | 'forum'
 
     const result = await createChannelInternal(supabase, {
       groupId,
@@ -34,6 +36,7 @@ export const createChannel = withAuth(
       description: formData.get('description') as string | null,
       noobAccess: formData.get('noob_access') === 'on',
       categoryId,
+      kind,
     })
 
     if ('error' in result) return result
