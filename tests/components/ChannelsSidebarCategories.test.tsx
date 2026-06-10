@@ -32,6 +32,22 @@ vi.mock('@/app/(app)/categories/actions', () => ({
   deleteCategory: vi.fn(),
   moveCategory: vi.fn(),
 }))
+vi.mock('@/app/(app)/voice/actions', () => ({
+  getCurrentVoiceRoom: vi.fn().mockResolvedValue({ ok: true, room: null }),
+  joinVoiceChannel: vi.fn(),
+  leaveVoiceRoom: vi.fn(),
+  createTempVoiceRoom: vi.fn(),
+}))
+vi.mock('@/components/voice/useVoiceRoomConnection', () => ({
+  useVoiceRoomConnection: () => ({
+    status: 'idle',
+    error: null,
+    muted: false,
+    connect: vi.fn(),
+    leave: vi.fn(),
+    toggleMute: vi.fn(),
+  }),
+}))
 
 const GROUP: Group = {
   id: 'grp-1', name: 'Design', description: null, icon_url: null,
@@ -80,7 +96,8 @@ describe('ChannelsSidebar category sections', () => {
     expect(screen.getByText('Text Channels')).toBeInTheDocument()
     expect(screen.getByText('Voice Rooms')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /design-talk/i })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /lounge/i })).toBeInTheDocument()
+    // Voice channels render in the dedicated voice section, not as text rows.
+    expect(screen.getByRole('button', { name: /join lounge voice/i })).toBeInTheDocument()
   })
 
   it('renders uncategorized channels outside category sections', () => {
@@ -88,9 +105,9 @@ describe('ChannelsSidebar category sections', () => {
     expect(screen.getByRole('link', { name: '#general, current channel' })).toBeInTheDocument()
   })
 
-  it('renders a voice icon for voice channels', () => {
+  it('renders voice channels in the voice section with a join control', () => {
     render(<ChannelsSidebar {...BASE_PROPS} />)
-    expect(screen.getByTestId('channel-kind-voice')).toBeInTheDocument()
+    expect(screen.getByTestId('voice-channel-ch-voice-1')).toBeInTheDocument()
   })
 
   it('collapses a category on toggle, hiding read channels', () => {

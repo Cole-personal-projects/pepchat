@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getCurrentVoiceRoom, joinVoiceChannel, leaveVoiceRoom } from '@/app/(app)/voice/actions'
+import { createTempVoiceRoom, getCurrentVoiceRoom, joinVoiceChannel, leaveVoiceRoom } from '@/app/(app)/voice/actions'
 import { useVoiceRoomConnection } from '@/components/voice/useVoiceRoomConnection'
 import type { Channel } from '@/lib/types'
 
@@ -15,6 +15,9 @@ type VoiceRoomSummary = {
 
 interface VoiceChannelsSectionProps {
   channels: Channel[]
+  /** Enables the join-to-create room button. */
+  groupId?: string
+  canCreateRoom?: boolean
   onMobileClose?: () => void
 }
 
@@ -27,18 +30,20 @@ function roomStatusLabel(room: VoiceRoomSummary | null | undefined, connected: b
   return 'Click to join'
 }
 
-export default function VoiceChannelsSection({ channels, onMobileClose }: VoiceChannelsSectionProps) {
+export default function VoiceChannelsSection({ channels, groupId, canCreateRoom = false, onMobileClose }: VoiceChannelsSectionProps) {
   const connection = useVoiceRoomConnection()
   const [roomsByChannelId, setRoomsByChannelId] = useState<Record<string, VoiceRoomSummary | null>>({})
   const [loadingChannelIds, setLoadingChannelIds] = useState<Set<string>>(new Set())
   const [joiningChannelId, setJoiningChannelId] = useState<string | null>(null)
   const [leaving, setLeaving] = useState(false)
+  const [creatingRoom, setCreatingRoom] = useState(false)
+  const [createRoomError, setCreateRoomError] = useState<string | null>(null)
   const [connectedChannelId, setConnectedChannelId] = useState<string | null>(null)
   const [connectedRoomId, setConnectedRoomId] = useState<string | null>(null)
   const [errorByChannelId, setErrorByChannelId] = useState<Record<string, string | null>>({})
 
   const channelIdsKey = useMemo(() => channels.map(channel => channel.id).join('|'), [channels])
-  const busy = Boolean(joiningChannelId) || leaving || connection.status === 'joining' || connection.status === 'leaving'
+  const busy = Boolean(joiningChannelId) || leaving || creatingRoom || connection.status === 'joining' || connection.status === 'leaving'
 
   useEffect(() => {
     if (channels.length === 0) return
@@ -76,7 +81,10 @@ export default function VoiceChannelsSection({ channels, onMobileClose }: VoiceC
     return () => {
       cancelled = true
     }
-  }, [channelIdsKey, channels])
+    // channelIdsKey captures channel membership; depending on the array
+    // identity would refetch every render since callers filter inline.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channelIdsKey])
 
   const handleJoin = useCallback(async (channel: Channel) => {
     setJoiningChannelId(channel.id)
@@ -115,6 +123,27 @@ export default function VoiceChannelsSection({ channels, onMobileClose }: VoiceC
     }
   }, [connection, onMobileClose])
 
+  const handleCreateRoom = useCallback(async () => {
+    if (!groupId) return
+    setCreatingRoom(true)
+    setCreateRoomError(null)
+
+    try {
+      const created = await createTempVoiceRoom(groupId)
+      if (!('ok' in created) || !created.ok) {
+        setCreateRoomError(JOIN_ERROR)
+        return
+      }
+      // The new channel arrives in the sidebar via the channels realtime
+      // subscription; join it immediately so the room never sits empty.
+      await handleJoin({ id: created.channelId, name: 'your room' } as Channel)
+    } catch {
+      setCreateRoomError(UNAVAILABLE_ERROR)
+    } finally {
+      setCreatingRoom(false)
+    }
+  }, [groupId, handleJoin])
+
   const handleLeave = useCallback(async () => {
     if (!connectedRoomId) return
     setLeaving(true)
@@ -134,7 +163,7 @@ export default function VoiceChannelsSection({ channels, onMobileClose }: VoiceC
     }
   }, [connectedChannelId, connectedRoomId, connection])
 
-  if (channels.length === 0) return null
+  if (channels.length === 0 && !canCreateRoom) return null
 
   return (
     <section aria-label="Voice Channels" className="mt-3 border-t border-[var(--border-soft)] pt-3">
@@ -144,6 +173,27 @@ export default function VoiceChannelsSection({ channels, onMobileClose }: VoiceC
         </span>
         <span className="text-[10px] text-[var(--text-faint)]" aria-hidden="true">●</span>
       </div>
+
+      {canCreateRoom && groupId && (
+        <div className="px-1 pb-1">
+          <button
+            type="button"
+            data-testid="create-voice-room-btn"
+            aria-label="Create voice room"
+            onClick={handleCreateRoom}
+            disabled={busy}
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[var(--text-muted)] transition-colors hover:bg-white/5 hover:text-[var(--text-primary)] disabled:cursor-default disabled:opacity-70"
+          >
+            <span aria-hidden="true" className="text-[var(--text-faint)]">➕</span>
+            <span className="min-w-0 flex-1 truncate">{creatingRoom ? 'Creating room…' : 'Create Room'}</span>
+          </button>
+          {createRoomError && (
+            <p role="alert" className="ml-8 mt-1 text-xs text-red-400">
+              {createRoomError}
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="space-y-1 px-1">
         {channels.map(channel => {

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  createTempVoiceRoom,
   getCurrentVoiceRoom,
   heartbeatVoiceRoom,
   joinVoiceChannel,
@@ -11,6 +12,7 @@ import {
 
 const {
   mockCreateClient,
+  mockCreateAdminClient,
   mockResolveVoiceChannel,
   mockResolveVoiceRoom,
   mockCreateOrReuseVoiceRoom,
@@ -22,9 +24,12 @@ const {
   mockTouchVoiceParticipant,
   mockUpsertVoiceParticipant,
   mockMarkVoiceParticipantLeft,
+  mockDeleteEphemeralChannelIfEmpty,
+  mockSweepEmptyEphemeralChannels,
   mockMintLiveKitToken,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
+  mockCreateAdminClient: vi.fn(),
   mockResolveVoiceChannel: vi.fn(),
   mockResolveVoiceRoom: vi.fn(),
   mockCreateOrReuseVoiceRoom: vi.fn(),
@@ -36,10 +41,13 @@ const {
   mockTouchVoiceParticipant: vi.fn(),
   mockUpsertVoiceParticipant: vi.fn(),
   mockMarkVoiceParticipantLeft: vi.fn(),
+  mockDeleteEphemeralChannelIfEmpty: vi.fn(),
+  mockSweepEmptyEphemeralChannels: vi.fn(),
   mockMintLiveKitToken: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: mockCreateClient }))
+vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: mockCreateAdminClient }))
 vi.mock('@/lib/voice/rooms', () => ({
   resolveVoiceChannel: mockResolveVoiceChannel,
   resolveVoiceRoom: mockResolveVoiceRoom,
@@ -52,6 +60,8 @@ vi.mock('@/lib/voice/rooms', () => ({
   touchVoiceParticipant: mockTouchVoiceParticipant,
   upsertVoiceParticipant: mockUpsertVoiceParticipant,
   markVoiceParticipantLeft: mockMarkVoiceParticipantLeft,
+  deleteEphemeralChannelIfEmpty: mockDeleteEphemeralChannelIfEmpty,
+  sweepEmptyEphemeralChannels: mockSweepEmptyEphemeralChannels,
 }))
 vi.mock('@/lib/voice/livekit', () => ({ mintLiveKitToken: mockMintLiveKitToken }))
 
@@ -423,5 +433,157 @@ describe('voice actions', () => {
 
     expect(mockMarkVoiceParticipantLeft).toHaveBeenCalledWith(expect.anything(), { roomId: 'room-1', userId: 'user-1' })
     expect(mockCloseVoiceRoomIfEmpty).toHaveBeenCalledWith(expect.anything(), { roomId: 'room-1' })
+  })
+})
+
+describe('createTempVoiceRoom', () => {
+  const ORIGINAL_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  function makeTempRoomClient(role: 'admin' | 'moderator' | 'user' | 'noob' | null) {
+    const gate: Record<string, ReturnType<typeof vi.fn>> = {}
+    gate.select = vi.fn(() => gate)
+    gate.eq = vi.fn(() => gate)
+    gate.single = vi.fn().mockResolvedValue(role
+      ? { data: { role }, error: null }
+      : { data: null, error: { message: 'missing', code: 'PGRST116' } })
+
+    const profile: Record<string, ReturnType<typeof vi.fn>> = {}
+    profile.select = vi.fn(() => profile)
+    profile.eq = vi.fn(() => profile)
+    profile.single = vi.fn().mockResolvedValue({ data: { username: 'cole', display_name: 'Cole' }, error: null })
+
+    const from = vi.fn((table: string) => {
+      if (table === 'group_members') return gate
+      if (table === 'profiles') return profile
+      throw new Error(`unexpected user-scoped table ${table}`)
+    })
+
+    mockCreateClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null }) },
+      from,
+    })
+
+    const positions: Record<string, ReturnType<typeof vi.fn>> = {}
+    positions.select = vi.fn(() => positions)
+    positions.eq = vi.fn(() => positions)
+    positions.order = vi.fn(() => positions)
+    positions.limit = vi.fn().mockResolvedValue({ data: [{ position: 4 }], error: null })
+
+    const insert: Record<string, ReturnType<typeof vi.fn>> = {}
+    insert.insert = vi.fn(() => insert)
+    insert.select = vi.fn(() => insert)
+    insert.single = vi.fn().mockResolvedValue({ data: { id: 'channel-temp' }, error: null })
+
+    let adminCall = 0
+    const adminFrom = vi.fn((table: string) => {
+      if (table !== 'channels') throw new Error(`unexpected admin table ${table}`)
+      adminCall += 1
+      return adminCall === 1 ? positions : insert
+    })
+
+    mockCreateAdminClient.mockReturnValue({ from: adminFrom })
+
+    return { insert, adminFrom }
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key'
+  })
+
+  afterEach(() => {
+    if (ORIGINAL_SERVICE_ROLE_KEY === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = ORIGINAL_SERVICE_ROLE_KEY
+  })
+
+  it('denies noobs', async () => {
+    makeTempRoomClient('noob')
+
+    await expect(createTempVoiceRoom('group-1')).resolves.toEqual({ error: 'Cannot join this room.' })
+  })
+
+  it('creates an ephemeral voice channel via the admin client with a derived name', async () => {
+    const { insert } = makeTempRoomClient('user')
+
+    await expect(createTempVoiceRoom('group-1')).resolves.toEqual({ ok: true, channelId: 'channel-temp' })
+
+    expect(insert.insert).toHaveBeenCalledWith({
+      group_id: 'group-1',
+      name: "Cole's Room",
+      description: null,
+      noob_access: false,
+      position: 5,
+      kind: 'voice',
+      is_ephemeral: true,
+      created_by: 'user-1',
+    })
+  })
+
+  it('uses the requested name when provided', async () => {
+    const { insert } = makeTempRoomClient('user')
+
+    await expect(createTempVoiceRoom('group-1', '  Game   Night  ')).resolves.toEqual({ ok: true, channelId: 'channel-temp' })
+
+    expect(insert.insert).toHaveBeenCalledWith(expect.objectContaining({ name: 'Game Night' }))
+  })
+})
+
+describe('ephemeral cleanup wiring', () => {
+  const ORIGINAL_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key'
+    mockCreateAdminClient.mockReturnValue({ from: vi.fn() })
+    mockResolveVoiceRoom.mockResolvedValue({
+      id: 'room-1',
+      channelId: 'channel-1',
+      groupId: 'group-1',
+      status: 'open',
+      providerRoomName: 'sidebar:voice:room-1',
+      channelName: 'general',
+      noobAccess: false,
+    })
+    mockMarkVoiceParticipantLeft.mockResolvedValue({ ok: true })
+    mockDeleteEphemeralChannelIfEmpty.mockResolvedValue({ ok: true, deleted: true })
+    mockSweepEmptyEphemeralChannels.mockResolvedValue({ ok: true })
+    mockCleanupStaleVoiceParticipants.mockResolvedValue({ ok: true })
+    mockListAccessibleVoiceChannelsWithOccupancy.mockResolvedValue([])
+
+    const gate: Record<string, ReturnType<typeof vi.fn>> = {}
+    gate.select = vi.fn(() => gate)
+    gate.eq = vi.fn(() => gate)
+    gate.single = vi.fn().mockResolvedValue({ data: { role: 'user' }, error: null })
+    mockCreateClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null }) },
+      from: vi.fn(() => gate),
+    })
+  })
+
+  afterEach(() => {
+    if (ORIGINAL_SERVICE_ROLE_KEY === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = ORIGINAL_SERVICE_ROLE_KEY
+  })
+
+  it('deletes the ephemeral channel after the room closes on leave', async () => {
+    mockCloseVoiceRoomIfEmpty.mockResolvedValue({ ok: true, closed: true })
+
+    await expect(leaveVoiceRoom('room-1')).resolves.toEqual({ ok: true })
+
+    expect(mockDeleteEphemeralChannelIfEmpty).toHaveBeenCalledWith(expect.anything(), { channelId: 'channel-1' })
+  })
+
+  it('does not attempt deletion while the room still has participants', async () => {
+    mockCloseVoiceRoomIfEmpty.mockResolvedValue({ ok: true, closed: false })
+
+    await expect(leaveVoiceRoom('room-1')).resolves.toEqual({ ok: true })
+
+    expect(mockDeleteEphemeralChannelIfEmpty).not.toHaveBeenCalled()
+  })
+
+  it('sweeps empty ephemeral channels when listing voice channels', async () => {
+    await expect(listVoiceChannels('group-1')).resolves.toEqual({ ok: true, channels: [] })
+
+    expect(mockSweepEmptyEphemeralChannels).toHaveBeenCalledWith(expect.anything(), { groupId: 'group-1' })
   })
 })

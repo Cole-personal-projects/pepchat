@@ -340,3 +340,64 @@ export async function closeVoiceRoomIfEmpty(
 
   return error ? { error: 'Cannot join this room.' } : { ok: true, closed: true }
 }
+
+/**
+ * Deletes a join-to-create (ephemeral) voice channel once it has no active
+ * participants. Channel deletion cascades to its voice rooms. Requires the
+ * admin client — channel deletes are manager-gated under RLS.
+ */
+export async function deleteEphemeralChannelIfEmpty(
+  adminClient: SupabaseClient,
+  input: { channelId: string },
+): Promise<{ ok: true; deleted: boolean } | { error: string }> {
+  const { data, error } = await adminClient
+    .from('channels')
+    .select('id, is_ephemeral')
+    .eq('id', input.channelId)
+    .maybeSingle()
+
+  if (error && error.code !== MISSING_ROW) return { error: 'Cannot join this room.' }
+  if (!data || !(data as { is_ephemeral?: boolean | null }).is_ephemeral) {
+    return { ok: true, deleted: false }
+  }
+
+  const room = await getLiveVoiceRoomForChannel(adminClient, input.channelId)
+  if (room) {
+    const participantCount = await getVoiceRoomParticipantCount(adminClient, room.id)
+    if (participantCount > 0) return { ok: true, deleted: false }
+  }
+
+  const { error: deleteError } = await adminClient
+    .from('channels')
+    .delete()
+    .eq('id', input.channelId)
+    .eq('is_ephemeral', true)
+
+  return deleteError ? { error: 'Cannot join this room.' } : { ok: true, deleted: true }
+}
+
+/**
+ * Lazy reaper for a group's empty ephemeral voice channels. Run after
+ * cleanupStaleVoiceParticipants so crashed clients are already marked left.
+ */
+export async function sweepEmptyEphemeralChannels(
+  adminClient: SupabaseClient,
+  input: { groupId: string },
+): Promise<{ ok: true } | { error: string }> {
+  const { data, error } = await adminClient
+    .from('channels')
+    .select('id')
+    .eq('group_id', input.groupId)
+    .eq('kind', 'voice')
+    .eq('is_ephemeral', true)
+
+  if (error) return { error: 'Cannot join this room.' }
+
+  await Promise.all(
+    ((data ?? []) as Array<{ id: string }>).map((row) =>
+      deleteEphemeralChannelIfEmpty(adminClient, { channelId: row.id }),
+    ),
+  )
+
+  return { ok: true }
+}

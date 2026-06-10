@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import ChannelsSidebar from '@/components/sidebar/ChannelsSidebar'
 import { deleteChannel, moveChannel, updateChannelSettings } from '@/app/(app)/channels/actions'
-import { getCurrentVoiceRoom, joinVoiceChannel, leaveVoiceRoom } from '@/app/(app)/voice/actions'
+import { createTempVoiceRoom, getCurrentVoiceRoom, joinVoiceChannel, leaveVoiceRoom } from '@/app/(app)/voice/actions'
 import type { Channel, Group, Profile } from '@/lib/types'
 
 const { mockVoiceRoomConnection } = vi.hoisted(() => ({
@@ -42,6 +42,7 @@ vi.mock('@/app/(app)/voice/actions', () => ({
   getCurrentVoiceRoom: vi.fn(),
   joinVoiceChannel: vi.fn(),
   leaveVoiceRoom: vi.fn(),
+  createTempVoiceRoom: vi.fn(),
 }))
 
 vi.mock('@/components/voice/useVoiceRoomConnection', () => ({
@@ -423,6 +424,24 @@ describe('ChannelsSidebar voice channels', () => {
 
     await waitFor(() => expect(joinVoiceChannel).toHaveBeenCalledWith('voice-lounge'))
     expect(joinVoiceChannel).toHaveBeenCalledTimes(1)
+  })
+
+  it('creates and joins a temp room from the Create Room button', async () => {
+    vi.mocked(createTempVoiceRoom).mockResolvedValue({ ok: true, channelId: 'channel-temp' })
+    render(<ChannelsSidebar {...BASE_PROPS} channels={CHANNELS_WITH_VOICE} userRole="user" />)
+
+    const createButton = screen.getByTestId('create-voice-room-btn')
+    await waitFor(() => expect(createButton).toBeEnabled())
+    fireEvent.click(createButton)
+
+    await waitFor(() => expect(createTempVoiceRoom).toHaveBeenCalledWith('grp-1'))
+    await waitFor(() => expect(joinVoiceChannel).toHaveBeenCalledWith('channel-temp'))
+  })
+
+  it('hides the Create Room button from noobs', () => {
+    render(<ChannelsSidebar {...BASE_PROPS} channels={CHANNELS_WITH_VOICE} userRole="noob" />)
+
+    expect(screen.queryByTestId('create-voice-room-btn')).not.toBeInTheDocument()
   })
 
   it('shows connected participant, mute, and leave controls after a successful join', async () => {

@@ -64,6 +64,13 @@ async function voiceRooms() {
   return import('@/lib/voice/rooms')
 }
 
+/** Service-role client for ephemeral channel lifecycle; null when not configured. */
+async function adminClientOrNull() {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return null
+  const { createAdminClient } = await import('@/lib/supabase/admin')
+  return createAdminClient()
+}
+
 function roomSummary(room: { id: string; channelId: string; groupId: string; status: VoiceRoomStatus }, participantCount: number): VoiceRoomSummary {
   return {
     id: room.id,
@@ -91,6 +98,15 @@ export const listVoiceChannels = withAuth(
       if ('error' in gate) return denied()
 
       await cleanupStaleVoiceParticipants(supabase, { groupId })
+
+      // Lazy reaper: drop join-to-create rooms that emptied out (covers
+      // crashed clients that never called leaveVoiceRoom).
+      const admin = await adminClientOrNull()
+      if (admin) {
+        const { sweepEmptyEphemeralChannels } = await voiceRooms()
+        await sweepEmptyEphemeralChannels(admin, { groupId })
+      }
+
       const channels = await listAccessibleVoiceChannelsWithOccupancy(supabase, {
         groupId,
         role: gate.membership.role,
@@ -303,7 +319,96 @@ export const leaveVoiceRoom = withAuth(
       const result = await markVoiceParticipantLeft(supabase, { roomId: room.id, userId: user.id })
       if ('error' in result) return denied()
       const closeResult = await closeVoiceRoomIfEmpty(supabase, { roomId: room.id })
-      return 'error' in closeResult ? denied() : { ok: true }
+      if ('error' in closeResult) return denied()
+
+      // Join-to-create rooms disappear when the last participant leaves.
+      if (closeResult.closed) {
+        const admin = await adminClientOrNull()
+        if (admin) {
+          const { deleteEphemeralChannelIfEmpty } = await voiceRooms()
+          await deleteEphemeralChannelIfEmpty(admin, { channelId: room.channelId })
+        }
+      }
+
+      return { ok: true }
+    } catch {
+      return denied()
+    }
+  },
+  { unauthenticated: () => denied() },
+)
+
+const MAX_TEMP_ROOM_NAME_LENGTH = 60
+
+type CreateTempVoiceRoomResult = { ok: true; channelId: string } | VoiceActionError
+
+/**
+ * Join-to-create: spawns an ephemeral voice channel that auto-deletes when
+ * the last participant leaves. Open to every role except noob.
+ */
+export const createTempVoiceRoom = withAuth(
+  async function createTempVoiceRoomBody(
+    { supabase, user },
+    groupId: string,
+    requestedName?: string,
+  ): Promise<CreateTempVoiceRoomResult> {
+    try {
+      if (!groupId) return denied()
+
+      const gate = await gateGroupRole(supabase, {
+        groupId,
+        userId: user.id,
+        predicate: PERMISSIONS.canCreateTempVoiceChannel,
+        deniedMessage: VOICE_DENIED,
+      })
+      if ('error' in gate) return denied()
+
+      // Channel inserts are manager-gated under RLS, so member-created
+      // ephemeral rooms go through the service-role client after gating.
+      const admin = await adminClientOrNull()
+      const writer = admin ?? supabase
+
+      let name = (requestedName ?? '').trim().replace(/\s+/g, ' ')
+      if (!name) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('username, display_name')
+          .eq('id', user.id)
+          .single()
+        const owner = (profile?.display_name as string | null) ?? (profile?.username as string | null) ?? 'New'
+        name = `${owner}'s Room`
+      }
+      if (name.length > MAX_TEMP_ROOM_NAME_LENGTH) {
+        name = name.slice(0, MAX_TEMP_ROOM_NAME_LENGTH)
+      }
+
+      const { data: existingPositions } = await writer
+        .from('channels')
+        .select('position')
+        .eq('group_id', groupId)
+        .order('position', { ascending: false })
+        .limit(1)
+
+      const nextPosition =
+        existingPositions && existingPositions.length > 0 ? existingPositions[0].position + 1 : 0
+
+      const { data: channel, error } = await writer
+        .from('channels')
+        .insert({
+          group_id: groupId,
+          name,
+          description: null,
+          noob_access: false,
+          position: nextPosition,
+          kind: 'voice',
+          is_ephemeral: true,
+          created_by: user.id,
+        })
+        .select('id')
+        .single()
+
+      if (error || !channel) return denied()
+      return { ok: true, channelId: (channel as { id: string }).id }
     } catch {
       return denied()
     }

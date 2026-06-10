@@ -101,11 +101,19 @@ export default function ChannelsSidebar({
     })
   }, [group])
 
-  const visibleChannels = userRole === 'noob'
-    ? channels.filter((c) => c.noob_access || c.name === 'welcome')
-    : channels
-  const textChannels = visibleChannels.filter(channel => (channel.kind ?? 'text') !== 'voice')
-  const voiceChannels = visibleChannels.filter(channel => channel.kind === 'voice')
+  const visibleChannels = useMemo(() => (
+    userRole === 'noob'
+      ? channels.filter((c) => c.noob_access || c.name === 'welcome')
+      : channels
+  ), [channels, userRole])
+  const textChannels = useMemo(
+    () => visibleChannels.filter(channel => (channel.kind ?? 'text') !== 'voice'),
+    [visibleChannels],
+  )
+  const voiceChannels = useMemo(
+    () => visibleChannels.filter(channel => channel.kind === 'voice'),
+    [visibleChannels],
+  )
   const normalizedChannelSearch = channelSearch.trim().toLowerCase()
   const filteredChannels = useMemo(() => {
     if (!normalizedChannelSearch) return textChannels
@@ -455,7 +463,12 @@ export default function ChannelsSidebar({
             })}
 
             {/* Voice channel rows */}
-            <VoiceChannelsSection channels={voiceChannels} onMobileClose={onMobileClose} />
+            <VoiceChannelsSection
+              channels={voiceChannels}
+              groupId={group.id}
+              canCreateRoom={Boolean(userRole && PERMISSIONS.canCreateTempVoiceChannel(userRole))}
+              onMobileClose={onMobileClose}
+            />
 
             {/* Members panel (admin / moderator only) */}
             {(userRole === 'admin' || userRole === 'moderator') && (
