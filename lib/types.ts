@@ -69,6 +69,8 @@ export interface GroupMember {
   profiles?: Pick<Profile, 'username' | 'avatar_url'>
 }
 
+export type ChannelKind = 'text' | 'voice' | 'forum'
+
 export interface Channel {
   id: string
   group_id: string
@@ -76,6 +78,53 @@ export interface Channel {
   description: string | null
   noob_access?: boolean
   position: number
+  kind?: ChannelKind
+  category_id?: string | null
+  is_ephemeral?: boolean
+  created_by?: string | null
+  created_at: string
+}
+
+export interface ChannelCategory {
+  id: string
+  group_id: string
+  name: string
+  position: number
+  created_at: string
+}
+
+/** Discord-style custom role (public.roles). */
+export interface GroupRole {
+  id: string
+  group_id: string
+  name: string
+  color: string | null
+  hoist: boolean
+  mentionable: boolean
+  position: number
+  /** Permission bitfield — convert with toPermissionBits() before bit math. */
+  permissions: number | string
+  is_default: boolean
+  created_at: string
+}
+
+/** Assignment row linking a member to a custom role (public.member_roles). */
+export interface MemberRoleAssignment {
+  id: string
+  group_id: string
+  user_id: string
+  role_id: string
+  created_at: string
+}
+
+/** Per-channel permission overwrite (public.channel_overwrites). */
+export interface ChannelOverwrite {
+  id: string
+  channel_id: string
+  role_id: string | null
+  user_id: string | null
+  allow: number | string
+  deny: number | string
   created_at: string
 }
 
@@ -307,6 +356,63 @@ export interface AuditEntry {
   target_type: string | null
   target_id: string | null
   metadata: Record<string, any> | null
+  created_at: string
+}
+
+/** Friend relationship (public.friendships). One row per user pair. */
+export interface Friendship {
+  id: string
+  requester_id: string
+  addressee_id: string
+  status: 'pending' | 'accepted' | 'blocked'
+  blocked_by: string | null
+  created_at: string
+  responded_at: string | null
+}
+
+export type PresenceMode = 'online' | 'idle' | 'dnd' | 'invisible'
+
+/** Rich presence + custom status (public.user_status). */
+export interface UserStatus {
+  user_id: string
+  presence: PresenceMode
+  status_emoji: string | null
+  status_text: string | null
+  status_expires_at: string | null
+  updated_at: string
+}
+
+export type ScheduledEventStatus = 'scheduled' | 'active' | 'completed' | 'canceled'
+
+export interface ScheduledEvent {
+  id: string
+  group_id: string
+  channel_id: string | null
+  name: string
+  description: string | null
+  cover_url: string | null
+  location: string | null
+  start_at: string
+  end_at: string | null
+  status: ScheduledEventStatus
+  created_by: string | null
+  created_at: string
+}
+
+export interface EventRsvp {
+  id: string
+  event_id: string
+  user_id: string
+  status: 'interested' | 'going' | 'declined'
+  created_at: string
+}
+
+export interface ForumTag {
+  id: string
+  channel_id: string
+  name: string
+  emoji: string | null
+  position: number
   created_at: string
 }
 
