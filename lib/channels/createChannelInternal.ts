@@ -2,11 +2,15 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 export const CHANNEL_MANAGE_DENIED = 'You do not have permission to manage channels.'
 
+export type ChannelKindInput = 'text' | 'voice' | 'forum'
+
 export type ChannelInput = {
   groupId: string
   name: string
   description?: string | null
   noobAccess?: boolean
+  kind?: ChannelKindInput
+  categoryId?: string | null
 }
 
 export type NormalizedChannelInput = {
@@ -14,11 +18,15 @@ export type NormalizedChannelInput = {
   name: string
   description: string | null
   noobAccess: boolean
+  kind: ChannelKindInput
+  categoryId: string | null
 }
 
 export type CreateChannelInternalResult =
   | { ok: true; channel: { id: string; group_id: string; name: string; description: string | null; noob_access: boolean; position: number } }
   | { error: string }
+
+const VALID_KINDS: ChannelKindInput[] = ['text', 'voice', 'forum']
 
 export function normalizeChannelName(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, '-')
@@ -40,6 +48,9 @@ export async function validateChannelInput(
   }
   if (description.length > 180) return { error: 'Topic must be 180 characters or fewer.' }
 
+  const kind = input.kind ?? 'text'
+  if (!VALID_KINDS.includes(kind)) return { error: 'Invalid channel type.' }
+
   const { data: existing, error } = await supabase
     .from('channels')
     .select('id')
@@ -50,6 +61,20 @@ export async function validateChannelInput(
   if (error && error.code !== 'PGRST116') return { error: error.message }
   if (existing) return { error: 'Channel name already exists.' }
 
+  const categoryId = input.categoryId ?? null
+  if (categoryId) {
+    const { data: category, error: categoryError } = await supabase
+      .from('channel_categories')
+      .select('id, group_id')
+      .eq('id', categoryId)
+      .maybeSingle()
+
+    if (categoryError && categoryError.code !== 'PGRST116') return { error: categoryError.message }
+    if (!category || (category as { group_id: string }).group_id !== groupId) {
+      return { error: 'Category not found in this group.' }
+    }
+  }
+
   return {
     ok: true,
     value: {
@@ -57,6 +82,8 @@ export async function validateChannelInput(
       name,
       description: description || null,
       noobAccess: Boolean(input.noobAccess),
+      kind,
+      categoryId,
     },
   }
 }
@@ -67,7 +94,7 @@ export async function createChannelInternal(
 ): Promise<CreateChannelInternalResult> {
   const validation = await validateChannelInput(supabase, input)
   if ('error' in validation) return validation
-  const { groupId, name, description, noobAccess } = validation.value
+  const { groupId, name, description, noobAccess, kind, categoryId } = validation.value
 
   const { data: existingPositions } = await supabase
     .from('channels')
@@ -86,6 +113,8 @@ export async function createChannelInternal(
       description,
       noob_access: noobAccess,
       position: nextPosition,
+      kind,
+      category_id: categoryId,
     })
     .select('id, group_id, name, description, noob_access, position')
     .single()

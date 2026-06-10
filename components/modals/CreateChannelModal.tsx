@@ -3,11 +3,14 @@
 import { useState, useTransition } from 'react'
 import Modal from '@/components/ui/Modal'
 import { createChannel } from '@/app/(app)/channels/actions'
+import type { ChannelCategory } from '@/lib/types'
 
 interface CreateChannelModalProps {
   open: boolean
   onClose: () => void
   groupId: string
+  categories?: ChannelCategory[]
+  initialCategoryId?: string | null
 }
 
 /** Modal for creating a new text channel inside a group. */
@@ -15,6 +18,8 @@ export default function CreateChannelModal({
   open,
   onClose,
   groupId,
+  categories = [],
+  initialCategoryId = null,
 }: CreateChannelModalProps) {
   const [error, setError] = useState('')
   const [isPending, startTransition] = useTransition()
@@ -80,6 +85,29 @@ export default function CreateChannelModal({
             placeholder="What belongs in this channel?"
           />
         </div>
+
+        {categories.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="ch-category"
+              className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]"
+            >
+              Category
+            </label>
+            <select
+              id="ch-category"
+              name="category_id"
+              key={initialCategoryId ?? 'none'}
+              defaultValue={initialCategoryId ?? ''}
+              className="rounded border border-black/20 bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+            >
+              <option value="">No category</option>
+              {categories.map(category => (
+                <option key={category.id} value={category.id}>{category.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <label className="flex items-start gap-3 rounded border border-black/20 bg-[var(--bg-primary)] p-3 text-sm text-[var(--text-primary)]">
           <input

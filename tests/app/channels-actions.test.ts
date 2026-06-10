@@ -55,6 +55,18 @@ function makeListBuilder(result: QueryResult): Builder {
   return builder
 }
 
+/** Thenable list builder matching the category-scoped sibling query in moveChannel. */
+function makeSiblingsBuilder(result: QueryResult): Builder {
+  const builder: Builder = {}
+  const resolved = Promise.resolve({ data: result.data ?? null, error: result.error ?? null })
+  builder.select = vi.fn(() => builder)
+  builder.eq = vi.fn(() => builder)
+  builder.is = vi.fn(() => builder)
+  builder.order = vi.fn(() => builder)
+  ;(builder as Record<string, unknown>).then = resolved.then.bind(resolved)
+  return builder
+}
+
 function makeInsertBuilder(result: QueryResult = {}): Builder {
   const builder: Builder = {}
   builder.insert = vi.fn(() => builder)
@@ -198,6 +210,8 @@ describe('channel actions — createChannel', () => {
       description: 'Start here',
       noob_access: true,
       position: 3,
+      kind: 'text',
+      category_id: null,
     })
     expect(mockRedirect).toHaveBeenCalledWith('/channels/ch-new')
   })
@@ -309,21 +323,36 @@ describe('channel actions — moveChannel', () => {
   })
 
   it('gates after selected channel lookup and before adjacent channel lookup', async () => {
-    const channel = makeSelectBuilder({ data: { id: 'ch-2', group_id: 'group-1', position: 1 } })
+    const channel = makeSelectBuilder({ data: { id: 'ch-2', group_id: 'group-1', position: 1, category_id: null } })
     const gate = makeGateBuilder('admin')
-    const adjacent = makeSelectBuilder({ data: { id: 'ch-1', position: 0 } })
+    const siblings = makeSiblingsBuilder({ data: [{ id: 'ch-1', position: 0 }, { id: 'ch-2', position: 1 }] })
     const channelUpdate = makeUpdateBuilder()
     const adjacentUpdate = makeUpdateBuilder()
-    const { tableCalls } = setupClient([channel, gate, adjacent, channelUpdate, adjacentUpdate])
+    const { tableCalls } = setupClient([channel, gate, siblings, channelUpdate, adjacentUpdate])
 
     await expect(moveChannel('ch-2', 'up')).resolves.toBeUndefined()
 
     expect(tableCalls).toEqual(['channels', 'group_members', 'channels', 'channels', 'channels'])
     expect(gate.eq).toHaveBeenCalledWith('group_id', 'group-1')
+    expect(siblings.is).toHaveBeenCalledWith('category_id', null)
     expect(channelUpdate.update).toHaveBeenCalledWith({ position: 0 })
     expect(channelUpdate.eq).toHaveBeenCalledWith('id', 'ch-2')
     expect(adjacentUpdate.update).toHaveBeenCalledWith({ position: 1 })
     expect(adjacentUpdate.eq).toHaveBeenCalledWith('id', 'ch-1')
+  })
+
+  it('scopes sibling lookups to the channel category when set', async () => {
+    const channel = makeSelectBuilder({ data: { id: 'ch-2', group_id: 'group-1', position: 1, category_id: 'cat-1' } })
+    const gate = makeGateBuilder('admin')
+    const siblings = makeSiblingsBuilder({ data: [{ id: 'ch-1', position: 0 }, { id: 'ch-2', position: 1 }] })
+    const channelUpdate = makeUpdateBuilder()
+    const adjacentUpdate = makeUpdateBuilder()
+    setupClient([channel, gate, siblings, channelUpdate, adjacentUpdate])
+
+    await expect(moveChannel('ch-2', 'up')).resolves.toBeUndefined()
+
+    expect(siblings.eq).toHaveBeenCalledWith('category_id', 'cat-1')
+    expect(siblings.is).not.toHaveBeenCalled()
   })
 
   it('rejects insufficient roles after selected channel lookup and before adjacent lookup', async () => {
@@ -341,11 +370,11 @@ describe('channel actions — moveChannel', () => {
   })
 
   it('returns without updating when there is no adjacent channel', async () => {
-    const channel = makeSelectBuilder({ data: { id: 'ch-1', group_id: 'group-1', position: 0 } })
+    const channel = makeSelectBuilder({ data: { id: 'ch-1', group_id: 'group-1', position: 0, category_id: null } })
     const gate = makeGateBuilder('admin')
-    const adjacent = makeSelectBuilder({ data: null })
+    const siblings = makeSiblingsBuilder({ data: [{ id: 'ch-1', position: 0 }] })
     const update = makeUpdateBuilder()
-    setupClient([channel, gate, adjacent, update])
+    setupClient([channel, gate, siblings, update])
 
     await expect(moveChannel('ch-1', 'up')).resolves.toBeUndefined()
 
@@ -365,9 +394,9 @@ describe('channel actions — moveChannel', () => {
   })
 
   it('surfaces adjacent channel lookup errors', async () => {
-    const channel = makeSelectBuilder({ data: { id: 'ch-2', group_id: 'group-1', position: 1 } })
+    const channel = makeSelectBuilder({ data: { id: 'ch-2', group_id: 'group-1', position: 1, category_id: null } })
     const gate = makeGateBuilder('moderator')
-    const adjacent = makeSelectBuilder({ error: { message: 'Adjacent lookup failed' } })
+    const adjacent = makeSiblingsBuilder({ error: { message: 'Adjacent lookup failed' } })
     const update = makeUpdateBuilder()
     setupClient([channel, gate, adjacent, update])
 
@@ -379,9 +408,9 @@ describe('channel actions — moveChannel', () => {
   })
 
   it('surfaces update errors before applying the second update', async () => {
-    const channel = makeSelectBuilder({ data: { id: 'ch-2', group_id: 'group-1', position: 1 } })
+    const channel = makeSelectBuilder({ data: { id: 'ch-2', group_id: 'group-1', position: 1, category_id: null } })
     const gate = makeGateBuilder('admin')
-    const adjacent = makeSelectBuilder({ data: { id: 'ch-1', position: 0 } })
+    const adjacent = makeSiblingsBuilder({ data: [{ id: 'ch-1', position: 0 }, { id: 'ch-2', position: 1 }] })
     const channelUpdate = makeUpdateBuilder({ error: { message: 'First update failed' } })
     const adjacentUpdate = makeUpdateBuilder()
     setupClient([channel, gate, adjacent, channelUpdate, adjacentUpdate])
