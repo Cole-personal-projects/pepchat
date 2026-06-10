@@ -15,6 +15,7 @@ import NetworkStatusBanner from '@/components/ui/NetworkStatusBanner'
 import MotionSurface from '@/components/ui/MotionSurface'
 import { useGroups } from '@/lib/hooks/useGroups'
 import { useChannels } from '@/lib/hooks/useChannels'
+import { useChannelCategories } from '@/lib/hooks/useChannelCategories'
 import { useUnreadChannels } from '@/lib/hooks/useUnreadChannels'
 import { markChannelRead, markChannelUnread } from '@/lib/channelReadState'
 import { createClient } from '@/lib/supabase/client'
@@ -37,6 +38,7 @@ export default function AppShell({ profile, children }: AppShellProps) {
   const [showJoin,       setShowJoin]       = useState(false)
   const [showSettings,   setShowSettings]   = useState(false)
   const [showNewChannel, setShowNewChannel] = useState(false)
+  const [newChannelCategoryId, setNewChannelCategoryId] = useState<string | null>(null)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [promptedFirstGroup, setPromptedFirstGroup] = useState(false)
 
@@ -115,6 +117,7 @@ export default function AppShell({ profile, children }: AppShellProps) {
   }, [activeGroupId, profile.id])
 
   const { channels } = useChannels(activeGroupId)
+  const { categories } = useChannelCategories(activeGroupId)
   const activeGroup  = groups.find((g) => g.id === activeGroupId) ?? null
 
   // Derive active channel ID from URL for unread hook
@@ -166,13 +169,17 @@ export default function AppShell({ profile, children }: AppShellProps) {
           <ChannelsSidebar
             group={activeGroup}
             channels={channels}
+            categories={categories}
             profile={profile}
             userRole={userRole}
             unreadChannelIds={unreadChannelIds}
             unreadCountsByChannelId={unreadCountsByChannelId}
             onMarkChannelRead={handleMarkChannelRead}
             onMarkChannelUnread={handleMarkChannelUnread}
-            onCreateChannel={() => setShowNewChannel(true)}
+            onCreateChannel={(categoryId) => {
+              setNewChannelCategoryId(categoryId ?? null)
+              setShowNewChannel(true)
+            }}
             onGroupSettings={() => setShowSettings(true)}
             onMobileClose={() => setMobileSidebarOpen(false)}
           />
@@ -212,8 +219,13 @@ export default function AppShell({ profile, children }: AppShellProps) {
       {activeGroupId && (
         <CreateChannelModal
           open={showNewChannel}
-          onClose={() => setShowNewChannel(false)}
+          onClose={() => {
+            setShowNewChannel(false)
+            setNewChannelCategoryId(null)
+          }}
           groupId={activeGroupId}
+          categories={categories}
+          initialCategoryId={newChannelCategoryId}
         />
       )}
     </MobileSidebarContext.Provider>

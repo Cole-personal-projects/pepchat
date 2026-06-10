@@ -2,35 +2,61 @@
 
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { useMemo, useState, useTransition } from 'react'
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import dynamic from 'next/dynamic'
 import Avatar from '@/components/ui/Avatar'
 import MembersPanel from '@/components/sidebar/MembersPanel'
+import ChannelRow from '@/components/sidebar/ChannelRow'
+import CategorySection from '@/components/sidebar/CategorySection'
 import Modal from '@/components/ui/Modal'
 import { logout } from '@/app/(auth)/actions'
 import { deleteChannel, moveChannel, updateChannelSettings } from '@/app/(app)/channels/actions'
+import { createCategory, deleteCategory, moveCategory, renameCategory } from '@/app/(app)/categories/actions'
 import { PERMISSIONS, type Role } from '@/lib/permissions'
-import type { Channel, Group, Profile } from '@/lib/types'
+import type { Channel, ChannelCategory, Group, Profile } from '@/lib/types'
 
 const DMSection = dynamic(() => import('@/components/dm/DMSection'), { ssr: false })
 
 interface ChannelsSidebarProps {
   group: Group | null
   channels: Channel[]
+  categories?: ChannelCategory[]
   profile: Profile
   userRole: Role | null
   unreadChannelIds?: Set<string>
   unreadCountsByChannelId?: Map<string, number>
   onMarkChannelRead?: (channelId: string) => void | Promise<void>
   onMarkChannelUnread?: (channelId: string) => void | Promise<void>
-  onCreateChannel?: () => void
+  onCreateChannel?: (categoryId?: string) => void
   onGroupSettings?: () => void
   onMobileClose?: () => void
+}
+
+type CategoryModalState =
+  | { mode: 'create' }
+  | { mode: 'rename'; categoryId: string; currentName: string }
+  | null
+
+function collapsedStorageKey(groupId: string) {
+  return `sidebar-collapsed-categories-${groupId}`
+}
+
+function readCollapsedCategories(groupId: string): Set<string> {
+  if (typeof window === 'undefined') return new Set()
+  try {
+    const raw = window.localStorage.getItem(collapsedStorageKey(groupId))
+    if (!raw) return new Set()
+    const parsed: unknown = JSON.parse(raw)
+    return Array.isArray(parsed) ? new Set(parsed.filter((v): v is string => typeof v === 'string')) : new Set()
+  } catch {
+    return new Set()
+  }
 }
 
 export default function ChannelsSidebar({
   group,
   channels,
+  categories = [],
   profile,
   userRole,
   unreadChannelIds = new Set(),
@@ -47,10 +73,32 @@ export default function ChannelsSidebar({
   const [channelActionError, setChannelActionError] = useState('')
   const [settingsChannel, setSettingsChannel] = useState<Channel | null>(null)
   const [settingsError, setSettingsError] = useState('')
+  const [categoryModal, setCategoryModal] = useState<CategoryModalState>(null)
+  const [categoryError, setCategoryError] = useState('')
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set())
   const [isPending, startTransition] = useTransition()
 
   const canManage    = userRole ? PERMISSIONS.canManageChannels(userRole) : false
   const canManageGrp = userRole ? PERMISSIONS.canManageGroup(userRole) : false
+
+  useEffect(() => {
+    if (group) setCollapsedCategories(readCollapsedCategories(group.id))
+  }, [group?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleCategory = useCallback((categoryId: string) => {
+    if (!group) return
+    setCollapsedCategories(prev => {
+      const next = new Set(prev)
+      if (next.has(categoryId)) next.delete(categoryId)
+      else next.add(categoryId)
+      try {
+        window.localStorage.setItem(collapsedStorageKey(group.id), JSON.stringify([...next]))
+      } catch {
+        // Persistence is best-effort; collapse still works in-memory.
+      }
+      return next
+    })
+  }, [group])
 
   const visibleChannels = userRole === 'noob'
     ? channels.filter((c) => c.noob_access || c.name === 'welcome')
@@ -64,6 +112,30 @@ export default function ChannelsSidebar({
       return values.some(value => value.includes(normalizedChannelSearch))
     })
   }, [normalizedChannelSearch, visibleChannels])
+
+  /** Channels grouped into the uncategorized bucket + ordered category sections. */
+  const sections = useMemo(() => {
+    const knownCategoryIds = new Set(categories.map(c => c.id))
+    const uncategorized = filteredChannels.filter(
+      c => !c.category_id || !knownCategoryIds.has(c.category_id),
+    )
+    const byCategory = categories.map(category => ({
+      category,
+      channels: filteredChannels.filter(c => c.category_id === category.id),
+    }))
+    return { uncategorized, byCategory }
+  }, [filteredChannels, categories])
+
+  /** Move bounds are evaluated within the channel's own section. */
+  const sectionPeers = useCallback((channel: Channel) => {
+    const knownCategoryIds = new Set(categories.map(c => c.id))
+    const channelCategoryId =
+      channel.category_id && knownCategoryIds.has(channel.category_id) ? channel.category_id : null
+    return channels.filter(c => {
+      const cCategoryId = c.category_id && knownCategoryIds.has(c.category_id) ? c.category_id : null
+      return cCategoryId === channelCategoryId
+    })
+  }, [channels, categories])
 
   function handleDelete(channelId: string) {
     if (!group) return
@@ -83,6 +155,45 @@ export default function ChannelsSidebar({
     })
   }
 
+  function handleCategoryMove(categoryId: string, direction: 'up' | 'down') {
+    setChannelActionError('')
+    startTransition(async () => {
+      const result = await moveCategory(categoryId, direction)
+      if (result && 'error' in result) setChannelActionError(result.error)
+    })
+  }
+
+  function handleCategoryDelete(categoryId: string) {
+    if (!confirm('Delete this category? Its channels move out of the category.')) return
+    setChannelActionError('')
+    startTransition(async () => {
+      const result = await deleteCategory(categoryId)
+      if (result && 'error' in result) setChannelActionError(result.error)
+    })
+  }
+
+  function handleCategorySubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!categoryModal || !group) return
+    setCategoryError('')
+    const formData = new FormData(e.currentTarget)
+    const name = (formData.get('name') as string | null) ?? ''
+    startTransition(async () => {
+      const result =
+        categoryModal.mode === 'create'
+          ? await (async () => {
+              formData.set('group_id', group.id)
+              return createCategory(formData)
+            })()
+          : await renameCategory(categoryModal.categoryId, name)
+      if (result && 'error' in result) {
+        setCategoryError(result.error)
+        return
+      }
+      setCategoryModal(null)
+    })
+  }
+
   function handleSettingsSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!settingsChannel) return
@@ -96,6 +207,36 @@ export default function ChannelsSidebar({
       }
       setSettingsChannel(null)
     })
+  }
+
+  function renderChannelRow(channel: Channel) {
+    const isActive  = channel.id === activeChannelId
+    const isUnread  = !isActive && unreadChannelIds.has(channel.id)
+    const peers     = sectionPeers(channel)
+    const peerIdx   = peers.findIndex(c => c.id === channel.id)
+
+    return (
+      <ChannelRow
+        key={channel.id}
+        channel={channel}
+        isActive={isActive}
+        isUnread={isUnread}
+        unreadCount={unreadCountsByChannelId.get(channel.id) ?? 0}
+        canManage={canManage}
+        isPending={isPending}
+        canMoveUp={peerIdx > 0}
+        canMoveDown={peerIdx !== -1 && peerIdx < peers.length - 1}
+        onMobileClose={onMobileClose}
+        onMarkChannelRead={onMarkChannelRead}
+        onMarkChannelUnread={onMarkChannelUnread}
+        onEditSettings={(ch) => {
+          setSettingsError('')
+          setSettingsChannel(ch)
+        }}
+        onMove={handleMove}
+        onDelete={handleDelete}
+      />
+    )
   }
 
   const displayName = profile.display_name ?? profile.username
@@ -196,17 +337,34 @@ export default function ChannelsSidebar({
                 Channels
               </span>
               {canManage && (
-                <button
-                  data-testid="create-channel-btn"
-                  onClick={onCreateChannel}
-                  className="icon-btn"
-                  title="Create channel"
-                  style={{ padding: 2 }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
-                </button>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <button
+                    data-testid="create-category-btn"
+                    onClick={() => {
+                      setCategoryError('')
+                      setCategoryModal({ mode: 'create' })
+                    }}
+                    className="icon-btn"
+                    title="Create category"
+                    style={{ padding: 2 }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                      <path d="M12 11v6M9 14h6" />
+                    </svg>
+                  </button>
+                  <button
+                    data-testid="create-channel-btn"
+                    onClick={() => onCreateChannel?.()}
+                    className="icon-btn"
+                    title="Create channel"
+                    style={{ padding: 2 }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                  </button>
+                </span>
               )}
             </div>
 
@@ -257,182 +415,39 @@ export default function ChannelsSidebar({
               </p>
             )}
 
-            {/* Channel rows */}
-            {filteredChannels.map((channel) => {
-              const isActive  = channel.id === activeChannelId
-              const isUnread  = !isActive && unreadChannelIds.has(channel.id)
-              const unreadCount = unreadCountsByChannelId.get(channel.id) ?? 0
-              const allIdx    = channels.findIndex((c) => c.id === channel.id)
-              const channelLabel = [
-                `#${channel.name}`,
-                isActive ? 'current channel' : null,
-                isUnread
-                  ? unreadCount > 0
-                    ? `${unreadCount} unread ${unreadCount === 1 ? 'message' : 'messages'}`
-                    : 'unread'
-                  : null,
-              ].filter(Boolean).join(', ')
+            {/* Uncategorized channels */}
+            {sections.uncategorized.map(renderChannelRow)}
+
+            {/* Category sections */}
+            {sections.byCategory.map(({ category, channels: sectionChannels }, index) => {
+              const isCollapsed = collapsedCategories.has(category.id) && !normalizedChannelSearch
+              // Discord behavior: collapsed categories still surface unread + active channels.
+              const rows = isCollapsed
+                ? sectionChannels.filter(c => c.id === activeChannelId || unreadChannelIds.has(c.id))
+                : sectionChannels
+              if (normalizedChannelSearch && sectionChannels.length === 0) return null
 
               return (
-                <div
-                  key={channel.id}
-                  className="group/ch"
-                  style={{ display: 'flex', alignItems: 'center', margin: '1px 0' }}
+                <CategorySection
+                  key={category.id}
+                  categoryId={category.id}
+                  name={category.name}
+                  collapsed={isCollapsed}
+                  canManage={canManage}
+                  isPending={isPending}
+                  canMoveUp={index > 0}
+                  canMoveDown={index < sections.byCategory.length - 1}
+                  onToggle={toggleCategory}
+                  onCreateChannel={onCreateChannel ? (categoryId) => onCreateChannel(categoryId) : undefined}
+                  onRename={(categoryId, currentName) => {
+                    setCategoryError('')
+                    setCategoryModal({ mode: 'rename', categoryId, currentName })
+                  }}
+                  onMove={handleCategoryMove}
+                  onDelete={handleCategoryDelete}
                 >
-                  <Link
-                    href={`/channels/${channel.id}`}
-                    aria-label={channelLabel}
-                    onClick={onMobileClose}
-                    className={`channel-row${isUnread ? ' font-medium' : ''}`}
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
-                      padding: '6px 10px',
-                      borderRadius: 6,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      cursor: 'pointer',
-                      background: isActive ? 'var(--channel-active-bg)' : 'transparent',
-                      textDecoration: 'none',
-                      color: isActive || isUnread ? 'var(--text-primary)' : 'var(--text-muted)',
-                      transition: 'background 120ms ease',
-                      touchAction: 'manipulation',
-                    }}
-                  >
-                    {/* Dot indicator */}
-                    {isUnread ? (
-                      <span
-                        data-testid={`unread-dot-${channel.id}`}
-                        style={{
-                          width: 6, height: 6,
-                          borderRadius: '50%',
-                          background: 'var(--text-primary)',
-                          flexShrink: 0,
-                        }}
-                      />
-                    ) : (
-                      <span style={{ width: 6, height: 6, flexShrink: 0 }} />
-                    )}
-
-                    {/* Channel name */}
-                    <span style={{
-                      fontSize: 14,
-                      flex: 1,
-                      minWidth: 0,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      <span style={{ opacity: 0.5 }}>#</span>{channel.name}
-                    </span>
-
-                    {isUnread && unreadCount > 0 && (
-                      <span
-                        data-testid={`unread-count-${channel.id}`}
-                        style={{
-                          minWidth: 18,
-                          height: 18,
-                          borderRadius: 9,
-                          padding: '0 6px',
-                          background: 'var(--accent)',
-                          color: '#fff',
-                          fontSize: 11,
-                          fontWeight: 700,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0,
-                        }}
-                      >
-                        {unreadCount > 99 ? '99+' : unreadCount}
-                      </span>
-                    )}
-                  </Link>
-
-                  {(onMarkChannelRead || onMarkChannelUnread || canManage) && (
-                    <div className="flex md:hidden group-hover/ch:flex items-center gap-0.5 pr-1 flex-shrink-0">
-                      {isUnread && onMarkChannelRead && (
-                        <button
-                          data-testid={`mark-read-${channel.id}`}
-                          aria-label={`Mark #${channel.name} read`}
-                          onClick={() => onMarkChannelRead(channel.id)}
-                          className="p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/10 transition-colors"
-                          title="Mark channel read"
-                        >
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                          </svg>
-                        </button>
-                      )}
-                      {!isActive && !isUnread && onMarkChannelUnread && (
-                        <button
-                          data-testid={`mark-unread-${channel.id}`}
-                          aria-label={`Mark #${channel.name} unread`}
-                          onClick={() => onMarkChannelUnread(channel.id)}
-                          className="p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/10 transition-colors"
-                          title="Mark channel unread"
-                        >
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                            <circle cx="12" cy="12" r="7" />
-                          </svg>
-                        </button>
-                      )}
-                      {canManage && (
-                        <>
-                      <button
-                        onClick={() => {
-                          setSettingsError('')
-                          setSettingsChannel(channel)
-                        }}
-                        disabled={isPending}
-                        aria-label={`Edit #${channel.name} settings`}
-                        className="p-1 md:p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/10 transition-colors"
-                        title="Channel settings"
-                      >
-                        <svg className="w-3.5 h-3.5 md:w-3 md:h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.757.427 1.757 2.925 0 3.352a1.724 1.724 0 00-1.066 2.572c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.757-2.924 1.757-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.757-.427-1.757-2.925 0-3.352a1.724 1.724 0 001.066-2.572c-.94-1.543.826-3.31 2.37-2.37.996.607 2.296.07 2.572-1.065z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                      </button>
-                      <button
-                        disabled={allIdx === 0 || isPending}
-                        aria-label={`Move #${channel.name} up`}
-                        onClick={() => handleMove(channel.id, 'up')}
-                        className="p-1 md:p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/10 disabled:opacity-30 disabled:cursor-default transition-colors"
-                        title="Move up"
-                      >
-                        <svg className="w-3.5 h-3.5 md:w-3 md:h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
-                        </svg>
-                      </button>
-                      <button
-                        disabled={allIdx === channels.length - 1 || isPending}
-                        aria-label={`Move #${channel.name} down`}
-                        onClick={() => handleMove(channel.id, 'down')}
-                        className="p-1 md:p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/10 disabled:opacity-30 disabled:cursor-default transition-colors"
-                        title="Move down"
-                      >
-                        <svg className="w-3.5 h-3.5 md:w-3 md:h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => handleDelete(channel.id)}
-                        disabled={isPending}
-                        aria-label={`Delete #${channel.name}`}
-                        className="p-1 md:p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger)]/10 transition-colors"
-                        title="Delete channel"
-                      >
-                        <svg className="w-3.5 h-3.5 md:w-3 md:h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
+                  {rows.map(renderChannelRow)}
+                </CategorySection>
               )
             })}
 
@@ -454,6 +469,73 @@ export default function ChannelsSidebar({
         {/* DM section — always visible below channel list */}
         <DMSection currentUserId={profile.id} />
       </div>
+
+      {/* Category create/rename modal */}
+      <Modal
+        open={Boolean(categoryModal)}
+        onClose={() => {
+          if (isPending) return
+          setCategoryError('')
+          setCategoryModal(null)
+        }}
+        title={categoryModal?.mode === 'rename' ? 'Rename Category' : 'Create Category'}
+      >
+        {categoryModal && (
+          <form onSubmit={handleCategorySubmit} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor="category-name"
+                className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]"
+              >
+                Category Name
+              </label>
+              <input
+                id="category-name"
+                name="name"
+                type="text"
+                required
+                maxLength={60}
+                autoComplete="off"
+                defaultValue={categoryModal.mode === 'rename' ? categoryModal.currentName : ''}
+                className="rounded border border-black/20 bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                placeholder="Voice Rooms"
+              />
+            </div>
+
+            {categoryError && (
+              <p className="rounded border border-[var(--danger)]/20 bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]">
+                {categoryError}
+              </p>
+            )}
+
+            <div className="mt-1 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if (isPending) return
+                  setCategoryError('')
+                  setCategoryModal(null)
+                }}
+                disabled={isPending}
+                className="rounded px-4 py-2 text-sm font-semibold text-[var(--text-muted)] transition-colors hover:bg-white/10 hover:text-[var(--text-primary)]"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isPending}
+                className="rounded bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isPending
+                  ? 'Saving...'
+                  : categoryModal.mode === 'rename'
+                    ? 'Save Changes'
+                    : 'Create Category'}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
 
       <Modal
         open={Boolean(settingsChannel)}
@@ -504,6 +586,28 @@ export default function ChannelsSidebar({
                 placeholder="What belongs in this channel?"
               />
             </div>
+
+            {categories.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="channel-settings-category"
+                  className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]"
+                >
+                  Category
+                </label>
+                <select
+                  id="channel-settings-category"
+                  name="category_id"
+                  defaultValue={settingsChannel.category_id ?? ''}
+                  className="rounded border border-black/20 bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                >
+                  <option value="">No category</option>
+                  {categories.map(category => (
+                    <option key={category.id} value={category.id}>{category.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <label className="flex items-start gap-3 rounded border border-black/20 bg-[var(--bg-primary)] p-3 text-sm text-[var(--text-primary)]">
               <input
