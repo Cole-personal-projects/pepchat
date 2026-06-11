@@ -14,16 +14,24 @@ vi.mock('@/app/(app)/members/actions', () => ({
   kickMember: (...args: any[]) => kickMemberMock(...args),
 }))
 
+const assignMemberRoleMock = vi.fn().mockResolvedValue({ ok: true })
+const removeMemberRoleMock = vi.fn().mockResolvedValue({ ok: true })
 vi.mock('@/app/(app)/roles/actions', () => ({
-  assignMemberRole: vi.fn().mockResolvedValue({ ok: true }),
-  removeMemberRole: vi.fn().mockResolvedValue({ ok: true }),
+  assignMemberRole: (...args: any[]) => assignMemberRoleMock(...args),
+  removeMemberRole: (...args: any[]) => removeMemberRoleMock(...args),
 }))
+
+// Mutable so the role-sheet tests can provide custom roles.
+let groupRolesResult: { roles: any[]; roleIdsByUserId: Map<string, Set<string>> } = {
+  roles: [],
+  roleIdsByUserId: new Map(),
+}
 
 vi.mock('@/lib/hooks/useGroupRoles', () => ({
   useGroupRoles: () => ({
-    roles: [],
+    roles: groupRolesResult.roles,
     memberRoles: [],
-    roleIdsByUserId: new Map(),
+    roleIdsByUserId: groupRolesResult.roleIdsByUserId,
     loading: false,
     refetch: vi.fn(),
   }),
@@ -76,6 +84,7 @@ describe('MembersPanel — role change regression', () => {
     realtimeCb = null
     assignRoleMock.mockResolvedValue({ ok: true })
     kickMemberMock.mockResolvedValue({ ok: true })
+    groupRolesResult = { roles: [], roleIdsByUserId: new Map() }
     fetchResult = {
       data: [
         { user_id: 'u1', group_id: 'grp-1', role: 'moderator', profiles: { username: 'alice', avatar_url: null } },
@@ -267,5 +276,110 @@ describe('MembersPanel — role change regression', () => {
 
     // Component stays alive — no crash
     expect(screen.getByText('alice')).toBeInTheDocument()
+  })
+})
+
+describe('MembersPanel — custom role assignment sheet', () => {
+  const GROUP_BUY = {
+    id: 'role-gb', group_id: 'grp-1', name: 'Group Buy', color: '#57f287',
+    hoist: false, mentionable: true, position: 1, permissions: '0',
+    is_default: false, created_at: '2026-01-01T00:00:00Z',
+  }
+
+  beforeEach(() => {
+    assignMemberRoleMock.mockClear()
+    removeMemberRoleMock.mockClear()
+    assignMemberRoleMock.mockResolvedValue({ ok: true })
+    removeMemberRoleMock.mockResolvedValue({ ok: true })
+    groupRolesResult = { roles: [GROUP_BUY], roleIdsByUserId: new Map() }
+    fetchResult = {
+      data: [
+        { user_id: 'u1', group_id: 'grp-1', role: 'moderator', profiles: { username: 'alice', avatar_url: null } },
+        { user_id: 'u2', group_id: 'grp-1', role: 'user',      profiles: { username: 'bob',   avatar_url: null } },
+      ],
+      error: null,
+    }
+  })
+
+  it('opens a portaled action sheet listing custom roles', async () => {
+    await act(async () => {
+      render(<MembersPanel {...BASE_PROPS} />)
+    })
+
+    fireEvent.click(screen.getByTestId('member-roles-btn-u2'))
+
+    expect(screen.getByTestId('action-sheet')).toBeInTheDocument()
+    expect(screen.getByTestId('action-sheet-title')).toHaveTextContent('bob — Roles')
+    // Portaled to document.body so the sidebar scroll container can't clip it.
+    expect(document.body.contains(screen.getByTestId('action-sheet'))).toBe(true)
+    expect(screen.getByTestId('toggle-role-role-gb-u2')).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('assigns a custom role with an optimistic checkmark', async () => {
+    await act(async () => {
+      render(<MembersPanel {...BASE_PROPS} />)
+    })
+
+    fireEvent.click(screen.getByTestId('member-roles-btn-u2'))
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('toggle-role-role-gb-u2'))
+    })
+
+    expect(assignMemberRoleMock).toHaveBeenCalledWith('grp-1', 'u2', 'role-gb')
+    expect(screen.getByTestId('toggle-role-role-gb-u2')).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('removes an assigned role when toggled off', async () => {
+    groupRolesResult = {
+      roles: [GROUP_BUY],
+      roleIdsByUserId: new Map([['u2', new Set(['role-gb'])]]),
+    }
+    await act(async () => {
+      render(<MembersPanel {...BASE_PROPS} />)
+    })
+
+    fireEvent.click(screen.getByTestId('member-roles-btn-u2'))
+    expect(screen.getByTestId('toggle-role-role-gb-u2')).toHaveAttribute('aria-pressed', 'true')
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('toggle-role-role-gb-u2'))
+    })
+
+    expect(removeMemberRoleMock).toHaveBeenCalledWith('grp-1', 'u2', 'role-gb')
+    expect(screen.getByTestId('toggle-role-role-gb-u2')).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('reverts the optimistic toggle and surfaces the error on failure', async () => {
+    assignMemberRoleMock.mockResolvedValue({ error: 'Only role managers can assign roles.' })
+    await act(async () => {
+      render(<MembersPanel {...BASE_PROPS} />)
+    })
+
+    fireEvent.click(screen.getByTestId('member-roles-btn-u2'))
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('toggle-role-role-gb-u2'))
+    })
+
+    expect(screen.getByTestId('toggle-role-role-gb-u2')).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByText('Only role managers can assign roles.')).toBeInTheDocument()
+  })
+
+  it('closes via the Done button', async () => {
+    await act(async () => {
+      render(<MembersPanel {...BASE_PROPS} />)
+    })
+
+    fireEvent.click(screen.getByTestId('member-roles-btn-u2'))
+    fireEvent.click(screen.getByTestId('member-roles-done'))
+
+    expect(screen.queryByTestId('action-sheet')).not.toBeInTheDocument()
+  })
+
+  it('hides the roles button from non-admin viewers', async () => {
+    await act(async () => {
+      render(<MembersPanel {...BASE_PROPS} currentUserRole="moderator" />)
+    })
+
+    expect(screen.queryByTestId('member-roles-btn-u2')).not.toBeInTheDocument()
   })
 })
