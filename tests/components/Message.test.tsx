@@ -51,6 +51,8 @@ const BASE_ACTIONS: MessageActions = {
   markUnread: vi.fn(),
   report: vi.fn(),
   muteUser: vi.fn(),
+  retrySend: vi.fn(),
+  discardSend: vi.fn(),
 }
 
 const BASE_PROPS = {
@@ -334,5 +336,49 @@ describe('Message — edit keyboard shortcuts', () => {
     render(<Message {...BASE_PROPS} isOwn editingId="msg-1" editContent="edited text" />, { cancelEdit: onCancelEdit })
     fireEvent.keyDown(screen.getByTestId('message-edit-textarea'), { key: 'Escape' })
     expect(onCancelEdit).toHaveBeenCalled()
+  })
+})
+
+describe('Message — optimistic send states', () => {
+  it('fades a pending echo and hides its action bar', () => {
+    const msg: MessageWithProfile = { ...BASE_MSG, optimistic: 'pending' } as MessageWithProfile
+    render(<Message {...BASE_PROPS} isOwn msg={msg} />)
+
+    const row = screen.getByText('Hello world').closest('.message-row') as HTMLElement
+    expect(row).toHaveStyle({ opacity: '0.55' })
+    expect(screen.queryByTestId('action-bar')).not.toBeInTheDocument()
+    expect(screen.queryByTestId(`send-failed-${msg.id}`)).not.toBeInTheDocument()
+  })
+
+  it('shows retry and discard controls on a failed echo', () => {
+    const retrySend = vi.fn()
+    const discardSend = vi.fn()
+    const msg: MessageWithProfile = { ...BASE_MSG, optimistic: 'failed' } as MessageWithProfile
+    render(<Message {...BASE_PROPS} isOwn msg={msg} />, { retrySend, discardSend })
+
+    expect(screen.getByTestId(`send-failed-${msg.id}`)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId(`retry-send-${msg.id}`))
+    expect(retrySend).toHaveBeenCalledWith(msg.id)
+
+    fireEvent.click(screen.getByTestId(`discard-send-${msg.id}`))
+    expect(discardSend).toHaveBeenCalledWith(msg.id)
+  })
+
+  it('does not open the long-press sheet on an optimistic row', () => {
+    vi.useFakeTimers()
+    try {
+      const openActions = vi.fn()
+      const msg: MessageWithProfile = { ...BASE_MSG, optimistic: 'pending' } as MessageWithProfile
+      render(<Message {...BASE_PROPS} isOwn msg={msg} />, { openActions })
+
+      const row = screen.getByText('Hello world').closest('.message-row') as HTMLElement
+      fireEvent.pointerDown(row, { pointerType: 'touch' })
+      vi.advanceTimersByTime(600)
+
+      expect(openActions).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

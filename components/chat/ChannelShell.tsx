@@ -56,6 +56,8 @@ export default function ChannelShell({
     loadingMore,
     loadMore,
     addMessage,
+    addOptimisticMessage,
+    setOptimisticState,
     removeMessage,
     broadcastNewMessage,
     toggleReactionOptimistic,
@@ -237,6 +239,21 @@ export default function ChannelShell({
           userRole={userRole}
           onEditSuccess={updateMessageContent}
           onDeleteSuccess={removeMessage}
+          onRetryMessage={(messageId) => {
+            const echo = messages.find(m => m.id === messageId)
+            if (!echo) return
+            setOptimisticState(messageId, 'pending')
+            void (async () => {
+              try {
+                const { sendMessage } = await import('@/app/(app)/messages/actions')
+                const result = await sendMessage(channelId, echo.content, echo.reply_to_id ?? undefined, echo.attachments ?? [])
+                setOptimisticState(messageId, result && 'error' in result ? 'failed' : 'sent')
+              } catch {
+                setOptimisticState(messageId, 'failed')
+              }
+            })()
+          }}
+          onDiscardMessage={removeMessage}
           onOpenPinnedPanel={() => {
             closeThreadPanel()
             setPinnedPanelOpen(true)
@@ -270,6 +287,35 @@ export default function ChannelShell({
           replyingTo={replyingTo}
           onCancelReply={() => setReplyingTo(null)}
           onTyping={broadcastTyping}
+          onOptimisticSend={({ content, attachments, replyTo }) => {
+            const tempId = `optimistic-${crypto.randomUUID()}`
+            addOptimisticMessage({
+              id: tempId,
+              channel_id: channelId,
+              user_id: profile.id,
+              content,
+              created_at: new Date().toISOString(),
+              edited_at: null,
+              reply_to_id: replyTo?.id ?? null,
+              replied_to: replyTo
+                ? { id: replyTo.id, content: replyTo.content, user_id: replyTo.user_id, profiles: replyTo.profiles }
+                : null,
+              attachments,
+              reactions: [],
+              optimistic: 'pending',
+              profiles: {
+                username: profile.username,
+                display_name: profile.display_name,
+                avatar_url: profile.avatar_url,
+                username_color: profile.username_color,
+              },
+            } as unknown as MessageWithProfile)
+            setReplyingTo(null)
+            return tempId
+          }}
+          onOptimisticSettled={(tempId, result) => {
+            setOptimisticState(tempId, 'error' in result ? 'failed' : 'sent')
+          }}
           onSent={(msg) => {
             addMessage(msg)
             broadcastNewMessage(msg)

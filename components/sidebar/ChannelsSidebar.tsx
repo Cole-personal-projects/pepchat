@@ -29,6 +29,7 @@ interface ChannelsSidebarProps {
   userRole: Role | null
   unreadChannelIds?: Set<string>
   unreadCountsByChannelId?: Map<string, number>
+  mentionCountsByChannelId?: Map<string, number>
   onMarkChannelRead?: (channelId: string) => void | Promise<void>
   onMarkChannelUnread?: (channelId: string) => void | Promise<void>
   onCreateChannel?: (categoryId?: string) => void
@@ -65,6 +66,7 @@ export default function ChannelsSidebar({
   userRole,
   unreadChannelIds = new Set(),
   unreadCountsByChannelId = new Map(),
+  mentionCountsByChannelId = new Map(),
   onMarkChannelRead,
   onMarkChannelUnread,
   onCreateChannel,
@@ -237,6 +239,7 @@ export default function ChannelsSidebar({
         isActive={isActive}
         isUnread={isUnread}
         unreadCount={unreadCountsByChannelId.get(channel.id) ?? 0}
+        mentionCount={mentionCountsByChannelId.get(channel.id) ?? 0}
         canManage={canManage}
         isPending={isPending}
         canMoveUp={peerIdx > 0}

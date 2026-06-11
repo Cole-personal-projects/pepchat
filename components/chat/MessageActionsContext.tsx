@@ -21,6 +21,9 @@ export type MessageActions = {
   closePicker: () => void
   markUnread: (messageId: string) => void
   report: (messageId: string) => void
+  /** Optimistic echo controls — present only in surfaces that send. */
+  retrySend?: (messageId: string) => void
+  discardSend?: (messageId: string) => void
   muteUser: (messageId: string) => void
 }
 

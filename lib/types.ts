@@ -147,6 +147,12 @@ export interface Reaction {
 }
 
 export interface Message {
+  /**
+   * Client-only optimistic send state. Never persisted: 'pending' while the
+   * action is in flight, 'failed' when it errored (retry/discard UI), 'sent'
+   * once acked but not yet replaced by the realtime row.
+   */
+  optimistic?: 'pending' | 'failed' | 'sent'
   id: string
   channel_id: string
   user_id: string

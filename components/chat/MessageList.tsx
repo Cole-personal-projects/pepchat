@@ -52,6 +52,9 @@ interface MessageListProps {
   }) => Promise<{ error: string } | { ok: true; messages: MessageSearchResult[] }>
   onEditSuccess?: (messageId: string, content: string) => void
   onDeleteSuccess?: (messageId: string) => void
+  /** Optimistic echo controls (channel surfaces only). */
+  onRetryMessage?: (messageId: string) => void
+  onDiscardMessage?: (messageId: string) => void
   onOpenPinnedPanel?: () => void
   onThreadPanelOpenChange?: (open: boolean) => void
   onOpenThreadRootIdChange?: (rootId: string | null) => void
@@ -115,6 +118,8 @@ export default function MessageList({
   searchAction,
   onEditSuccess,
   onDeleteSuccess,
+  onRetryMessage,
+  onDiscardMessage,
   onOpenPinnedPanel,
   onThreadPanelOpenChange,
   onOpenThreadRootIdChange,
@@ -780,6 +785,8 @@ export default function MessageList({
       const msg = findMessageById(messageId)
       if (msg) muteUser(msg)
     },
+    retrySend: onRetryMessage,
+    discardSend: onDiscardMessage,
   }), [
     editContent,
     editPending,

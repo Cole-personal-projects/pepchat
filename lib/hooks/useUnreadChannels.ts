@@ -8,6 +8,8 @@ interface UnreadState {
   unreadChannelIds: Set<string>
   unreadGroupIds: Set<string>
   unreadCountsByChannelId: Map<string, number>
+  /** Unread @mention pings per channel — rendered as the red badge. */
+  mentionCountsByChannelId: Map<string, number>
 }
 
 export function useUnreadChannels(
@@ -16,6 +18,7 @@ export function useUnreadChannels(
 ): UnreadState {
   const [unreadChannelIds, setUnreadChannelIds] = useState(new Set<string>())
   const [unreadCountsByChannelId, setUnreadCountsByChannelId] = useState(new Map<string, number>())
+  const [mentionCountsByChannelId, setMentionCountsByChannelId] = useState(new Map<string, number>())
   const channelGroupMapRef = useRef(new Map<string, string>())
 
   // Keep a ref so Realtime callbacks always see the current activeChannelId
@@ -38,7 +41,21 @@ export function useUnreadChannels(
       next.delete(activeChannelId)
       return next
     })
-  }, [activeChannelId])
+    setMentionCountsByChannelId(prev => {
+      if (!prev.has(activeChannelId)) return prev
+      const next = new Map(prev)
+      next.delete(activeChannelId)
+      // Opening the channel consumes its pings — best-effort server mark.
+      void createClient()
+        .from('notification_events')
+        .update({ read_at: new Date().toISOString() })
+        .eq('user_id', userId)
+        .eq('channel_id', activeChannelId)
+        .eq('type', 'mention')
+        .is('read_at', null)
+      return next
+    })
+  }, [activeChannelId, userId])
 
   const fetchUnread = useCallback(async () => {
     if (!userId) return
@@ -78,6 +95,22 @@ export function useUnreadChannels(
       .neq('user_id', userId)
       .is('thread_root_id', null)
       .gte('created_at', thirtyDaysAgo)
+
+    // 3b — Unread mention pings, grouped per channel.
+    const { data: mentionRows } = await supabase
+      .from('notification_events')
+      .select('channel_id')
+      .eq('user_id', userId)
+      .eq('type', 'mention')
+      .is('read_at', null)
+      .gte('created_at', thirtyDaysAgo)
+
+    const mentionCounts = new Map<string, number>()
+    for (const row of (mentionRows ?? []) as { channel_id: string | null }[]) {
+      if (!row.channel_id || row.channel_id === activeChannelIdRef.current) continue
+      mentionCounts.set(row.channel_id, (mentionCounts.get(row.channel_id) ?? 0) + 1)
+    }
+    setMentionCountsByChannelId(mentionCounts)
 
     // 4 — Compute unread channel IDs
     const unread = new Set<string>()
@@ -135,6 +168,21 @@ export function useUnreadChannels(
       },
       {
         type: 'postgres_changes',
+        filter: { event: 'INSERT', schema: 'public', table: 'notification_events', filter: `user_id=eq.${userId}` },
+        handler: (payload) => {
+          const event = payload.new as { type?: string; channel_id?: string | null }
+          if (event.type !== 'mention' || !event.channel_id) return
+          if (event.channel_id === activeChannelIdRef.current) return
+          const channelId = event.channel_id
+          setMentionCountsByChannelId(prev => {
+            const next = new Map(prev)
+            next.set(channelId, (next.get(channelId) ?? 0) + 1)
+            return next
+          })
+        },
+      },
+      {
+        type: 'postgres_changes',
         filter: { event: '*', schema: 'public', table: 'channel_read_state' },
         handler: (payload) => {
           const { channel_id } = payload.new as { channel_id: string }
@@ -168,5 +216,5 @@ export function useUnreadChannels(
     return groups
   }, [unreadChannelIds])
 
-  return { unreadChannelIds, unreadGroupIds, unreadCountsByChannelId }
+  return { unreadChannelIds, unreadGroupIds, unreadCountsByChannelId, mentionCountsByChannelId }
 }
