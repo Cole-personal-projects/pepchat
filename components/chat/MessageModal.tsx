@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import ReactDOM from 'react-dom'
 import dynamic from 'next/dynamic'
 import { useMessageActions } from '@/components/chat/MessageActionsContext'
+import { useAnimatedPresence } from '@/lib/hooks/useAnimatedPresence'
 import type { MessageWithProfile } from '@/lib/types'
 
 const EmojiPickerPopover = dynamic(
@@ -43,12 +44,20 @@ export default function MessageModal({
   const actions = useMessageActions()
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [showFullPicker, setShowFullPicker] = useState(false)
+  const { mounted, exiting } = useAnimatedPresence(open && msg !== null)
 
-  if (!open || !msg) return null
+  // The parent nulls `msg` the moment it closes; keep the last message so
+  // the sheet still has content while the exit animation plays.
+  const lastMsgRef = useRef<MessageWithProfile | null>(msg)
+  if (msg) lastMsgRef.current = msg
+  const visibleMsg = msg ?? lastMsgRef.current
+
+  if (!mounted || !visibleMsg) return null
+  const sheetMsg = visibleMsg
 
   const canDelete = isOwn || canDeleteAny
-  const mirrorRootId = msg.mirrored_from_thread?.thread_root_id ?? null
-  const isMirror = Boolean(msg.mirrored_from_thread_id)
+  const mirrorRootId = sheetMsg.mirrored_from_thread?.thread_root_id ?? null
+  const isMirror = Boolean(sheetMsg.mirrored_from_thread_id)
 
   function handleBackdropClick(e: React.MouseEvent) {
     if (e.target === e.currentTarget) closeModal()
@@ -59,7 +68,7 @@ export default function MessageModal({
       setConfirmingDelete(true)
       return
     }
-    actions.delete(msg!.id)
+    actions.delete(sheetMsg.id)
     setConfirmingDelete(false)
     closeModal()
   }
@@ -69,13 +78,14 @@ export default function MessageModal({
   }
 
   function handleCopyLink() {
-    navigator.clipboard?.writeText(`${window.location.origin}${messageLinkBasePath}/${msg!.channel_id}#${msg!.id}`)
+    navigator.clipboard?.writeText(`${window.location.origin}${messageLinkBasePath}/${sheetMsg.channel_id}#${sheetMsg.id}`)
     closeModal()
   }
 
   const content = (
     <div
       data-testid="modal-backdrop"
+      className={exiting ? 'modal-backdrop-exit' : 'modal-backdrop-enter'}
       onClick={handleBackdropClick}
       style={{
         position: 'fixed',
@@ -89,6 +99,7 @@ export default function MessageModal({
     >
       <div
         data-testid="message-modal"
+        className={exiting ? 'sheet-panel-exit' : 'modal-panel-enter'}
         onClick={e => e.stopPropagation()}
         style={{
           width: '100%',
@@ -121,7 +132,7 @@ export default function MessageModal({
             WebkitBoxOrient: 'vertical',
           }}
         >
-          {msg.content}
+          {sheetMsg.content}
         </div>
 
         {/* Quick reactions */}
@@ -140,7 +151,7 @@ export default function MessageModal({
               <button
                 key={emoji}
                 data-testid={`quick-react-${emoji}`}
-                onClick={() => { actions.react(msg.id, emoji); closeModal() }}
+                onClick={() => { actions.react(sheetMsg.id, emoji); closeModal() }}
                 style={{
                   fontSize: 24,
                   background: 'var(--bg-tertiary)',
@@ -186,22 +197,22 @@ export default function MessageModal({
             <ActionRow
               testId="modal-action-reply"
               label="Reply"
-              onClick={() => { actions.reply(msg.id); closeModal() }}
+              onClick={() => { actions.reply(sheetMsg.id); closeModal() }}
             />
           )}
 
-          {allowReplies && !msg.thread_root_id && (
+          {allowReplies && !sheetMsg.thread_root_id && (
             <ActionRow
               testId="modal-action-reply-thread"
               label="Reply in Thread"
-              onClick={() => { actions.openThread(msg.id); closeModal() }}
+              onClick={() => { actions.openThread(sheetMsg.id); closeModal() }}
             />
           )}
 
           <ActionRow
             testId="modal-action-copy"
             label="Copy Text"
-            onClick={() => { navigator.clipboard?.writeText(msg.content); closeModal() }}
+            onClick={() => { navigator.clipboard?.writeText(sheetMsg.content); closeModal() }}
           />
 
           <ActionRow
@@ -218,7 +229,7 @@ export default function MessageModal({
                 if (isMirror) {
                   if (mirrorRootId) actions.openThread(mirrorRootId)
                 } else {
-                  actions.startEdit(msg.id)
+                  actions.startEdit(sheetMsg.id)
                 }
                 closeModal()
               }}
@@ -229,7 +240,7 @@ export default function MessageModal({
             <ActionRow
               testId="modal-action-pin"
               label="Pin Message"
-              onClick={() => { actions.pin(msg.id); closeModal() }}
+              onClick={() => { actions.pin(sheetMsg.id); closeModal() }}
             />
           )}
 
@@ -237,7 +248,7 @@ export default function MessageModal({
             <ActionRow
               testId="modal-action-mark-unread"
               label="Mark Unread"
-              onClick={() => { actions.markUnread(msg.id); closeModal() }}
+              onClick={() => { actions.markUnread(sheetMsg.id); closeModal() }}
             />
           )}
 
@@ -245,7 +256,7 @@ export default function MessageModal({
             <ActionRow
               testId="modal-action-report"
               label="Report Message"
-              onClick={() => { actions.report(msg.id); closeModal() }}
+              onClick={() => { actions.report(sheetMsg.id); closeModal() }}
             />
           )}
 
@@ -329,7 +340,7 @@ export default function MessageModal({
           >
             <EmojiPickerPopover
               onSelect={emoji => {
-                actions.react(msg!.id, emoji)
+                actions.react(sheetMsg.id, emoji)
                 setShowFullPicker(false)
                 closeModal()
               }}
