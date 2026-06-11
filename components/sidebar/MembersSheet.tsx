@@ -10,6 +10,7 @@ interface MembersSheetProps {
   groupName: string
   currentUserId: string
   currentUserRole: Role
+  ownerId?: string | null
 }
 
 /**
@@ -24,6 +25,7 @@ export default function MembersSheet({
   groupName,
   currentUserId,
   currentUserRole,
+  ownerId = null,
 }: MembersSheetProps) {
   return (
     <>
@@ -72,6 +74,7 @@ export default function MembersSheet({
               groupId={groupId}
               currentUserId={currentUserId}
               currentUserRole={currentUserRole}
+              ownerId={ownerId}
               variant="sheet"
             />
           )}

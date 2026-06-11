@@ -112,13 +112,39 @@ describe('member actions — membership guards', () => {
     expect(mutation.update).not.toHaveBeenCalled()
   })
 
-  it('does not assign the admin role', async () => {
+  it('does not let non-owner admins grant the admin role', async () => {
     const caller = makeSingleBuilder({ data: { role: 'admin' } })
+    const ownerLookup = makeSingleBuilder({ data: { owner_id: 'owner-x' } })
     const mutation = makeMutationBuilder()
-    setupClient([caller, mutation])
+    setupClient([caller, ownerLookup, mutation])
 
     await expect(assignRole('group-1', 'user-1', 'admin')).resolves.toEqual({
-      error: 'Cannot assign the admin role.',
+      error: 'Only the owner can grant the admin role.',
+    })
+
+    expect(mutation.update).not.toHaveBeenCalled()
+  })
+
+  it('lets the owner grant the admin role', async () => {
+    const caller = makeSingleBuilder({ data: { role: 'admin' } })
+    const ownerLookup = makeSingleBuilder({ data: { owner_id: 'admin-1' } })
+    const target = makeSingleBuilder({ data: { role: 'user' } })
+    const mutation = makeMutationBuilder()
+    const audit = makeAuditBuilder()
+    setupClient([caller, ownerLookup, target, mutation, audit])
+
+    await expect(assignRole('group-1', 'user-1', 'admin')).resolves.toEqual({ ok: true })
+    expect(mutation.update).toHaveBeenCalledWith({ role: 'admin' })
+  })
+
+  it("refuses to change the owner's role", async () => {
+    const caller = makeSingleBuilder({ data: { role: 'admin' } })
+    const ownerLookup = makeSingleBuilder({ data: { owner_id: 'user-1' } })
+    const mutation = makeMutationBuilder()
+    setupClient([caller, ownerLookup, mutation])
+
+    await expect(assignRole('group-1', 'user-1', 'moderator')).resolves.toEqual({
+      error: "The owner's role cannot be changed. Transfer ownership instead.",
     })
 
     expect(mutation.update).not.toHaveBeenCalled()
@@ -126,9 +152,10 @@ describe('member actions — membership guards', () => {
 
   it('does not assign a role when the target member is missing', async () => {
     const caller = makeSingleBuilder({ data: { role: 'admin' } })
+    const ownerLookup = makeSingleBuilder({ data: { owner_id: 'owner-x' } })
     const target = makeSingleBuilder({ data: null })
     const mutation = makeMutationBuilder()
-    setupClient([caller, target, mutation])
+    setupClient([caller, ownerLookup, target, mutation])
 
     await expect(assignRole('group-1', 'missing-user', 'moderator')).resolves.toEqual({
       error: 'Target member was not found.',
@@ -137,25 +164,39 @@ describe('member actions — membership guards', () => {
     expect(mutation.update).not.toHaveBeenCalled()
   })
 
-  it('does not assign a role when the target member is an admin', async () => {
+  it('does not let non-owner admins demote another admin', async () => {
     const caller = makeSingleBuilder({ data: { role: 'admin' } })
+    const ownerLookup = makeSingleBuilder({ data: { owner_id: 'owner-x' } })
     const target = makeSingleBuilder({ data: { role: 'admin' } })
     const mutation = makeMutationBuilder()
-    setupClient([caller, target, mutation])
+    setupClient([caller, ownerLookup, target, mutation])
 
     await expect(assignRole('group-1', 'target-admin-1', 'moderator')).resolves.toEqual({
-      error: 'Cannot change an admin\'s role.',
+      error: 'Only the owner can change an admin\'s role.',
     })
 
     expect(mutation.update).not.toHaveBeenCalled()
   })
 
+  it('lets the owner demote another admin', async () => {
+    const caller = makeSingleBuilder({ data: { role: 'admin' } })
+    const ownerLookup = makeSingleBuilder({ data: { owner_id: 'admin-1' } })
+    const target = makeSingleBuilder({ data: { role: 'admin' } })
+    const mutation = makeMutationBuilder()
+    const audit = makeAuditBuilder()
+    setupClient([caller, ownerLookup, target, mutation, audit])
+
+    await expect(assignRole('group-1', 'target-admin-1', 'moderator')).resolves.toEqual({ ok: true })
+    expect(mutation.update).toHaveBeenCalledWith({ role: 'moderator' })
+  })
+
   it('updates a member role using group and user filters', async () => {
     const caller = makeSingleBuilder({ data: { role: 'admin' } })
+    const ownerLookup = makeSingleBuilder({ data: { owner_id: 'owner-x' } })
     const target = makeSingleBuilder({ data: { role: 'user' } })
     const mutation = makeMutationBuilder()
     const audit = makeAuditBuilder()
-    setupClient([caller, target, mutation, audit])
+    setupClient([caller, ownerLookup, target, mutation, audit])
 
     await expect(assignRole('group-1', 'user-1', 'moderator')).resolves.toEqual({ ok: true })
 
@@ -195,17 +236,44 @@ describe('member actions — membership guards', () => {
     },
   )
 
-  it('does not let admins kick the group admin', async () => {
+  it('does not let non-owner admins kick another admin', async () => {
     const caller = makeSingleBuilder({ data: { role: 'admin' } })
     const target = makeSingleBuilder({ data: { role: 'admin' } })
+    const ownerLookup = makeSingleBuilder({ data: { owner_id: 'owner-x' } })
     const mutation = makeMutationBuilder()
-    setupClient([caller, target, mutation])
+    setupClient([caller, target, ownerLookup, mutation])
 
     await expect(kickMember('group-1', 'target-admin-1')).resolves.toEqual({
-      error: 'The group admin cannot be kicked.',
+      error: 'Only the owner can kick an admin.',
     })
 
     expect(mutation.delete).not.toHaveBeenCalled()
+  })
+
+  it('never kicks the group owner', async () => {
+    const caller = makeSingleBuilder({ data: { role: 'admin' } })
+    const target = makeSingleBuilder({ data: { role: 'admin' } })
+    const ownerLookup = makeSingleBuilder({ data: { owner_id: 'target-admin-1' } })
+    const mutation = makeMutationBuilder()
+    setupClient([caller, target, ownerLookup, mutation])
+
+    await expect(kickMember('group-1', 'target-admin-1')).resolves.toEqual({
+      error: 'The group owner cannot be kicked.',
+    })
+
+    expect(mutation.delete).not.toHaveBeenCalled()
+  })
+
+  it('lets the owner kick an admin', async () => {
+    const caller = makeSingleBuilder({ data: { role: 'admin' } })
+    const target = makeSingleBuilder({ data: { role: 'admin' } })
+    const ownerLookup = makeSingleBuilder({ data: { owner_id: 'admin-1' } })
+    const mutation = makeMutationBuilder()
+    const audit = makeAuditBuilder()
+    setupClient([caller, target, ownerLookup, mutation, audit])
+
+    await expect(kickMember('group-1', 'target-admin-1')).resolves.toEqual({ ok: true })
+    expect(mutation.delete).toHaveBeenCalled()
   })
 
   it('does not kick a member when the target member is missing', async () => {
@@ -249,10 +317,11 @@ describe('member actions — membership guards', () => {
 
   it('audits successful role assignments', async () => {
     const caller = makeSingleBuilder({ data: { role: 'admin' } })
+    const ownerLookup = makeSingleBuilder({ data: { owner_id: 'owner-x' } })
     const target = makeSingleBuilder({ data: { role: 'user' } })
     const mutation = makeMutationBuilder()
     const audit = makeAuditBuilder()
-    setupClient([caller, target, mutation, audit])
+    setupClient([caller, ownerLookup, target, mutation, audit])
 
     await expect(assignRole('group-1', 'user-1', 'moderator')).resolves.toEqual({ ok: true })
 
@@ -272,9 +341,10 @@ describe('member actions — membership guards', () => {
   it('deletes a kicked member using group and user filters', async () => {
     const caller = makeSingleBuilder({ data: { role: 'moderator' } })
     const target = makeSingleBuilder({ data: { role: 'noob' } })
+    const ownerLookup = makeSingleBuilder({ data: { owner_id: 'owner-x' } })
     const mutation = makeMutationBuilder()
     const audit = makeAuditBuilder()
-    setupClient([caller, target, mutation, audit], 'mod-1')
+    setupClient([caller, target, ownerLookup, mutation, audit], 'mod-1')
 
     await expect(kickMember('group-1', 'user-1')).resolves.toEqual({ ok: true })
 
@@ -286,9 +356,10 @@ describe('member actions — membership guards', () => {
   it('audits successful member kicks', async () => {
     const caller = makeSingleBuilder({ data: { role: 'moderator' } })
     const target = makeSingleBuilder({ data: { role: 'noob' } })
+    const ownerLookup = makeSingleBuilder({ data: { owner_id: 'owner-x' } })
     const mutation = makeMutationBuilder()
     const audit = makeAuditBuilder()
-    setupClient([caller, target, mutation, audit], 'mod-1')
+    setupClient([caller, target, ownerLookup, mutation, audit], 'mod-1')
 
     await expect(kickMember('group-1', 'user-1')).resolves.toEqual({ ok: true })
 

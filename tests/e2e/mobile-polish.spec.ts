@@ -274,3 +274,34 @@ test.describe('roles settings on mobile', () => {
     await page.screenshot({ path: 'test-results/mobile-roles-editor.png', fullPage: false })
   })
 })
+
+test.describe('ownership', () => {
+  test('owner transfers the server; crown moves and old owner stays admin', async ({ page }) => {
+    await login(page)
+    await openSidebar(page)
+
+    // Settings → Danger Zone → Transfer Ownership (owner only).
+    await page.locator('[data-testid="group-settings-btn"]').click()
+    await page.locator('[data-testid="nav-danger"]').click()
+    const transferBlock = page.locator('[data-testid="transfer-ownership"]')
+    await expect(transferBlock).toBeVisible()
+    await page.screenshot({ path: 'test-results/mobile-transfer-ownership.png' })
+
+    await page.locator('[data-testid="transfer-target-select"]').selectOption('22222222-2222-4222-8222-222222222222')
+    // Two-tap confirmation guards the irreversible action.
+    await page.locator('[data-testid="transfer-ownership-btn"]').click()
+    await expect(page.locator('[data-testid="transfer-ownership-btn"]')).toContainText('confirm')
+    await page.locator('[data-testid="transfer-ownership-btn"]').click()
+    await expect(page.locator('[data-testid="transfer-notice"]')).toContainText('Ownership transferred')
+
+    // After reload, hermes wears the crown and the old owner is an admin.
+    await page.reload()
+    await openGeneralChannel(page)
+    await openMembersSheet(page)
+    const sheet = page.locator('[data-testid="members-sheet"]')
+    const hermesRow = sheet.locator('li', { hasText: 'hermes' }).first()
+    await expect(hermesRow.locator('[data-testid="role-pill"]')).toContainText('owner')
+    const oldOwnerRow = sheet.locator('li', { hasText: 'panicmonkeyxx' }).first()
+    await expect(oldOwnerRow.locator('[data-testid="role-pill"]')).toContainText('admin')
+  })
+})

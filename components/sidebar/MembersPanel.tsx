@@ -20,6 +20,8 @@ interface MembersPanelProps {
   groupId: string
   currentUserId: string
   currentUserRole: Role
+  /** The group owner — gets the crown pill instead of the admin pill. */
+  ownerId?: string | null
   /**
    * 'sidebar' renders the collapsible section used in the desktop channels
    * sidebar; 'sheet' renders bare content for the mobile members sheet,
@@ -32,7 +34,7 @@ interface MembersPanelProps {
  * Members list with role management. Admins can assign roles and kick;
  * everyone else sees the read-only view.
  */
-export default function MembersPanel({ groupId, currentUserId, currentUserRole, variant = 'sidebar' }: MembersPanelProps) {
+export default function MembersPanel({ groupId, currentUserId, currentUserRole, ownerId = null, variant = 'sidebar' }: MembersPanelProps) {
   const { members, loading } = useMembersList(groupId)
   const { roles, roleIdsByUserId } = useGroupRoles(groupId)
   const [expanded, setExpanded] = useState(true)
@@ -234,9 +236,13 @@ export default function MembersPanel({ groupId, currentUserId, currentUserRole, 
 
                 {/* Discord-style rows: no role pills or management buttons —
                     colored names + hoist groups carry the role signal, and
-                    role management lives on the profile card. Admins keep a
-                    pill only to spot the server owner at a glance. */}
-                {isTargetAdmin && <RolePill role="admin" />}
+                    role management lives on the profile card. Only the owner
+                    crown and admin pills stay so leadership is visible. */}
+                {member.user_id === ownerId ? (
+                  <RolePill role="owner" />
+                ) : (
+                  isTargetAdmin && <RolePill role="admin" />
+                )}
 
                 {/* Message button */}
                 {!isSelf && (
