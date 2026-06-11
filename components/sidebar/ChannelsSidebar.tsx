@@ -329,7 +329,7 @@ export default function ChannelsSidebar({
       )}
 
       {/* Scrollable body: channel list + DM section */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '10px 6px' }}>
+      <div className="sidebar-scroll" style={{ flex: 1, overflowY: 'auto', padding: '10px 6px' }}>
         {group ? (
           <>
             {/* Scheduled events */}
@@ -478,6 +478,7 @@ export default function ChannelsSidebar({
               channels={voiceChannels}
               groupId={group.id}
               canCreateRoom={Boolean(userRole && PERMISSIONS.canCreateTempVoiceChannel(userRole))}
+              canManageChannels={Boolean(userRole && PERMISSIONS.canManageChannels(userRole))}
               onMobileClose={onMobileClose}
             />
 

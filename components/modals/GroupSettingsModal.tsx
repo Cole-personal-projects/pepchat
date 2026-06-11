@@ -235,15 +235,15 @@ export default function GroupSettingsModal({ open, onClose, group, isOwner, onIc
   return (
     <>
       <ModalShell open={open} onClose={onClose} title={group.name} size="lg">
-        <div className="flex gap-0 -mx-6 -mt-4 min-h-[280px]">
-          {/* Left nav */}
-          <nav className="w-44 flex-shrink-0 border-r border-white/10 py-2 px-2">
+        <div className="flex max-md:flex-col gap-0 -mx-6 -mt-4 min-h-[280px]">
+          {/* Section nav: left rail on desktop, horizontal tab bar on mobile */}
+          <nav className="md:w-44 md:flex-shrink-0 md:border-r border-white/10 py-2 px-2 max-md:flex max-md:gap-1 max-md:overflow-x-auto max-md:border-b max-md:px-3">
             {navItems.map((item) => (
               <button
                 key={item.id}
                 data-testid={item.testId}
                 onClick={() => setNav(item.id)}
-                className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`md:w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors max-md:flex-shrink-0 max-md:whitespace-nowrap ${
                   nav === item.id
                     ? 'bg-white/10 text-[var(--text-primary)]'
                     : 'text-[var(--text-muted)] hover:bg-white/5 hover:text-[var(--text-primary)]'
@@ -255,7 +255,7 @@ export default function GroupSettingsModal({ open, onClose, group, isOwner, onIc
           </nav>
 
           {/* Right content */}
-          <div className="flex-1 px-6 py-4 overflow-y-auto">
+          <div className="flex-1 px-6 max-md:px-4 py-4 overflow-y-auto">
             {error && (
               <p className="text-[var(--danger)] text-sm bg-[var(--danger)]/10 border border-[var(--danger)]/20 rounded-lg px-3 py-2 mb-4">
                 {error}

@@ -97,14 +97,16 @@ export const listVoiceChannels = withAuth(
       })
       if ('error' in gate) return denied()
 
-      await cleanupStaleVoiceParticipants(supabase, { groupId })
-
       // Lazy reaper: drop join-to-create rooms that emptied out (covers
-      // crashed clients that never called leaveVoiceRoom).
+      // crashed clients that never called leaveVoiceRoom). Stale-participant
+      // cleanup must run with the admin client — RLS limits the user client
+      // to its own participant rows, which left abandoned rooms undeletable.
       const admin = await adminClientOrNull()
       if (admin) {
         const { sweepEmptyEphemeralChannels } = await voiceRooms()
         await sweepEmptyEphemeralChannels(admin, { groupId })
+      } else {
+        await cleanupStaleVoiceParticipants(supabase, { groupId })
       }
 
       const channels = await listAccessibleVoiceChannelsWithOccupancy(supabase, {
@@ -114,6 +116,39 @@ export const listVoiceChannels = withAuth(
       if ('error' in channels) return denied()
 
       return { ok: true, channels }
+    } catch {
+      return denied()
+    }
+  },
+  { unauthenticated: () => denied() },
+)
+
+/**
+ * Reaps abandoned join-to-create rooms for a group. Wired to sidebar mount —
+ * the sweep must run from a path the UI actually hits, otherwise ephemeral
+ * channels orphaned by crashed clients linger forever.
+ */
+export const sweepVoiceRooms = withAuth(
+  async function sweepVoiceRoomsBody({ supabase, user }, groupId: string): Promise<{ ok: true } | VoiceActionError> {
+    try {
+      const gate = await gateGroupRole(supabase, {
+        groupId,
+        userId: user.id,
+        predicate: canAccessGroup,
+        deniedMessage: VOICE_DENIED,
+      })
+      if ('error' in gate) return denied()
+
+      const admin = await adminClientOrNull()
+      if (admin) {
+        const { sweepEmptyEphemeralChannels } = await voiceRooms()
+        await sweepEmptyEphemeralChannels(admin, { groupId })
+      } else {
+        const { cleanupStaleVoiceParticipants } = await voiceRooms()
+        await cleanupStaleVoiceParticipants(supabase, { groupId })
+      }
+
+      return { ok: true }
     } catch {
       return denied()
     }
@@ -409,6 +444,42 @@ export const createTempVoiceRoom = withAuth(
 
       if (error || !channel) return denied()
       return { ok: true, channelId: (channel as { id: string }).id }
+    } catch {
+      return denied()
+    }
+  },
+  { unauthenticated: () => denied() },
+)
+
+type CloseVoiceChannelResult = { ok: true; deletedChannel: boolean } | VoiceActionError
+
+/**
+ * Channel-manager escape hatch for stuck voice rooms: force-disconnects all
+ * tracked participants, closes the live rooms, and deletes the channel when
+ * it is an ephemeral join-to-create room.
+ */
+export const closeVoiceChannel = withAuth(
+  async function closeVoiceChannelBody({ supabase, user }, channelId: string): Promise<CloseVoiceChannelResult> {
+    try {
+      const { forceCloseVoiceChannel, resolveVoiceChannel } = await voiceRooms()
+      const channel = await resolveVoiceChannel(supabase, channelId)
+      if (!channel) return denied()
+
+      const gate = await gateGroupRole(supabase, {
+        groupId: channel.groupId,
+        userId: user.id,
+        predicate: PERMISSIONS.canManageChannels,
+        deniedMessage: VOICE_DENIED,
+      })
+      if ('error' in gate) return denied()
+
+      // Clearing other users' participant rows requires the service-role
+      // client; the user client falls back for channel-only cleanup.
+      const admin = await adminClientOrNull()
+      const result = await forceCloseVoiceChannel(admin ?? supabase, { channelId: channel.id })
+      if ('error' in result) return denied()
+
+      return { ok: true, deletedChannel: result.deletedChannel }
     } catch {
       return denied()
     }

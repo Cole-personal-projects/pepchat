@@ -10,6 +10,11 @@ export default defineConfig({
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
     headless: true,
+    // Sandboxes without access to Playwright's CDN can point at a
+    // system-installed Chromium instead of the pinned download.
+    ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+      ? { launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } }
+      : {}),
   },
   projects: [
     {

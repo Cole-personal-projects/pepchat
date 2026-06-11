@@ -375,6 +375,26 @@ a, button, [role="button"], .channel-row, .dm-entry {
   -webkit-touch-callout: none;
 }
 
+/* Sidebar chrome is navigation, not document text: suppress long-press text
+   selection and the iOS callout that made the open drawer feel "floaty",
+   and keep drawer scrolling from chaining into the chat behind the overlay. */
+.app-sidebar {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.app-sidebar input,
+.app-sidebar textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.sidebar-scroll {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 .mention-token {
   color: var(--accent);
   background: var(--accent-soft);

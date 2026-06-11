@@ -15,14 +15,24 @@ test.beforeEach(async ({ page }) => {
 })
 
 test.describe('Threads', () => {
-  test('exposes a visible mobile thread entry point for root messages', async ({ page }) => {
+  test('opens a thread from the mobile long-press action sheet', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
 
     const firstRoot = page.locator('.message-row').first()
     await expect(firstRoot).toBeVisible()
-    await expect(page.locator('[data-testid="mobile-action-reply-thread"]').first()).toBeVisible()
 
-    await page.locator('[data-testid="mobile-action-reply-thread"]').first().click()
+    // No inline "Thread" affordance cluttering every message row.
+    await expect(page.locator('[data-testid="mobile-action-reply-thread"]')).toHaveCount(0)
+
+    // Long-press (touch) the message to open the action sheet.
+    const box = await firstRoot.boundingBox()
+    if (!box) throw new Error('message row has no bounding box')
+    await firstRoot.dispatchEvent('pointerdown', { pointerType: 'touch', clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 })
+    await page.waitForTimeout(650)
+    await firstRoot.dispatchEvent('pointerup', { pointerType: 'touch' })
+
+    await expect(page.locator('[data-testid="message-modal"]')).toBeVisible()
+    await page.locator('[data-testid="modal-action-reply-thread"]').click()
     await expect(page.locator('[data-testid="thread-panel"]')).toBeVisible()
   })
 

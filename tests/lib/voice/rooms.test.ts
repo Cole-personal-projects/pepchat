@@ -3,7 +3,9 @@ import {
   cleanupStaleVoiceParticipants,
   closeVoiceRoomIfEmpty,
   createOrReuseVoiceRoom,
+  forceCloseVoiceChannel,
   listAccessibleVoiceChannelsWithOccupancy,
+  sweepEmptyEphemeralChannels,
 } from '@/lib/voice/rooms'
 
 type QueryResponse = { data?: unknown; error?: unknown; count?: number | null }
@@ -20,6 +22,7 @@ function makeQuery(response: QueryResponse = { data: null, error: null }): Query
     limit: vi.fn(() => query),
     insert: vi.fn(() => query),
     update: vi.fn(() => query),
+    delete: vi.fn(() => query),
     single: vi.fn().mockResolvedValue(response),
     maybeSingle: vi.fn().mockResolvedValue(response),
     then: vi.fn((resolve, reject) => Promise.resolve(response).then(resolve, reject)),
@@ -174,6 +177,89 @@ describe('voice room lifecycle helpers', () => {
     expect(idleRoom.in).toHaveBeenCalledWith('status', ['open', 'idle'])
     expect(countGeneral.select).toHaveBeenCalledWith('id', { count: 'exact', head: true })
     expect(countGeneral.eq).toHaveBeenCalledWith('room_id', 'room-general')
+  })
+
+  it('sweep expires stale participants with the admin client before reaping ephemeral channels', async () => {
+    // Cleanup pass (admin client, group scoped)
+    const cleanupRooms = makeQuery({ data: [{ id: 'room-stale' }], error: null })
+    const markStaleLeft = makeQuery({ data: null, error: null })
+    const countAfterCleanup = makeQuery({ count: 0, error: null })
+    const idleRoom = makeQuery({ data: null, error: null })
+    // Sweep pass
+    const ephemeralList = makeQuery({ data: [{ id: 'chan-eph' }], error: null })
+    const channelLookup = makeQuery({ data: { id: 'chan-eph', is_ephemeral: true }, error: null })
+    const liveRoomForChannel = makeQuery({ data: null, error: null })
+    const channelDelete = makeQuery({ data: null, error: null })
+    const adminClient = makeSupabase({
+      voice_rooms: [cleanupRooms, idleRoom, liveRoomForChannel],
+      voice_room_participants: [markStaleLeft, countAfterCleanup],
+      channels: [ephemeralList, channelLookup, channelDelete],
+    })
+
+    await expect(sweepEmptyEphemeralChannels(adminClient as never, { groupId: 'grp-1' })).resolves.toEqual({ ok: true })
+
+    // Stale rows from any user are released before the emptiness check…
+    expect(cleanupRooms.eq).toHaveBeenCalledWith('group_id', 'grp-1')
+    expect(markStaleLeft.update).toHaveBeenCalledWith({ left_at: expect.any(String) })
+    expect(markStaleLeft.lt).toHaveBeenCalledWith('last_seen_at', expect.any(String))
+    // …so the abandoned ephemeral channel actually gets deleted.
+    expect(channelDelete.delete).toHaveBeenCalled()
+    expect(channelDelete.eq).toHaveBeenCalledWith('id', 'chan-eph')
+    expect(channelDelete.eq).toHaveBeenCalledWith('is_ephemeral', true)
+  })
+
+  it('force-closes a stuck ephemeral voice channel: clears participants, closes rooms, deletes channel', async () => {
+    const channelLookup = makeQuery({ data: { id: 'chan-eph', is_ephemeral: true, kind: 'voice' }, error: null })
+    const liveRooms = makeQuery({ data: [{ id: 'room-1' }, { id: 'room-2' }], error: null })
+    const participantsUpdate = makeQuery({ data: null, error: null })
+    const roomsClose = makeQuery({ data: null, error: null })
+    const channelDelete = makeQuery({ data: null, error: null })
+    const adminClient = makeSupabase({
+      channels: [channelLookup, channelDelete],
+      voice_rooms: [liveRooms, roomsClose],
+      voice_room_participants: [participantsUpdate],
+    })
+
+    await expect(forceCloseVoiceChannel(adminClient as never, { channelId: 'chan-eph' })).resolves.toEqual({
+      ok: true,
+      deletedChannel: true,
+    })
+
+    expect(participantsUpdate.update).toHaveBeenCalledWith({ left_at: expect.any(String) })
+    expect(participantsUpdate.in).toHaveBeenCalledWith('room_id', ['room-1', 'room-2'])
+    expect(participantsUpdate.is).toHaveBeenCalledWith('left_at', null)
+    expect(roomsClose.update).toHaveBeenCalledWith({ status: 'closed', closed_at: expect.any(String) })
+    expect(roomsClose.in).toHaveBeenCalledWith('id', ['room-1', 'room-2'])
+    expect(channelDelete.delete).toHaveBeenCalled()
+    expect(channelDelete.eq).toHaveBeenCalledWith('is_ephemeral', true)
+  })
+
+  it('force-close keeps persistent voice channels and only closes their rooms', async () => {
+    const channelLookup = makeQuery({ data: { id: 'chan-voice', is_ephemeral: false, kind: 'voice' }, error: null })
+    const liveRooms = makeQuery({ data: [{ id: 'room-1' }], error: null })
+    const participantsUpdate = makeQuery({ data: null, error: null })
+    const roomsClose = makeQuery({ data: null, error: null })
+    const adminClient = makeSupabase({
+      channels: [channelLookup],
+      voice_rooms: [liveRooms, roomsClose],
+      voice_room_participants: [participantsUpdate],
+    })
+
+    await expect(forceCloseVoiceChannel(adminClient as never, { channelId: 'chan-voice' })).resolves.toEqual({
+      ok: true,
+      deletedChannel: false,
+    })
+
+    expect(roomsClose.update).toHaveBeenCalledWith({ status: 'closed', closed_at: expect.any(String) })
+  })
+
+  it('force-close rejects non-voice channels', async () => {
+    const channelLookup = makeQuery({ data: { id: 'chan-text', is_ephemeral: false, kind: 'text' }, error: null })
+    const adminClient = makeSupabase({ channels: [channelLookup] })
+
+    await expect(forceCloseVoiceChannel(adminClient as never, { channelId: 'chan-text' })).resolves.toEqual({
+      error: 'Cannot close this room.',
+    })
   })
 
   it('filters inaccessible voice channels before checking occupancy', async () => {
