@@ -239,6 +239,25 @@ test.describe('custom role assignment', () => {
   })
 })
 
+test.describe('events', () => {
+  test('Events modal opens centered above the closing drawer', async ({ page }) => {
+    await login(page)
+    await openSidebar(page)
+
+    await page.locator('[data-testid="events-chip"]').click()
+
+    // The modal portals to <body>, so it stays on-screen while the drawer
+    // (a transformed container) slides away beneath it.
+    const heading = page.getByRole('heading', { name: 'Scheduled Events' })
+    await expect(heading).toBeVisible()
+    const box = await heading.boundingBox()
+    if (!box) throw new Error('events modal heading has no bounding box')
+    expect(box.x).toBeGreaterThanOrEqual(0)
+    expect(box.x + box.width).toBeLessThanOrEqual(391)
+    await page.screenshot({ path: 'test-results/mobile-events-modal.png' })
+  })
+})
+
 test.describe('@role mentions', () => {
   test('admin pings @group-buy: autocomplete, pill render, and fan-out to role holders', async ({ page }) => {
     await login(page)
