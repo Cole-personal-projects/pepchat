@@ -19,6 +19,12 @@ export interface UseVoiceRoomConnectionResult {
   status: VoiceConnectionStatus
   muted: boolean
   error: string | null
+  /** Live participant count (self + remotes) while connected. */
+  participantCount: number
+  /** Whether the local participant is currently speaking (for the glow ring). */
+  isSpeaking: boolean
+  /** Number of remote participants currently speaking. */
+  activeSpeakerCount: number
   connect: (payload: VoiceTokenPayload) => Promise<{ ok: true } | { error: string }>
   leave: () => Promise<void>
   toggleMute: () => Promise<void>
@@ -43,6 +49,9 @@ export function useVoiceRoomConnection(): UseVoiceRoomConnectionResult {
   const [status, setStatus] = useState<VoiceConnectionStatus>('idle')
   const [muted, setMuted] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [participantCount, setParticipantCount] = useState(0)
+  const [isSpeaking, setIsSpeaking] = useState(false)
+  const [activeSpeakerCount, setActiveSpeakerCount] = useState(0)
 
   const cleanupRemoteAudio = useCallback(() => {
     remoteAudioRef.current.forEach(({ element, track }) => {
@@ -91,12 +100,26 @@ export function useVoiceRoomConnection(): UseVoiceRoomConnectionResult {
         })
       })
 
+      const updateCount = () => {
+        if (mountedRef.current) setParticipantCount(room.numParticipants + 1)
+      }
+      room.on(RoomEvent.ParticipantConnected, updateCount)
+      room.on(RoomEvent.ParticipantDisconnected, updateCount)
+
+      room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
+        if (!mountedRef.current) return
+        const localSid = room.localParticipant.sid
+        setIsSpeaking(speakers.some((s) => s.sid === localSid))
+        setActiveSpeakerCount(speakers.filter((s) => s.sid !== localSid).length)
+      })
+
       await room.connect(livekitUrl, token, { autoSubscribe: true })
       await room.startAudio()
       await room.localParticipant.setMicrophoneEnabled(true)
 
       if (mountedRef.current) {
         setMuted(false)
+        setParticipantCount(room.numParticipants + 1)
         setStatus('connected')
       }
       return { ok: true as const }
@@ -116,6 +139,9 @@ export function useVoiceRoomConnection(): UseVoiceRoomConnectionResult {
     if (mountedRef.current) {
       setMuted(false)
       setError(null)
+      setParticipantCount(0)
+      setIsSpeaking(false)
+      setActiveSpeakerCount(0)
       setStatus('idle')
     }
   }, [disconnectRoom])
@@ -144,5 +170,5 @@ export function useVoiceRoomConnection(): UseVoiceRoomConnectionResult {
     }
   }, [disconnectRoom])
 
-  return { status, muted, error, connect, leave, toggleMute }
+  return { status, muted, error, participantCount, isSpeaking, activeSpeakerCount, connect, leave, toggleMute }
 }
