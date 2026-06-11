@@ -91,8 +91,9 @@ function highlightMentions(html: string): string {
     .split(/(<[^>]+>)/g)
     .map(part => {
       if (part.startsWith('<')) return part
+      // Covers @username and hyphenated @role-name slugs alike.
       return part.replace(
-        /(^|[^\w])@([a-zA-Z0-9_]{1,32})\b/g,
+        /(^|[^\w-])@([a-zA-Z0-9_][a-zA-Z0-9_-]{0,59})(?![\w-])/g,
         '$1<span class="mention-token">@$2</span>'
       )
     })

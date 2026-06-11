@@ -154,16 +154,18 @@ export const sendThreadReply = withAuth(
 
     try {
       const name = result.data.message.profiles.display_name ?? result.data.message.profiles.username
-      await import('@/lib/server-notifications').then(({ buildThreadReplyUrl, enqueueMentionNotifications }) =>
-        enqueueMentionNotifications(ctx.supabase, {
+      await import('@/lib/server-notifications').then(async ({ buildThreadReplyUrl, enqueueMentionNotifications, enqueueRoleMentionNotifications }) => {
+        const payload = {
           senderId: ctx.user.id,
           senderName: name,
           messageId: result.data.message.id,
           channelId: threadRoot.channel_id,
           content: trimmed,
-          urlBuilder: ({ channelId, messageId }) => buildThreadReplyUrl(channelId, rootId, messageId),
-        })
-      )
+          urlBuilder: ({ channelId, messageId }: { channelId: string; messageId: string }) => buildThreadReplyUrl(channelId, rootId, messageId),
+        }
+        await enqueueMentionNotifications(ctx.supabase, payload)
+        await enqueueRoleMentionNotifications(ctx.supabase, payload)
+      })
     } catch {
       // Mention notification fanout should never block the core thread reply path.
     }

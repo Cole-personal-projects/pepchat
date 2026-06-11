@@ -191,7 +191,7 @@ describe('updateRole', () => {
 
     await expect(updateRole('role-1', { name: ' VIP  Crew ', color: '#ff0000', hoist: true, mentionable: false })).resolves.toEqual({ ok: true })
     expect(update.update).toHaveBeenCalledWith({
-      name: 'VIP Crew',
+      name: 'VIP-Crew',
       color: '#ff0000',
       hoist: true,
       mentionable: false,

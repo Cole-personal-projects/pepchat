@@ -203,8 +203,8 @@ test.describe('custom role assignment', () => {
     const roleSheet = page.locator('[data-testid="action-sheet"]')
     await expect(roleSheet).toBeVisible()
 
-    // Toggle "Group Buy" on — optimistic checkmark flips immediately.
-    const groupBuyToggle = roleSheet.locator('button', { hasText: 'Group Buy' })
+    // Toggle "group-buy" on — optimistic checkmark flips immediately.
+    const groupBuyToggle = roleSheet.locator('button', { hasText: 'group-buy' })
     await expect(groupBuyToggle).toHaveAttribute('aria-pressed', 'false')
     await groupBuyToggle.click()
     await expect(groupBuyToggle).toHaveAttribute('aria-pressed', 'true')
@@ -227,15 +227,59 @@ test.describe('custom role assignment', () => {
     await openGeneralChannel(page)
     await openHermesRoleSheet(page)
     await expect(
-      page.locator('[data-testid="action-sheet"] button', { hasText: 'Group Buy' }),
+      page.locator('[data-testid="action-sheet"] button', { hasText: 'group-buy' }),
     ).toHaveAttribute('aria-pressed', 'true')
     // The legacy promotion also persisted.
     await expect(page.locator('[data-testid="legacy-role-moderator"]')).toHaveAttribute('aria-pressed', 'true')
     await page.locator('[data-testid="member-roles-done"]').click()
 
     // The profile card displays the assigned role as a chip.
-    await expect(page.locator('[data-testid="profile-role-chips"]')).toContainText('Group Buy')
+    await expect(page.locator('[data-testid="profile-role-chips"]')).toContainText('group-buy')
     await page.screenshot({ path: 'test-results/mobile-profile-roles.png' })
+  })
+})
+
+test.describe('@role mentions', () => {
+  test('admin pings @group-buy: autocomplete, pill render, and fan-out to role holders', async ({ page }) => {
+    await login(page)
+    await openGeneralChannel(page)
+
+    // Typing "@gro" surfaces the role in the mention autocomplete.
+    const composer = page.locator('[data-testid="message-input-textarea"]').first()
+    await composer.click()
+    await composer.fill('heads up @gro')
+    const suggestions = page.locator('[data-testid="mention-suggestions"]')
+    await expect(suggestions).toBeVisible()
+    await expect(suggestions.getByText('@group-buy')).toBeVisible()
+    await page.screenshot({ path: 'test-results/mobile-role-mention-autocomplete.png' })
+    await suggestions.getByText('@group-buy').click()
+    await expect(composer).toHaveValue('heads up @group-buy ')
+
+    // Send, then reload to render the persisted message (no realtime in the
+    // mock backend) and confirm the mention pill.
+    await page.getByRole('button', { name: 'Send' }).click()
+    await page.waitForTimeout(800)
+    await page.reload()
+    await expect(page.locator('.message-row').first()).toBeVisible({ timeout: 10000 })
+    const sent = page.locator('.message-row', { hasText: 'heads up' }).last()
+    await expect(sent).toBeVisible()
+    await expect(sent.locator('.mention-token')).toHaveText('@group-buy')
+    await page.screenshot({ path: 'test-results/mobile-role-mention-sent.png' })
+
+    // Server fan-out: hermes holds group-buy (assigned in the earlier spec),
+    // so a mention notification row lands for them in the mock DB.
+    await expect
+      .poll(async () => {
+        const res = await page.request.get('http://127.0.0.1:54321/rest/v1/notification_events')
+        const rows = (await res.json()) as Array<{ user_id: string; type: string; title: string }>
+        return rows.some(
+          row =>
+            row.user_id === '22222222-2222-4222-8222-222222222222' &&
+            row.type === 'mention' &&
+            row.title.includes('mentioned @group-buy'),
+        )
+      }, { timeout: 5000 })
+      .toBe(true)
   })
 })
 

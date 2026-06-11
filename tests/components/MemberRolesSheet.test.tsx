@@ -16,7 +16,7 @@ vi.mock('@/app/(app)/roles/actions', () => ({
 }))
 
 const GROUP_BUY = {
-  id: 'role-gb', group_id: 'grp-1', name: 'Group Buy', color: '#57f287',
+  id: 'role-gb', group_id: 'grp-1', name: 'group-buy', color: '#57f287',
   hoist: false, mentionable: true, position: 1, permissions: '0',
   is_default: false, created_at: '2026-01-01T00:00:00Z',
 }

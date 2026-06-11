@@ -151,7 +151,7 @@ const db = {
     messageRow({ id: uuid(), userId: U_MEMBER, content: 'Plain message, no thread', minutesAgo: 10 }),
   ],
   roles: [
-    { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', group_id: G1, name: 'Group Buy', color: '#eb459e', hoist: true, mentionable: true, position: 4, permissions: '0', is_default: false, created_at: iso(24 * HOUR) },
+    { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', group_id: G1, name: 'group-buy', color: '#eb459e', hoist: true, mentionable: true, position: 4, permissions: '0', is_default: false, created_at: iso(24 * HOUR) },
     { id: uuid(), group_id: G1, name: 'Admin', color: '#5865f2', hoist: true, mentionable: true, position: 3, permissions: '8', is_default: false, created_at: iso(30 * 24 * HOUR) },
     { id: uuid(), group_id: G1, name: 'Moderator', color: '#57f287', hoist: true, mentionable: true, position: 2, permissions: '0', is_default: false, created_at: iso(30 * 24 * HOUR) },
     { id: uuid(), group_id: G1, name: 'Member', color: null, hoist: false, mentionable: false, position: 1, permissions: '0', is_default: false, created_at: iso(30 * 24 * HOUR) },
@@ -377,6 +377,27 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST') {
       const body = await readBody(req)
       const inserted = (Array.isArray(body) ? body : [body]).map((row) => ({ id: uuid(), created_at: iso(), ...row }))
+      // Messages come back with the PostgREST embeds the app selects.
+      if (table === 'messages') {
+        for (const row of inserted) {
+          const author = USERS.find((user) => user.id === row.user_id)
+          row.profiles = row.profiles ?? {
+            username: author?.username ?? 'unknown',
+            avatar_url: null,
+            display_name: author?.display_name ?? null,
+            username_color: '#f4ebdd',
+          }
+          row.attachments = row.attachments ?? []
+          row.reactions = row.reactions ?? []
+          row.replied_to = row.replied_to ?? null
+          row.promoted_channel = row.promoted_channel ?? null
+          row.mirrored_from_thread = row.mirrored_from_thread ?? null
+          row.thread_root_id = row.thread_root_id ?? null
+          row.thread_reply_count = row.thread_reply_count ?? 0
+          row.edited_at = row.edited_at ?? null
+          row.pinned_at = row.pinned_at ?? null
+        }
+      }
       rows.push(...inserted)
       if (/return=representation/.test(prefer)) {
         return send(res, 201, wantsSingle ? inserted[0] : inserted)
