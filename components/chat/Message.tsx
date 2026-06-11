@@ -291,9 +291,10 @@ export default function Message({
             {msg.attachments && msg.attachments.length > 0 && (
               <MessageAttachments attachments={msg.attachments} />
             )}
-            {/* Rich link preview — skipped on un-acked echoes to avoid a
-                fetch for a message that may never land. */}
-            {msg.content && !optimisticState && (!msg.attachments || msg.attachments.length === 0) && (
+            {/* Rich link preview. Renders on optimistic echoes too — the
+                embed derives from content alone, so your own pasted links
+                preview instantly instead of waiting for the server echo. */}
+            {msg.content && (!msg.attachments || msg.attachments.length === 0) && (
               <LinkEmbed content={msg.content} />
             )}
             {msg.mirrored_from_thread_id && (
