@@ -250,16 +250,13 @@ test.describe('link embeds', () => {
     await page.getByRole('button', { name: 'Send' }).click()
     await expect(composer).toHaveValue('')
 
-    // Reload so the persisted message renders (no realtime in the mock).
-    await page.waitForTimeout(600)
-    await page.reload()
-    await expect(page.locator('.message-row').first()).toBeVisible({ timeout: 10000 })
-
-    const card = page.locator('[data-testid="link-embed-youtube"]')
-    await expect(card).toBeVisible()
+    // The embed appears immediately on the sender's optimistic echo —
+    // no reload, no waiting for the server round-trip.
+    const card = page.locator('[data-testid="link-embed-youtube"]').first()
+    await expect(card).toBeVisible({ timeout: 10000 })
     // Clicking the poster swaps in the player iframe.
-    await page.locator('[data-testid="link-embed-play"]').click()
-    await expect(page.locator('[data-testid="link-embed-iframe"]')).toBeVisible()
+    await page.locator('[data-testid="link-embed-play"]').first().click()
+    await expect(page.locator('[data-testid="link-embed-iframe"]').first()).toBeVisible()
     await page.screenshot({ path: 'test-results/mobile-link-embed.png' })
   })
 })
