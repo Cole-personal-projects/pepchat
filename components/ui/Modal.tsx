@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
+import { useAnimatedPresence } from '@/lib/hooks/useAnimatedPresence'
 
 interface ModalProps {
   open: boolean
@@ -11,9 +13,14 @@ interface ModalProps {
 
 /**
  * Accessible modal dialog with backdrop click + Escape to close.
+ *
+ * Portaled to document.body: callers can live inside transformed containers
+ * (like the mobile drawer, whose transform would otherwise become the
+ * containing block for position:fixed and drag the modal offscreen with it).
  */
 export default function Modal({ open, onClose, title, children }: ModalProps) {
   const backdropRef = useRef<HTMLDivElement>(null)
+  const { mounted, exiting } = useAnimatedPresence(open)
 
   useEffect(() => {
     if (!open) return
@@ -24,18 +31,18 @@ export default function Modal({ open, onClose, title, children }: ModalProps) {
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
-  if (!open) return null
+  if (!mounted || typeof document === 'undefined') return null
 
-  return (
+  return createPortal(
     <div
       ref={backdropRef}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 modal-backdrop-enter"
+      className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 ${exiting ? 'modal-backdrop-exit' : 'modal-backdrop-enter'}`}
       onClick={(e) => {
         if (e.target === backdropRef.current) onClose()
       }}
     >
       <div
-        className="w-full max-w-md rounded-lg shadow-xl modal-panel-enter"
+        className={`w-full max-w-md rounded-lg shadow-xl ${exiting ? 'modal-panel-exit' : 'modal-panel-enter'}`}
         style={{ background: 'var(--bg-secondary)' }}
       >
         {/* Header */}
@@ -54,6 +61,7 @@ export default function Modal({ open, onClose, title, children }: ModalProps) {
         {/* Body */}
         <div className="px-6 pb-6 pt-2">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

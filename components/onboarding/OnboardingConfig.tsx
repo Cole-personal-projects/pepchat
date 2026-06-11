@@ -29,7 +29,11 @@ export default function OnboardingConfig({ groupId }: OnboardingConfigProps) {
   const [notice, setNotice] = useState('')
   const [isPending, startTransition] = useTransition()
 
-  const customRoles = roles.filter(role => !role.is_default)
+  // Grantable by onboarding answers: custom roles minus the staff templates.
+  // Admin/Moderator must never be self-served through a questionnaire.
+  const grantableRoles = roles.filter(
+    role => !role.is_default && role.name !== 'Admin' && role.name !== 'Moderator',
+  )
 
   const load = useCallback(async () => {
     const supabase = createClient()
@@ -184,16 +188,20 @@ export default function OnboardingConfig({ groupId }: OnboardingConfigProps) {
             placeholder={'One answer option per line (at least two)'}
             className="resize-none rounded border border-black/20 bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
           />
-          {customRoles.length > 0 && (
+          {grantableRoles.length > 0 && (
             <select
               data-testid="grant-role-select"
               value={grantRoleId}
               onChange={(e) => setGrantRoleId(e.target.value)}
               className="rounded border border-black/20 bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
             >
-              <option value="">No role granted by answers</option>
-              {customRoles.map(role => (
-                <option key={role.id} value={role.id}>Grants role: {role.name}</option>
+              <option value="">Noob (default) — stays limited to welcome channels</option>
+              {grantableRoles.map(role => (
+                <option key={role.id} value={role.id}>
+                  {role.name === 'Member'
+                    ? 'Member — full access (promotes out of noob)'
+                    : `Grants role: ${role.name}`}
+                </option>
               ))}
             </select>
           )}

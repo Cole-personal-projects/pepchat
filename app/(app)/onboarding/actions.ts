@@ -99,6 +99,25 @@ export const addOnboardingQuestion = withAuth(
     const gate = await gateOnboardingManager(supabase, groupId, user.id)
     if ('error' in gate) return gate
 
+    // Granted roles must belong to this group and never be staff tiers —
+    // onboarding answers cannot self-serve Admin/Moderator (or @everyone).
+    const requestedRoleIds = [...new Set(options.flatMap(option => option.roleIds ?? []).filter(Boolean))]
+    if (requestedRoleIds.length > 0) {
+      const { data: roleRows, error: roleError } = await supabase
+        .from('roles')
+        .select('id, group_id, name, is_default')
+        .in('id', requestedRoleIds)
+
+      if (roleError) return { error: roleError.message }
+      const rows = (roleRows ?? []) as Array<{ id: string; group_id: string; name: string; is_default: boolean }>
+      const valid = rows.filter(role =>
+        role.group_id === groupId && !role.is_default && role.name !== 'Admin' && role.name !== 'Moderator',
+      )
+      if (valid.length !== requestedRoleIds.length) {
+        return { error: 'Onboarding answers can only grant non-staff roles from this server.' }
+      }
+    }
+
     const { data: positions } = await supabase
       .from('onboarding_questions')
       .select('position')
@@ -253,14 +272,38 @@ export const completeOnboarding = withAuth(
     if (grantedRoleIds.length > 0 && process.env.SUPABASE_SERVICE_ROLE_KEY) {
       const { createAdminClient } = await import('@/lib/supabase/admin')
       const admin = createAdminClient()
-      const { error: roleError } = await admin
-        .from('member_roles')
-        .upsert(
-          grantedRoleIds.map(roleId => ({ group_id: groupId, user_id: user.id, role_id: roleId })),
-          { onConflict: 'role_id,user_id', ignoreDuplicates: true },
-        )
-      // Role grants are best-effort; onboarding completion stands.
-      if (roleError) return { ok: true }
+
+      // Defense in depth for stale configs: drop staff/foreign/default roles
+      // before granting anything with the service-role client.
+      const { data: roleRows } = await admin
+        .from('roles')
+        .select('id, group_id, name, is_default')
+        .in('id', grantedRoleIds)
+      const safeRoles = ((roleRows ?? []) as Array<{ id: string; group_id: string; name: string; is_default: boolean }>)
+        .filter(role => role.group_id === groupId && !role.is_default && role.name !== 'Admin' && role.name !== 'Moderator')
+
+      if (safeRoles.length > 0) {
+        const { error: roleError } = await admin
+          .from('member_roles')
+          .upsert(
+            safeRoles.map(role => ({ group_id: groupId, user_id: user.id, role_id: role.id })),
+            { onConflict: 'role_id,user_id', ignoreDuplicates: true },
+          )
+        // Role grants are best-effort; onboarding completion stands.
+        if (roleError) return { ok: true }
+
+        // The Member template carries the membership level with it: noobs who
+        // earn it through onboarding get promoted out of the noob tier (which
+        // gates channel visibility). Never touches moderator/admin levels.
+        if (safeRoles.some(role => role.name === 'Member')) {
+          await admin
+            .from('group_members')
+            .update({ role: 'user' })
+            .eq('group_id', groupId)
+            .eq('user_id', user.id)
+            .eq('role', 'noob')
+        }
+      }
     }
 
     return { ok: true }
