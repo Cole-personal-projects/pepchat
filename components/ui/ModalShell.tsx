@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { useAnimatedPresence } from '@/lib/hooks/useAnimatedPresence'
 
 interface ModalShellProps {
   open: boolean
@@ -14,6 +15,7 @@ interface ModalShellProps {
 
 export default function ModalShell({ open, onClose, title, children, size = 'md' }: ModalShellProps) {
   const backdropRef = useRef<HTMLDivElement>(null)
+  const { mounted, exiting } = useAnimatedPresence(open)
 
   useEffect(() => {
     if (!open) return
@@ -22,7 +24,7 @@ export default function ModalShell({ open, onClose, title, children, size = 'md'
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
-  if (!open || typeof document === 'undefined') return null
+  if (!mounted || typeof document === 'undefined') return null
 
   const maxW = size === 'lg' ? 640 : 448
 
@@ -30,11 +32,11 @@ export default function ModalShell({ open, onClose, title, children, size = 'md'
     <div
       ref={backdropRef}
       data-testid="modal-backdrop"
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 modal-backdrop-enter"
+      className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 ${exiting ? 'modal-backdrop-exit' : 'modal-backdrop-enter'}`}
       onClick={(e) => { if (e.target === backdropRef.current) onClose() }}
     >
       <div
-        className="w-full rounded-t-2xl sm:rounded-xl shadow-2xl overflow-hidden flex flex-col modal-panel-enter"
+        className={`w-full rounded-t-2xl sm:rounded-xl shadow-2xl overflow-hidden flex flex-col ${exiting ? 'modal-panel-exit' : 'modal-panel-enter'}`}
         style={{
           maxWidth: maxW,
           maxHeight: 'calc(100dvh - 48px)',

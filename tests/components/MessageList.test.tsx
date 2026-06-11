@@ -832,7 +832,7 @@ describe('MessageList — report message', () => {
 
     await new Promise(r => setTimeout(r, 50))
     expect(reportAction).not.toHaveBeenCalled()
-    expect(screen.queryByTestId('report-submit')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByTestId('report-submit')).not.toBeInTheDocument())
   })
 
   it('shows inline error when reportAction fails', async () => {
@@ -857,7 +857,7 @@ describe('MessageList — report message', () => {
     fireEvent.click(screen.getByTestId('report-submit'))
 
     await waitFor(() => expect(screen.getByText('Report submitted for review.')).toBeInTheDocument())
-    expect(screen.queryByTestId('report-submit')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByTestId('report-submit')).not.toBeInTheDocument())
   })
 
   it('hides the mobile report action after a successful report', async () => {
@@ -885,6 +885,9 @@ describe('MessageList — report message', () => {
     fireEvent.click(screen.getByTestId('report-submit'))
 
     await waitFor(() => expect(screen.getByText('Report submitted for review.')).toBeInTheDocument())
+    // Let the report dialog finish its exit animation and unmount —
+    // its "Report Message" title would otherwise match the query below.
+    await waitFor(() => expect(screen.queryByTestId('report-submit')).not.toBeInTheDocument())
 
     fireEvent.click(screen.getByTestId('context-btn-msg-2'))
     expect(screen.queryByText('Report Message')).not.toBeInTheDocument()

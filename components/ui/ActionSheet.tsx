@@ -1,6 +1,7 @@
 'use client'
 
 import { createPortal } from 'react-dom'
+import { useAnimatedPresence } from '@/lib/hooks/useAnimatedPresence'
 
 interface ActionSheetProps {
   open: boolean
@@ -16,12 +17,13 @@ interface ActionSheetProps {
  * of desktop hover toolbars and context menus.
  */
 export default function ActionSheet({ open, onClose, title, children }: ActionSheetProps) {
-  if (!open || typeof document === 'undefined') return null
+  const { mounted, exiting } = useAnimatedPresence(open)
+  if (!mounted || typeof document === 'undefined') return null
 
   return createPortal(
     <div
       data-testid="action-sheet-backdrop"
-      className="modal-backdrop-enter"
+      className={exiting ? 'modal-backdrop-exit' : 'modal-backdrop-enter'}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
       style={{
         position: 'fixed',
@@ -35,7 +37,7 @@ export default function ActionSheet({ open, onClose, title, children }: ActionSh
     >
       <div
         data-testid="action-sheet"
-        className="modal-panel-enter"
+        className={exiting ? 'sheet-panel-exit' : 'modal-panel-enter'}
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
@@ -91,6 +93,7 @@ export function ActionSheetRow({
   return (
     <button
       data-testid={testId}
+      className="sheet-action-row"
       onClick={onClick}
       disabled={disabled}
       style={{

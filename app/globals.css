@@ -176,6 +176,21 @@ select:focus-visible {
   to   { opacity: 1; transform: translateX(0); }
 }
 
+@keyframes modal-backdrop-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+@keyframes modal-panel-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(8px) scale(0.985); }
+}
+
+@keyframes sheet-panel-out {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(24px); }
+}
+
 .fade-in    { animation: fade-in 180ms ease-out; }
 .pulse      { animation: pulse 1.6s ease-in-out infinite; }
 .message-new { animation: message-in 150ms var(--ease-pep-standard); }
@@ -194,6 +209,27 @@ select:focus-visible {
 .modal-backdrop-enter { animation: modal-backdrop-in 140ms var(--ease-pep-standard); }
 .modal-panel-enter { animation: modal-panel-in var(--motion-panel) var(--ease-pep-spring); }
 .drawer-panel-enter { animation: drawer-panel-in var(--motion-panel) var(--ease-pep-spring); }
+.modal-backdrop-exit { animation: modal-backdrop-out 150ms var(--ease-pep-standard) forwards; }
+.modal-panel-exit { animation: modal-panel-out 150ms var(--ease-pep-standard) forwards; }
+.sheet-panel-exit { animation: sheet-panel-out 150ms var(--ease-pep-standard) forwards; }
+
+/* Touch press feedback — hover styles never fire on touch, so :active is
+   the only "this tap registered" signal mobile users get. */
+@media (hover: none) {
+  .channel-row:active,
+  .dm-entry:active,
+  .sheet-action-row:active {
+    background: var(--bg-hover) !important;
+  }
+  .icon-btn:active {
+    background: var(--bg-hover);
+    transform: scale(0.92);
+  }
+  .mobile-bottom-nav button:active,
+  .mobile-bottom-nav a:active {
+    transform: scale(0.97);
+  }
+}
 
 /* ── Reduced motion ──────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
