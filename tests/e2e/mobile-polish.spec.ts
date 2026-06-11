@@ -92,6 +92,70 @@ test.describe('voice room cleanup', () => {
   })
 })
 
+test.describe('discord-style mobile navigation', () => {
+  test('drawer holds channels only; members live in the right-hand sheet', async ({ page }) => {
+    await login(page)
+    await openSidebar(page)
+
+    // The drawer no longer shows the members management block on mobile
+    // (the desktop panel stays in the DOM behind a md: visibility class).
+    await expect(page.locator('[data-testid="member-search-input"]')).not.toBeVisible()
+    await page.screenshot({ path: 'test-results/mobile-drawer-slim.png' })
+
+    // Members open from the chat header as a right-side sheet.
+    await openGeneralChannel(page)
+    await page.locator('[data-testid="members-header-btn"]').click()
+
+    const sheet = page.locator('[data-testid="members-sheet"]')
+    await expect(sheet).toHaveAttribute('aria-hidden', 'false')
+    await expect(sheet.getByText('Members')).toBeVisible()
+    await expect(sheet.getByTestId('member-search-input')).toBeVisible()
+    // Fully on-screen once the slide-in transition settles.
+    await expect
+      .poll(async () => {
+        const box = await sheet.boundingBox()
+        return box ? box.x + box.width : Number.POSITIVE_INFINITY
+      })
+      .toBeLessThanOrEqual(391)
+    const box = await sheet.boundingBox()
+    if (!box) throw new Error('members sheet has no bounding box')
+    expect(box.width).toBeLessThanOrEqual(320)
+    await page.screenshot({ path: 'test-results/mobile-members-sheet.png' })
+
+    await page.locator('[data-testid="members-sheet-close"]').click()
+    await expect(sheet).toHaveAttribute('aria-hidden', 'true')
+  })
+
+  test('channel admin actions live behind long-press, not inline buttons', async ({ page }) => {
+    await login(page)
+    await openSidebar(page)
+
+    const row = page.locator('a.channel-row', { hasText: 'welcome' }).first()
+    await expect(row).toBeVisible()
+
+    // No inline gear/trash cluttering the drawer on mobile.
+    await expect(page.locator('[aria-label="Delete #welcome"]')).toBeHidden()
+    await expect(page.locator('[aria-label="Edit #welcome settings"]')).toBeHidden()
+
+    // Long-press opens the channel action sheet.
+    const box = await row.boundingBox()
+    if (!box) throw new Error('channel row has no bounding box')
+    await row.dispatchEvent('pointerdown', { pointerType: 'touch', clientX: box.x + 40, clientY: box.y + 10 })
+    await page.waitForTimeout(650)
+    await row.dispatchEvent('pointerup', { pointerType: 'touch' })
+
+    await expect(page.locator('[data-testid="action-sheet"]')).toBeVisible()
+    await expect(page.locator('[data-testid="action-sheet-title"]')).toHaveText('#welcome')
+    await expect(page.locator('[data-testid="channel-sheet-settings"]')).toBeVisible()
+    await expect(page.locator('[data-testid="channel-sheet-delete"]')).toBeVisible()
+    await page.screenshot({ path: 'test-results/mobile-channel-sheet.png' })
+
+    // Long-press must not have navigated away from the drawer.
+    await page.locator('[data-testid="action-sheet-backdrop"]').click({ position: { x: 10, y: 10 } })
+    await expect(page.locator('[data-testid="action-sheet"]')).toHaveCount(0)
+  })
+})
+
 test.describe('roles settings on mobile', () => {
   test('roles editor is fully usable at 390px', async ({ page }) => {
     await login(page)

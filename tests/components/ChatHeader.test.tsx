@@ -3,8 +3,10 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ChatHeader from '@/components/chat/ChatHeader'
 
+const mockOpenMembers = vi.fn()
+
 vi.mock('@/lib/context/MobileSidebarContext', () => ({
-  useMobileSidebar: () => ({ open: vi.fn() }),
+  useMobileSidebar: () => ({ open: vi.fn(), openMembers: mockOpenMembers }),
 }))
 
 describe('ChatHeader', () => {
@@ -62,6 +64,15 @@ describe('ChatHeader', () => {
 
     await user.click(button)
     expect(onTogglePinnedPanel).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens the members sheet from the header people button', async () => {
+    const user = userEvent.setup()
+    render(<ChatHeader channelName="general" />)
+
+    await user.click(screen.getByTestId('members-header-btn'))
+
+    expect(mockOpenMembers).toHaveBeenCalledTimes(1)
   })
 
   it('labels pinned messages toggle when open', () => {

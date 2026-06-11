@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import GroupsSidebar from '@/components/sidebar/GroupsSidebar'
 import ChannelsSidebar from '@/components/sidebar/ChannelsSidebar'
+import MembersSheet from '@/components/sidebar/MembersSheet'
 import CreateGroupModal from '@/components/modals/CreateGroupModal'
 import JoinGroupModal from '@/components/modals/JoinGroupModal'
 import GroupSettingsModal from '@/components/modals/GroupSettingsModal'
@@ -42,6 +43,7 @@ export default function AppShell({ profile, children }: AppShellProps) {
   const [showNewChannel, setShowNewChannel] = useState(false)
   const [newChannelCategoryId, setNewChannelCategoryId] = useState<string | null>(null)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  const [membersSheetOpen, setMembersSheetOpen] = useState(false)
   const [promptedFirstGroup, setPromptedFirstGroup] = useState(false)
 
   // Auto-open the sidebar on mobile whenever no channel is selected
@@ -52,6 +54,11 @@ export default function AppShell({ profile, children }: AppShellProps) {
       const t = setTimeout(() => setMobileSidebarOpen(true), 300)
       return () => clearTimeout(t)
     }
+  }, [pathname])
+
+  // Navigating away always dismisses the members sheet.
+  useEffect(() => {
+    setMembersSheetOpen(false)
   }, [pathname])
 
   // Resolve active group from URL
@@ -143,12 +150,17 @@ export default function AppShell({ profile, children }: AppShellProps) {
   }
 
   return (
-    <MobileSidebarContext.Provider value={{ open: () => setMobileSidebarOpen(true) }}>
+    <MobileSidebarContext.Provider
+      value={{
+        open: () => setMobileSidebarOpen(true),
+        openMembers: () => setMembersSheetOpen(true),
+      }}
+    >
       <div className="flex overflow-hidden" style={{ height: '100dvh' }}>
         {/* Mobile sidebar overlay backdrop */}
         {mobileSidebarOpen && (
           <div
-            className="fixed inset-0 z-20 bg-black/60 md:hidden modal-backdrop-enter"
+            className="fixed inset-0 z-20 bg-black/60 backdrop-blur-[2px] md:hidden modal-backdrop-enter"
             onClick={() => setMobileSidebarOpen(false)}
           />
         )}
@@ -156,10 +168,10 @@ export default function AppShell({ profile, children }: AppShellProps) {
         {/* Sidebars: always visible on md+; slide-in overlay on mobile */}
         <div
           className={`
-            app-sidebar fixed inset-y-0 left-0 z-30 flex
+            app-sidebar fixed inset-y-0 left-0 z-30 flex shadow-2xl
             transform transition-transform ease-[var(--ease-pep-spring)] duration-[var(--motion-panel)]
             ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-            md:relative md:translate-x-0 md:z-auto md:flex
+            md:relative md:translate-x-0 md:z-auto md:flex md:shadow-none
           `}
         >
           <GroupsSidebar
@@ -219,6 +231,18 @@ export default function AppShell({ profile, children }: AppShellProps) {
 
       {/* Per-server onboarding gate (rules + role questions) */}
       {activeGroupId && <OnboardingGate groupId={activeGroupId} userId={profile.id} />}
+
+      {/* Mobile members sheet (Discord-style, slides in from the right) */}
+      {activeGroup && userRole && (
+        <MembersSheet
+          open={membersSheetOpen}
+          onClose={() => setMembersSheetOpen(false)}
+          groupId={activeGroup.id}
+          groupName={activeGroup.name}
+          currentUserId={profile.id}
+          currentUserRole={userRole}
+        />
+      )}
 
       <CreateGroupModal open={showCreate} onClose={() => setShowCreate(false)} onSuccess={refetch} />
       <JoinGroupModal   open={showJoin}   onClose={() => setShowJoin(false)}   onSuccess={refetch} />

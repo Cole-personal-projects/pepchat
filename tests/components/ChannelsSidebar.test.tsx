@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
-import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import ChannelsSidebar from '@/components/sidebar/ChannelsSidebar'
 import { deleteChannel, moveChannel, updateChannelSettings } from '@/app/(app)/channels/actions'
 import { createTempVoiceRoom, getCurrentVoiceRoom, joinVoiceChannel, leaveVoiceRoom } from '@/app/(app)/voice/actions'
@@ -373,6 +373,106 @@ describe('ChannelsSidebar channel rows', () => {
     expect(formData.get('name')).toBe('welcome-chat')
     expect(formData.get('description')).toBe('Start here')
     expect(formData.get('noob_access')).toBe('on')
+  })
+})
+
+describe('ChannelsSidebar long-press channel sheet', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(getCurrentVoiceRoom).mockResolvedValue({ ok: true, room: null })
+    vi.mocked(moveChannel).mockResolvedValue(undefined)
+  })
+
+  function longPress(element: HTMLElement) {
+    fireEvent.pointerDown(element, { pointerType: 'touch' })
+    act(() => {
+      vi.advanceTimersByTime(600)
+    })
+    fireEvent.pointerUp(element, { pointerType: 'touch' })
+  }
+
+  it('opens the channel action sheet on touch long-press', async () => {
+    vi.useFakeTimers()
+    try {
+      render(<ChannelsSidebar {...BASE_PROPS} userRole="admin" />)
+
+      longPress(screen.getByRole('link', { name: /#random/ }))
+
+      expect(screen.getByTestId('action-sheet')).toBeInTheDocument()
+      expect(screen.getByTestId('action-sheet-title')).toHaveTextContent('#random')
+      expect(screen.getByTestId('channel-sheet-settings')).toBeInTheDocument()
+      expect(screen.getByTestId('channel-sheet-delete')).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('suppresses link navigation when the long-press completes', () => {
+    vi.useFakeTimers()
+    try {
+      render(<ChannelsSidebar {...BASE_PROPS} userRole="admin" />)
+      const link = screen.getByRole('link', { name: /#random/ })
+
+      longPress(link)
+      const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true })
+      link.dispatchEvent(clickEvent)
+
+      expect(clickEvent.defaultPrevented).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('hides manager actions from regular members in the sheet', () => {
+    vi.useFakeTimers()
+    try {
+      render(
+        <ChannelsSidebar
+          {...BASE_PROPS}
+          userRole="user"
+          onMarkChannelUnread={() => {}}
+        />,
+      )
+
+      longPress(screen.getByRole('link', { name: /#random/ }))
+
+      expect(screen.getByTestId('action-sheet')).toBeInTheDocument()
+      expect(screen.getByTestId('channel-sheet-mark-unread')).toBeInTheDocument()
+      expect(screen.queryByTestId('channel-sheet-delete')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('channel-sheet-settings')).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('opens channel settings from the sheet', () => {
+    vi.useFakeTimers()
+    try {
+      render(<ChannelsSidebar {...BASE_PROPS} userRole="admin" />)
+
+      longPress(screen.getByRole('link', { name: /#random/ }))
+      fireEvent.click(screen.getByTestId('channel-sheet-settings'))
+
+      expect(screen.queryByTestId('action-sheet')).not.toBeInTheDocument()
+      expect(screen.getByText('#random Settings')).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('moves the channel from the sheet', () => {
+    vi.useFakeTimers()
+    try {
+      render(<ChannelsSidebar {...BASE_PROPS} userRole="admin" />)
+
+      longPress(screen.getByRole('link', { name: /#random/ }))
+      fireEvent.click(screen.getByTestId('channel-sheet-move-up'))
+
+      expect(moveChannel).toHaveBeenCalledWith('ch-read', 'up')
+      expect(screen.queryByTestId('action-sheet')).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 
