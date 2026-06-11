@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { closeVoiceChannel, createTempVoiceRoom, getCurrentVoiceRoom, joinVoiceChannel, leaveVoiceRoom, sweepVoiceRooms } from '@/app/(app)/voice/actions'
 import { useVoiceRoomConnection } from '@/components/voice/useVoiceRoomConnection'
+import VoiceBar from '@/components/voice/VoiceBar'
 import type { Channel } from '@/lib/types'
 
 type VoiceRoomSummary = {
@@ -199,9 +200,28 @@ export default function VoiceChannelsSection({ channels, groupId, canCreateRoom 
     }
   }, [connectedChannelId, connectedRoomId, connection])
 
-  if (channels.length === 0 && !canCreateRoom) return null
+  const isConnectedNow = connection.status === 'connected' && Boolean(connectedChannelId)
+  const connectedChannel = channels.find(channel => channel.id === connectedChannelId)
+
+  // The persistent voice bar keeps controls in reach after the drawer closes.
+  const voiceBar = isConnectedNow && connectedChannel ? (
+    <VoiceBar
+      channelName={connectedChannel.name}
+      participantCount={Math.max(connection.participantCount, 1)}
+      muted={connection.muted}
+      isSpeaking={connection.isSpeaking}
+      activeSpeakerCount={connection.activeSpeakerCount}
+      busy={busy}
+      onToggleMute={connection.toggleMute}
+      onLeave={handleLeave}
+    />
+  ) : null
+
+  if (channels.length === 0 && !canCreateRoom) return voiceBar
 
   return (
+    <>
+    {voiceBar}
     <section aria-label="Voice Channels" className="mt-3 border-t border-[var(--border-soft)] pt-3">
       <div className="flex items-center justify-between px-3 pb-1">
         <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--text-faint)]">
@@ -324,5 +344,6 @@ export default function VoiceChannelsSection({ channels, groupId, canCreateRoom 
         })}
       </div>
     </section>
+    </>
   )
 }
