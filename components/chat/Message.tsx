@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic'
 import Avatar from '@/components/ui/Avatar'
 import ReactionPills from '@/components/chat/ReactionPills'
 import MessageAttachments from '@/components/chat/MessageAttachments'
+import LinkEmbed from '@/components/chat/LinkEmbed'
 import { MessageContent } from '@/components/chat/MessageContent'
 import MessageActionBar from '@/components/chat/MessageActionBar'
 import ThreadChip from '@/components/chat/ThreadChip'
@@ -289,6 +290,11 @@ export default function Message({
             )}
             {msg.attachments && msg.attachments.length > 0 && (
               <MessageAttachments attachments={msg.attachments} />
+            )}
+            {/* Rich link preview — skipped on un-acked echoes to avoid a
+                fetch for a message that may never land. */}
+            {msg.content && !optimisticState && (!msg.attachments || msg.attachments.length === 0) && (
+              <LinkEmbed content={msg.content} />
             )}
             {msg.mirrored_from_thread_id && (
               mirrorPromotedChannelId ? (

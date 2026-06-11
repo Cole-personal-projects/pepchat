@@ -239,6 +239,31 @@ test.describe('custom role assignment', () => {
   })
 })
 
+test.describe('link embeds', () => {
+  test('a YouTube link renders an inline player card', async ({ page }) => {
+    await login(page)
+    await openGeneralChannel(page)
+
+    const composer = page.locator('[data-testid="message-input-textarea"]').first()
+    await composer.click()
+    await composer.fill('watch this https://youtu.be/dQw4w9WgXcQ')
+    await page.getByRole('button', { name: 'Send' }).click()
+    await expect(composer).toHaveValue('')
+
+    // Reload so the persisted message renders (no realtime in the mock).
+    await page.waitForTimeout(600)
+    await page.reload()
+    await expect(page.locator('.message-row').first()).toBeVisible({ timeout: 10000 })
+
+    const card = page.locator('[data-testid="link-embed-youtube"]')
+    await expect(card).toBeVisible()
+    // Clicking the poster swaps in the player iframe.
+    await page.locator('[data-testid="link-embed-play"]').click()
+    await expect(page.locator('[data-testid="link-embed-iframe"]')).toBeVisible()
+    await page.screenshot({ path: 'test-results/mobile-link-embed.png' })
+  })
+})
+
 test.describe('instant messaging', () => {
   test('sent message appears optimistically and settles', async ({ page }) => {
     await login(page)
