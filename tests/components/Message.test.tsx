@@ -116,7 +116,6 @@ describe('Message — ungrouped', () => {
   it('does not render a thread summary for messages with no replies', () => {
     render(<Message {...BASE_PROPS} />)
     expect(screen.queryByTestId('thread-chip-msg-1')).not.toBeInTheDocument()
-    expect(screen.getByTestId('mobile-action-reply-thread')).toHaveTextContent('Thread')
   })
 
   it('renders thread summary only when the message has replies', () => {
@@ -254,33 +253,28 @@ describe('Message — reply quote', () => {
 })
 
 describe('Message — mobile thread entry', () => {
-  it('shows a visible mobile thread affordance for root messages with no replies', () => {
+  // Start-a-thread on mobile lives in the long-press action sheet
+  // (MessageModal "Reply in Thread"), not as an inline button on every row.
+  it('renders no inline thread affordance for root messages with no replies', () => {
     render(<Message {...BASE_PROPS} />)
 
-    expect(screen.getByTestId('mobile-action-reply-thread')).toHaveTextContent('Thread')
-  })
-
-  it('opens the thread from the mobile thread affordance', () => {
-    const openThread = vi.fn()
-    render(<Message {...BASE_PROPS} />, { openThread })
-
-    fireEvent.click(screen.getByTestId('mobile-action-reply-thread'))
-
-    expect(openThread).toHaveBeenCalledWith('msg-1')
-  })
-
-  it('hides the mobile thread affordance for thread reply messages', () => {
-    const threadReply: MessageWithProfile = { ...BASE_MSG, thread_root_id: 'root-1' }
-
-    render(<Message {...BASE_PROPS} msg={threadReply} />)
-
     expect(screen.queryByTestId('mobile-action-reply-thread')).not.toBeInTheDocument()
   })
 
-  it('hides the mobile thread affordance when replies are disabled', () => {
-    render(<Message {...BASE_PROPS} allowReplies={false} />)
+  it('opens the long-press action sheet via openActions on touch long press', () => {
+    vi.useFakeTimers()
+    try {
+      const openActions = vi.fn()
+      render(<Message {...BASE_PROPS} />, { openActions })
 
-    expect(screen.queryByTestId('mobile-action-reply-thread')).not.toBeInTheDocument()
+      const row = screen.getByText('Hello world').closest('.message-row') as HTMLElement
+      fireEvent.pointerDown(row, { pointerType: 'touch' })
+      vi.advanceTimersByTime(600)
+
+      expect(openActions).toHaveBeenCalledWith('msg-1')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

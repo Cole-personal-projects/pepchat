@@ -127,19 +127,20 @@ export default function RolesManager({ groupId }: RolesManagerProps) {
         </button>
       </form>
 
-      <div className="flex gap-4">
-        {/* Role list, top role first; @everyone pinned at the bottom */}
-        <div className="w-40 flex-shrink-0 space-y-1" data-testid="role-list">
+      <div className="flex gap-4 max-md:flex-col">
+        {/* Role list: vertical rail on desktop, wrapping pills on mobile so
+            the editor keeps the full viewport width on small screens. */}
+        <div className="md:w-40 md:flex-shrink-0 md:space-y-1 max-md:flex max-md:flex-wrap max-md:gap-1.5" data-testid="role-list">
           {roles.map((role, index) => {
             const isSelected = selectedRole?.id === role.id
             const customIndex = customRoles.findIndex((r) => r.id === role.id)
             return (
-              <div key={role.id} className="group/role flex items-center gap-1">
+              <div key={role.id} className="group/role flex items-center gap-1 max-md:rounded-full max-md:border max-md:border-white/10 max-md:bg-[var(--bg-primary)] max-md:px-1">
                 <button
                   type="button"
                   data-testid={`role-item-${role.id}`}
                   onClick={() => setSelectedRoleId(role.id)}
-                  className={`flex min-w-0 flex-1 items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors ${
+                  className={`flex min-w-0 flex-1 items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors max-md:rounded-full ${
                     isSelected ? 'bg-white/10 text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:bg-white/5'
                   }`}
                 >
@@ -151,7 +152,9 @@ export default function RolesManager({ groupId }: RolesManagerProps) {
                   <span className="min-w-0 flex-1 truncate">{role.name}</span>
                 </button>
                 {!role.is_default && (
-                  <span className="hidden flex-shrink-0 items-center group-hover/role:flex">
+                  // Touch devices have no hover: keep the reorder arrows
+                  // visible whenever the role is the one being edited.
+                  <span className={`flex-shrink-0 items-center ${isSelected ? 'flex' : 'hidden group-hover/role:flex'}`}>
                     <button
                       type="button"
                       aria-label={`Move ${role.name} role up`}

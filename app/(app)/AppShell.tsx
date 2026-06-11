@@ -156,7 +156,7 @@ export default function AppShell({ profile, children }: AppShellProps) {
         {/* Sidebars: always visible on md+; slide-in overlay on mobile */}
         <div
           className={`
-            fixed inset-y-0 left-0 z-30 flex
+            app-sidebar fixed inset-y-0 left-0 z-30 flex
             transform transition-transform ease-[var(--ease-pep-spring)] duration-[var(--motion-panel)]
             ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
             md:relative md:translate-x-0 md:z-auto md:flex

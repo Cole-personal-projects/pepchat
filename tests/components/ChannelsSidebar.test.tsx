@@ -39,6 +39,8 @@ vi.mock('@/app/(app)/channels/actions', () => ({
 }))
 
 vi.mock('@/app/(app)/voice/actions', () => ({
+  sweepVoiceRooms: vi.fn().mockResolvedValue({ ok: true }),
+  closeVoiceChannel: vi.fn().mockResolvedValue({ ok: true, deletedChannel: true }),
   getCurrentVoiceRoom: vi.fn(),
   joinVoiceChannel: vi.fn(),
   leaveVoiceRoom: vi.fn(),

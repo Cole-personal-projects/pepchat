@@ -377,13 +377,17 @@ export async function deleteEphemeralChannelIfEmpty(
 }
 
 /**
- * Lazy reaper for a group's empty ephemeral voice channels. Run after
- * cleanupStaleVoiceParticipants so crashed clients are already marked left.
+ * Lazy reaper for a group's empty ephemeral voice channels. Runs its own
+ * admin-client stale-participant cleanup first: RLS only lets users update
+ * their own participant rows, so a user-client cleanup silently skips other
+ * users' crashed sessions and would keep empty rooms alive forever.
  */
 export async function sweepEmptyEphemeralChannels(
   adminClient: SupabaseClient,
   input: { groupId: string },
 ): Promise<{ ok: true } | { error: string }> {
+  await cleanupStaleVoiceParticipants(adminClient, { groupId: input.groupId })
+
   const { data, error } = await adminClient
     .from('channels')
     .select('id')
@@ -400,4 +404,62 @@ export async function sweepEmptyEphemeralChannels(
   )
 
   return { ok: true }
+}
+
+/**
+ * Admin escape hatch for stuck voice rooms: force-marks every participant
+ * left, closes the channel's live rooms, and deletes the channel when it is
+ * ephemeral. Caller must gate on canManageChannels before invoking.
+ */
+export async function forceCloseVoiceChannel(
+  adminClient: SupabaseClient,
+  input: { channelId: string },
+): Promise<{ ok: true; deletedChannel: boolean } | { error: string }> {
+  const { data: channel, error: channelError } = await adminClient
+    .from('channels')
+    .select('id, is_ephemeral, kind')
+    .eq('id', input.channelId)
+    .maybeSingle()
+
+  if (channelError && channelError.code !== MISSING_ROW) return { error: 'Cannot close this room.' }
+  if (!channel || (channel as { kind?: string | null }).kind !== 'voice') {
+    return { error: 'Cannot close this room.' }
+  }
+
+  const { data: rooms, error: roomsError } = await adminClient
+    .from('voice_rooms')
+    .select('id')
+    .eq('channel_id', input.channelId)
+    .in('status', ['open', 'idle'])
+
+  if (roomsError) return { error: 'Cannot close this room.' }
+
+  const roomIds = ((rooms ?? []) as Array<{ id: string }>).map((row) => row.id)
+  if (roomIds.length > 0) {
+    const now = new Date().toISOString()
+    const { error: participantsError } = await adminClient
+      .from('voice_room_participants')
+      .update({ left_at: now })
+      .in('room_id', roomIds)
+      .is('left_at', null)
+    if (participantsError) return { error: 'Cannot close this room.' }
+
+    const { error: closeError } = await adminClient
+      .from('voice_rooms')
+      .update({ status: 'closed', closed_at: now })
+      .in('id', roomIds)
+    if (closeError) return { error: 'Cannot close this room.' }
+  }
+
+  if (!(channel as { is_ephemeral?: boolean | null }).is_ephemeral) {
+    return { ok: true, deletedChannel: false }
+  }
+
+  const { error: deleteError } = await adminClient
+    .from('channels')
+    .delete()
+    .eq('id', input.channelId)
+    .eq('is_ephemeral', true)
+
+  return deleteError ? { error: 'Cannot close this room.' } : { ok: true, deletedChannel: true }
 }

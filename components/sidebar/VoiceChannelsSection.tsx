@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { createTempVoiceRoom, getCurrentVoiceRoom, joinVoiceChannel, leaveVoiceRoom } from '@/app/(app)/voice/actions'
+import { closeVoiceChannel, createTempVoiceRoom, getCurrentVoiceRoom, joinVoiceChannel, leaveVoiceRoom, sweepVoiceRooms } from '@/app/(app)/voice/actions'
 import { useVoiceRoomConnection } from '@/components/voice/useVoiceRoomConnection'
 import type { Channel } from '@/lib/types'
 
@@ -18,6 +18,8 @@ interface VoiceChannelsSectionProps {
   /** Enables the join-to-create room button. */
   groupId?: string
   canCreateRoom?: boolean
+  /** Shows the channel-manager force-close control on each room. */
+  canManageChannels?: boolean
   onMobileClose?: () => void
 }
 
@@ -30,7 +32,7 @@ function roomStatusLabel(room: VoiceRoomSummary | null | undefined, connected: b
   return 'Click to join'
 }
 
-export default function VoiceChannelsSection({ channels, groupId, canCreateRoom = false, onMobileClose }: VoiceChannelsSectionProps) {
+export default function VoiceChannelsSection({ channels, groupId, canCreateRoom = false, canManageChannels = false, onMobileClose }: VoiceChannelsSectionProps) {
   const connection = useVoiceRoomConnection()
   const [roomsByChannelId, setRoomsByChannelId] = useState<Record<string, VoiceRoomSummary | null>>({})
   const [loadingChannelIds, setLoadingChannelIds] = useState<Set<string>>(new Set())
@@ -41,9 +43,17 @@ export default function VoiceChannelsSection({ channels, groupId, canCreateRoom 
   const [connectedChannelId, setConnectedChannelId] = useState<string | null>(null)
   const [connectedRoomId, setConnectedRoomId] = useState<string | null>(null)
   const [errorByChannelId, setErrorByChannelId] = useState<Record<string, string | null>>({})
+  const [closingChannelId, setClosingChannelId] = useState<string | null>(null)
 
   const channelIdsKey = useMemo(() => channels.map(channel => channel.id).join('|'), [channels])
   const busy = Boolean(joiningChannelId) || leaving || creatingRoom || connection.status === 'joining' || connection.status === 'leaving'
+
+  // Lazy reaper trigger: deletes abandoned join-to-create rooms. Removed
+  // channels then leave the sidebar through the channels realtime DELETE.
+  useEffect(() => {
+    if (!groupId) return
+    void sweepVoiceRooms(groupId).catch(() => {})
+  }, [groupId])
 
   useEffect(() => {
     if (channels.length === 0) return
@@ -144,6 +154,32 @@ export default function VoiceChannelsSection({ channels, groupId, canCreateRoom 
     }
   }, [groupId, handleJoin])
 
+  const handleCloseChannel = useCallback(async (channel: Channel) => {
+    if (!window.confirm(`Close ${channel.name}? Everyone tracked in this room is disconnected and temporary rooms are removed.`)) return
+    setClosingChannelId(channel.id)
+    setErrorByChannelId(current => ({ ...current, [channel.id]: null }))
+
+    try {
+      const result = await closeVoiceChannel(channel.id)
+      if (!('ok' in result) || !result.ok) {
+        setErrorByChannelId(current => ({ ...current, [channel.id]: 'Cannot close this room.' }))
+        return
+      }
+      // Deleted ephemeral channels leave the sidebar via the channels
+      // realtime subscription; clear the local room snapshot either way.
+      setRoomsByChannelId(current => ({ ...current, [channel.id]: null }))
+      if (connectedChannelId === channel.id) {
+        await connection.leave()
+        setConnectedChannelId(null)
+        setConnectedRoomId(null)
+      }
+    } catch {
+      setErrorByChannelId(current => ({ ...current, [channel.id]: UNAVAILABLE_ERROR }))
+    } finally {
+      setClosingChannelId(null)
+    }
+  }, [connectedChannelId, connection])
+
   const handleLeave = useCallback(async () => {
     if (!connectedRoomId) return
     setLeaving(true)
@@ -204,22 +240,45 @@ export default function VoiceChannelsSection({ channels, groupId, canCreateRoom 
           const participantCount = room?.participantCount ?? 0
           const visibleError = errorByChannelId[channel.id] ?? (isConnected ? connection.error : null)
 
+          const isClosing = closingChannelId === channel.id
+
           return (
             <div key={channel.id} className="rounded-md">
-              <button
-                type="button"
-                aria-label={`${isConnected ? 'Connected to' : 'Join'} ${channel.name} voice`}
-                data-testid={`voice-channel-${channel.id}`}
-                onClick={() => handleJoin(channel)}
-                disabled={busy || isLoading || isConnected}
-                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors disabled:cursor-default disabled:opacity-70 ${isConnected ? 'bg-[var(--channel-active-bg)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:bg-white/5 hover:text-[var(--text-primary)]'}`}
-              >
-                <span aria-hidden="true" className="text-[var(--text-faint)]">🔊</span>
-                <span className="min-w-0 flex-1 truncate">{channel.name}</span>
-                <span className="text-[10px] text-[var(--text-faint)]">
-                  {isLoading ? 'Loading…' : isJoining ? 'Joining…' : roomStatusLabel(room, isConnected)}
-                </span>
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  aria-label={`${isConnected ? 'Connected to' : 'Join'} ${channel.name} voice`}
+                  data-testid={`voice-channel-${channel.id}`}
+                  onClick={() => handleJoin(channel)}
+                  disabled={busy || isLoading || isConnected}
+                  className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors disabled:cursor-default disabled:opacity-70 ${isConnected ? 'bg-[var(--channel-active-bg)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:bg-white/5 hover:text-[var(--text-primary)]'}`}
+                >
+                  <span aria-hidden="true" className="text-[var(--text-faint)]">🔊</span>
+                  <span className="min-w-0 flex-1 truncate">{channel.name}</span>
+                  <span className="text-[10px] text-[var(--text-faint)]">
+                    {isLoading ? 'Loading…' : isJoining ? 'Joining…' : roomStatusLabel(room, isConnected)}
+                  </span>
+                </button>
+                {canManageChannels && (
+                  <button
+                    type="button"
+                    aria-label={`Close ${channel.name} voice room`}
+                    data-testid={`close-voice-channel-${channel.id}`}
+                    title="Close room"
+                    onClick={() => handleCloseChannel(channel)}
+                    disabled={isClosing}
+                    className="flex-shrink-0 rounded p-1 text-[var(--text-faint)] transition-colors hover:bg-[var(--danger)]/10 hover:text-[var(--danger)] disabled:opacity-50"
+                  >
+                    {isClosing ? (
+                      <span className="block h-3.5 w-3.5 animate-pulse text-[10px] leading-[14px]">…</span>
+                    ) : (
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    )}
+                  </button>
+                )}
+              </div>
 
               {(participantCount > 0 || isConnected) && (
                 <div

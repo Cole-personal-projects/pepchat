@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  closeVoiceChannel,
   createTempVoiceRoom,
   getCurrentVoiceRoom,
   heartbeatVoiceRoom,
@@ -8,6 +9,7 @@ import {
   listVoiceChannels,
   mintVoiceToken,
   startVoiceRoom,
+  sweepVoiceRooms,
 } from '@/app/(app)/voice/actions'
 
 const {
@@ -26,6 +28,7 @@ const {
   mockMarkVoiceParticipantLeft,
   mockDeleteEphemeralChannelIfEmpty,
   mockSweepEmptyEphemeralChannels,
+  mockForceCloseVoiceChannel,
   mockMintLiveKitToken,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
@@ -43,6 +46,7 @@ const {
   mockMarkVoiceParticipantLeft: vi.fn(),
   mockDeleteEphemeralChannelIfEmpty: vi.fn(),
   mockSweepEmptyEphemeralChannels: vi.fn(),
+  mockForceCloseVoiceChannel: vi.fn(),
   mockMintLiveKitToken: vi.fn(),
 }))
 
@@ -62,6 +66,7 @@ vi.mock('@/lib/voice/rooms', () => ({
   markVoiceParticipantLeft: mockMarkVoiceParticipantLeft,
   deleteEphemeralChannelIfEmpty: mockDeleteEphemeralChannelIfEmpty,
   sweepEmptyEphemeralChannels: mockSweepEmptyEphemeralChannels,
+  forceCloseVoiceChannel: mockForceCloseVoiceChannel,
 }))
 vi.mock('@/lib/voice/livekit', () => ({ mintLiveKitToken: mockMintLiveKitToken }))
 
@@ -585,5 +590,83 @@ describe('ephemeral cleanup wiring', () => {
     await expect(listVoiceChannels('group-1')).resolves.toEqual({ ok: true, channels: [] })
 
     expect(mockSweepEmptyEphemeralChannels).toHaveBeenCalledWith(expect.anything(), { groupId: 'group-1' })
+  })
+
+  it('lets any member trigger the lazy reaper via sweepVoiceRooms', async () => {
+    await expect(sweepVoiceRooms('group-1')).resolves.toEqual({ ok: true })
+
+    expect(mockSweepEmptyEphemeralChannels).toHaveBeenCalledWith(expect.anything(), { groupId: 'group-1' })
+  })
+
+  it('falls back to user-client stale cleanup when no service role key is configured', async () => {
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY
+
+    await expect(sweepVoiceRooms('group-1')).resolves.toEqual({ ok: true })
+
+    expect(mockSweepEmptyEphemeralChannels).not.toHaveBeenCalled()
+    expect(mockCleanupStaleVoiceParticipants).toHaveBeenCalledWith(expect.anything(), { groupId: 'group-1' })
+  })
+})
+
+describe('closeVoiceChannel', () => {
+  const ORIGINAL_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const adminClient = { from: vi.fn() }
+
+  function setupClose(role: 'admin' | 'moderator' | 'user' | 'noob' | null) {
+    const gate: Record<string, ReturnType<typeof vi.fn>> = {}
+    gate.select = vi.fn(() => gate)
+    gate.eq = vi.fn(() => gate)
+    gate.single = vi.fn().mockResolvedValue(role
+      ? { data: { role }, error: null }
+      : { data: null, error: { message: 'missing', code: 'PGRST116' } })
+    mockCreateClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null }) },
+      from: vi.fn(() => gate),
+    })
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key'
+    mockCreateAdminClient.mockReturnValue(adminClient)
+    mockResolveVoiceChannel.mockResolvedValue({ ...channel, kind: 'voice' })
+    mockForceCloseVoiceChannel.mockResolvedValue({ ok: true, deletedChannel: true })
+  })
+
+  afterEach(() => {
+    if (ORIGINAL_SERVICE_ROLE_KEY === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = ORIGINAL_SERVICE_ROLE_KEY
+  })
+
+  it('lets channel managers force-close a voice channel via the admin client', async () => {
+    for (const role of ['admin', 'moderator'] as const) {
+      vi.clearAllMocks()
+      mockCreateAdminClient.mockReturnValue(adminClient)
+      mockResolveVoiceChannel.mockResolvedValue({ ...channel, kind: 'voice' })
+      mockForceCloseVoiceChannel.mockResolvedValue({ ok: true, deletedChannel: true })
+      setupClose(role)
+
+      await expect(closeVoiceChannel('channel-1')).resolves.toEqual({ ok: true, deletedChannel: true })
+      expect(mockForceCloseVoiceChannel).toHaveBeenCalledWith(adminClient, { channelId: 'channel-1' })
+    }
+  })
+
+  it('denies regular members and noobs', async () => {
+    for (const role of ['user', 'noob'] as const) {
+      vi.clearAllMocks()
+      mockResolveVoiceChannel.mockResolvedValue({ ...channel, kind: 'voice' })
+      setupClose(role)
+
+      await expect(closeVoiceChannel('channel-1')).resolves.toEqual({ error: GENERIC })
+      expect(mockForceCloseVoiceChannel).not.toHaveBeenCalled()
+    }
+  })
+
+  it('denies when the channel cannot be resolved', async () => {
+    setupClose('admin')
+    mockResolveVoiceChannel.mockResolvedValue(null)
+
+    await expect(closeVoiceChannel('channel-x')).resolves.toEqual({ error: GENERIC })
+    expect(mockForceCloseVoiceChannel).not.toHaveBeenCalled()
   })
 })
