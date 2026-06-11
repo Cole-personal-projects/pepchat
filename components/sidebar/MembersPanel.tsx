@@ -23,16 +23,23 @@ interface MembersPanelProps {
   groupId: string
   currentUserId: string
   currentUserRole: Role
+  /**
+   * 'sidebar' renders the collapsible section used in the desktop channels
+   * sidebar; 'sheet' renders bare content for the mobile members sheet,
+   * which provides its own header and scroll container.
+   */
+  variant?: 'sidebar' | 'sheet'
 }
 
 /**
- * Collapsible members list shown in the channels sidebar.
- * Admins can assign roles and kick. Moderators see read-only view.
+ * Members list with role management. Admins can assign roles and kick;
+ * everyone else sees the read-only view.
  */
-export default function MembersPanel({ groupId, currentUserId, currentUserRole }: MembersPanelProps) {
+export default function MembersPanel({ groupId, currentUserId, currentUserRole, variant = 'sidebar' }: MembersPanelProps) {
   const { members, loading } = useMembersList(groupId)
   const { roles, roleIdsByUserId } = useGroupRoles(groupId)
   const [expanded, setExpanded] = useState(true)
+  const isSheet = variant === 'sheet'
   const [memberSearch, setMemberSearch] = useState('')
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState('')
@@ -108,21 +115,23 @@ export default function MembersPanel({ groupId, currentUserId, currentUserRole }
   }
 
   return (
-    <div className="border-t border-black/20 mt-2">
-      {/* Section header */}
-      <button
-        onClick={() => setExpanded((v) => !v)}
-        className="flex items-center justify-between w-full px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-        aria-expanded={expanded}
-      >
-        <span>Members — {members.length}</span>
-        <svg
-          className={`w-3 h-3 transition-transform ${expanded ? 'rotate-0' : '-rotate-90'}`}
-          fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"
+    <div className={isSheet ? 'pt-2' : 'border-t border-black/20 mt-2'}>
+      {/* Section header (sidebar only — the sheet has its own) */}
+      {!isSheet && (
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="flex items-center justify-between w-full px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+          aria-expanded={expanded}
         >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
+          <span>Members — {members.length}</span>
+          <svg
+            className={`w-3 h-3 transition-transform ${expanded ? 'rotate-0' : '-rotate-90'}`}
+            fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      )}
 
       {error && (
         <p className="mx-3 mb-2 text-xs text-[var(--danger)] bg-[var(--danger)]/10 border border-[var(--danger)]/20 rounded px-2 py-1">
@@ -130,7 +139,7 @@ export default function MembersPanel({ groupId, currentUserId, currentUserRole }
         </p>
       )}
 
-      {expanded && (
+      {(expanded || isSheet) && (
         <>
         <div className="px-3 pb-2">
           <div className="grid grid-cols-2 gap-1 text-[10px] text-[var(--text-faint)]">

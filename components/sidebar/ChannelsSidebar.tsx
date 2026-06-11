@@ -12,6 +12,7 @@ import VoiceChannelsSection from '@/components/sidebar/VoiceChannelsSection'
 import UserStatusMenu from '@/components/status/UserStatusMenu'
 import EventsPanel from '@/components/events/EventsPanel'
 import Modal from '@/components/ui/Modal'
+import ActionSheet, { ActionSheetRow } from '@/components/ui/ActionSheet'
 import { logout } from '@/app/(auth)/actions'
 import { deleteChannel, moveChannel, updateChannelSettings } from '@/app/(app)/channels/actions'
 import { createCategory, deleteCategory, moveCategory, renameCategory } from '@/app/(app)/categories/actions'
@@ -76,6 +77,7 @@ export default function ChannelsSidebar({
   const [channelActionError, setChannelActionError] = useState('')
   const [settingsChannel, setSettingsChannel] = useState<Channel | null>(null)
   const [settingsError, setSettingsError] = useState('')
+  const [channelSheet, setChannelSheet] = useState<Channel | null>(null)
   const [categoryModal, setCategoryModal] = useState<CategoryModalState>(null)
   const [categoryError, setCategoryError] = useState('')
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set())
@@ -248,7 +250,71 @@ export default function ChannelsSidebar({
         }}
         onMove={handleMove}
         onDelete={handleDelete}
+        onLongPress={(ch) => setChannelSheet(ch)}
       />
+    )
+  }
+
+  /** Bottom action sheet contents for a long-pressed channel row. */
+  function renderChannelSheet() {
+    if (!channelSheet) return null
+    const channel = channels.find(c => c.id === channelSheet.id) ?? channelSheet
+    const peers = sectionPeers(channel)
+    const peerIdx = peers.findIndex(c => c.id === channel.id)
+    const isActive = channel.id === activeChannelId
+    const isUnread = !isActive && unreadChannelIds.has(channel.id)
+    const prefix = channel.kind === 'voice' || channel.kind === 'forum' ? '' : '#'
+    const close = () => setChannelSheet(null)
+
+    return (
+      <ActionSheet open onClose={close} title={`${prefix}${channel.name}`}>
+        {isUnread && onMarkChannelRead && (
+          <ActionSheetRow
+            testId="channel-sheet-mark-read"
+            label="Mark as Read"
+            onClick={() => { void onMarkChannelRead(channel.id); close() }}
+          />
+        )}
+        {!isActive && !isUnread && onMarkChannelUnread && (
+          <ActionSheetRow
+            testId="channel-sheet-mark-unread"
+            label="Mark as Unread"
+            onClick={() => { void onMarkChannelUnread(channel.id); close() }}
+          />
+        )}
+        {canManage && (
+          <>
+            <ActionSheetRow
+              testId="channel-sheet-settings"
+              label="Channel Settings"
+              onClick={() => {
+                setSettingsError('')
+                setSettingsChannel(channel)
+                close()
+              }}
+            />
+            <ActionSheetRow
+              testId="channel-sheet-move-up"
+              label="Move Up"
+              disabled={isPending || peerIdx <= 0}
+              onClick={() => { handleMove(channel.id, 'up'); close() }}
+            />
+            <ActionSheetRow
+              testId="channel-sheet-move-down"
+              label="Move Down"
+              disabled={isPending || peerIdx === -1 || peerIdx >= peers.length - 1}
+              onClick={() => { handleMove(channel.id, 'down'); close() }}
+            />
+            <ActionSheetRow
+              testId="channel-sheet-delete"
+              label="Delete Channel"
+              danger
+              disabled={isPending}
+              onClick={() => { close(); handleDelete(channel.id) }}
+            />
+          </>
+        )}
+      </ActionSheet>
     )
   }
 
@@ -482,13 +548,17 @@ export default function ChannelsSidebar({
               onMobileClose={onMobileClose}
             />
 
-            {/* Members panel (admin / moderator only) */}
+            {/* Members panel (desktop, admin / moderator only). On mobile the
+                member list lives in the right-hand MembersSheet instead —
+                Discord-style, opened from the chat header. */}
             {(userRole === 'admin' || userRole === 'moderator') && (
-              <MembersPanel
-                groupId={group.id}
-                currentUserId={profile.id}
-                currentUserRole={userRole}
-              />
+              <div className="hidden md:block">
+                <MembersPanel
+                  groupId={group.id}
+                  currentUserId={profile.id}
+                  currentUserRole={userRole}
+                />
+              </div>
             )}
           </>
         ) : (
@@ -712,6 +782,9 @@ export default function ChannelsSidebar({
           </form>
         )}
       </Modal>
+
+      {/* Long-press channel actions (mobile) */}
+      {renderChannelSheet()}
 
       {/* User footer */}
       <div

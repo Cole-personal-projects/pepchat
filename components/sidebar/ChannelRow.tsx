@@ -1,6 +1,8 @@
 'use client'
 
 import Link from 'next/link'
+import { useRef } from 'react'
+import { useLongPress } from '@/lib/hooks/useLongPress'
 import type { Channel } from '@/lib/types'
 
 interface ChannelRowProps {
@@ -18,6 +20,8 @@ interface ChannelRowProps {
   onEditSettings: (channel: Channel) => void
   onMove: (channelId: string, direction: 'up' | 'down') => void
   onDelete: (channelId: string) => void
+  /** Mobile: long-pressing the row opens the channel action sheet. */
+  onLongPress?: (channel: Channel) => void
 }
 
 /** Kind-aware channel prefix: # for text, speaker for voice, bubbles for forum. */
@@ -72,7 +76,15 @@ export default function ChannelRow({
   onEditSettings,
   onMove,
   onDelete,
+  onLongPress,
 }: ChannelRowProps) {
+  // Suppress the link navigation that follows a completed long-press.
+  const longPressFiredRef = useRef(false)
+  const longPress = useLongPress(() => {
+    longPressFiredRef.current = true
+    onLongPress?.(channel)
+  })
+
   const isVoiceLike = channel.kind === 'voice'
   const displayPrefix = isVoiceLike || channel.kind === 'forum' ? '' : '#'
   const channelLabel = [
@@ -90,7 +102,27 @@ export default function ChannelRow({
       <Link
         href={`/channels/${channel.id}`}
         aria-label={channelLabel}
-        onClick={onMobileClose}
+        onClick={(e) => {
+          if (longPressFiredRef.current) {
+            longPressFiredRef.current = false
+            e.preventDefault()
+            return
+          }
+          onMobileClose?.()
+        }}
+        {...(onLongPress
+          ? {
+              onPointerDown: longPress.onPointerDown,
+              onPointerUp: longPress.onPointerUp,
+              onPointerMove: longPress.onPointerMove,
+              onPointerLeave: longPress.onPointerLeave,
+              onContextMenu: (e: React.MouseEvent) => {
+                // Long-press fires the native context menu on some browsers;
+                // it must not race the action sheet.
+                if (longPressFiredRef.current) e.preventDefault()
+              },
+            }
+          : {})}
         className={`channel-row${isUnread ? ' font-medium' : ''}`}
         style={{
           flex: 1,
@@ -164,8 +196,10 @@ export default function ChannelRow({
         )}
       </Link>
 
+      {/* Inline controls are desktop hover affordances; mobile reaches the
+          same actions through the long-press channel action sheet. */}
       {(onMarkChannelRead || onMarkChannelUnread || canManage) && (
-        <div className="flex md:hidden group-hover/ch:flex items-center gap-0.5 pr-1 flex-shrink-0">
+        <div className="hidden md:group-hover/ch:flex items-center gap-0.5 pr-1 flex-shrink-0">
           {isUnread && onMarkChannelRead && (
             <button
               data-testid={`mark-read-${channel.id}`}
