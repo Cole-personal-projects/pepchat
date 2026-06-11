@@ -1240,6 +1240,8 @@ export default function MessageList({
           currentUserId={currentUserId}
           anchorEl={profileCard.anchor}
           onClose={() => setProfileCard(null)}
+          groupId={groupId}
+          viewerRole={userRole}
         />
       )}
 
