@@ -37,6 +37,27 @@ const mockChannel = vi.fn().mockReturnThis()
 const mockOn = vi.fn().mockReturnThis()
 const mockSubscribe = vi.fn().mockReturnThis()
 
+vi.mock('@/lib/hooks/useGroupRoles', () => ({
+  useGroupRoles: () => ({
+    roles: [
+      {
+        id: 'role-gb', group_id: 'grp-1', name: 'group-buy', color: '#57f287',
+        hoist: false, mentionable: true, position: 1, permissions: '0',
+        is_default: false, created_at: '2026-01-01T00:00:00Z',
+      },
+      {
+        id: 'role-quiet', group_id: 'grp-1', name: 'quiet-role', color: null,
+        hoist: false, mentionable: false, position: 2, permissions: '0',
+        is_default: false, created_at: '2026-01-01T00:00:00Z',
+      },
+    ],
+    memberRoles: [],
+    roleIdsByUserId: new Map(),
+    loading: false,
+    refetch: vi.fn(),
+  }),
+}))
+
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
     from: () => ({
@@ -214,5 +235,21 @@ describe('MessageInput draft persistence', () => {
 
     expect(await screen.findByTestId('mention-suggestions')).toBeInTheDocument()
     expect(screen.getByText('@bob')).toBeInTheDocument()
+  })
+
+  it('suggests mentionable roles, hiding non-mentionable ones', async () => {
+    render(<MessageInput {...BASE_PROPS} groupId="group-1" />)
+
+    fireEvent.change(screen.getByTestId('message-input-textarea'), {
+      target: { value: 'ping @g' },
+    })
+
+    expect(await screen.findByTestId('mention-suggestions')).toBeInTheDocument()
+    expect(screen.getByText('@group-buy')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByTestId('message-input-textarea'), {
+      target: { value: 'ping @quiet' },
+    })
+    expect(screen.queryByTestId('mention-suggestions')).not.toBeInTheDocument()
   })
 })
