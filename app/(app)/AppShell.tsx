@@ -139,7 +139,18 @@ export default function AppShell({ profile, children }: AppShellProps) {
     return m ? m[1] : null
   })()
 
-  const { unreadChannelIds, unreadGroupIds, unreadCountsByChannelId } = useUnreadChannels(profile.id, activeChannelId)
+  const { unreadChannelIds, unreadGroupIds, unreadCountsByChannelId, mentionCountsByChannelId } = useUnreadChannels(profile.id, activeChannelId)
+
+  // PWA icon badge mirrors total unread pings (no-op where unsupported).
+  useEffect(() => {
+    const total = Array.from(mentionCountsByChannelId.values()).reduce((sum, count) => sum + count, 0)
+    const nav = navigator as Navigator & {
+      setAppBadge?: (count: number) => Promise<void>
+      clearAppBadge?: () => Promise<void>
+    }
+    if (total > 0) void nav.setAppBadge?.(total)?.catch(() => {})
+    else void nav.clearAppBadge?.()?.catch(() => {})
+  }, [mentionCountsByChannelId])
 
   async function handleMarkChannelRead(channelId: string) {
     await markChannelRead(channelId, profile.id)
@@ -192,6 +203,7 @@ export default function AppShell({ profile, children }: AppShellProps) {
             userRole={userRole}
             unreadChannelIds={unreadChannelIds}
             unreadCountsByChannelId={unreadCountsByChannelId}
+            mentionCountsByChannelId={mentionCountsByChannelId}
             onMarkChannelRead={handleMarkChannelRead}
             onMarkChannelUnread={handleMarkChannelUnread}
             onCreateChannel={(categoryId) => {

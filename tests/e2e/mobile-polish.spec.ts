@@ -239,6 +239,27 @@ test.describe('custom role assignment', () => {
   })
 })
 
+test.describe('instant messaging', () => {
+  test('sent message appears optimistically and settles', async ({ page }) => {
+    await login(page)
+    await openGeneralChannel(page)
+
+    const composer = page.locator('[data-testid="message-input-textarea"]').first()
+    const body = `optimistic ${Date.now()}`
+    await composer.click()
+    await composer.fill(body)
+    await page.getByRole('button', { name: 'Send' }).click()
+
+    // The echo renders immediately — composer clears without waiting on the server.
+    await expect(composer).toHaveValue('')
+    const sent = page.locator('.message-row', { hasText: body })
+    await expect(sent).toBeVisible()
+    // No failure banner: the send succeeded against the mock backend.
+    await expect(page.locator('[data-testid^="send-failed-"]')).toHaveCount(0)
+    await page.screenshot({ path: 'test-results/mobile-optimistic-send.png' })
+  })
+})
+
 test.describe('events', () => {
   test('Events modal opens centered above the closing drawer', async ({ page }) => {
     await login(page)

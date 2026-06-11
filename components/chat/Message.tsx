@@ -102,6 +102,8 @@ export default function Message({
     )
   }
 
+  const optimisticState = msg.optimistic ?? null
+
   return (
     <div
       className={`message-row group/msg flex items-start gap-3 rounded px-2 hover:bg-[var(--bg-hover)] transition-colors${isOwn ? ' own-message' : ''}`}
@@ -109,12 +111,15 @@ export default function Message({
         paddingTop: isCompact ? 2 : 16,
         paddingBottom: 2,
         position: 'relative',
+        // Echoes fade until the server acks; actions target real ids only.
+        opacity: optimisticState === 'pending' || optimisticState === 'failed' ? 0.55 : 1,
       }}
       onContextMenu={e => {
         e.preventDefault()
+        if (optimisticState) return
         actions.openContextMenu(msg.id, e)
       }}
-      {...(!isEditing ? {
+      {...(!isEditing && !optimisticState ? {
         onPointerDown: longPress.onPointerDown,
         onPointerUp: longPress.onPointerUp,
         onPointerMove: longPress.onPointerMove,
@@ -331,10 +336,35 @@ export default function Message({
           />
         )}
 
+        {optimisticState === 'failed' && (
+          <div
+            data-testid={`send-failed-${msg.id}`}
+            className="mt-1 flex items-center gap-2 text-xs"
+            style={{ color: 'var(--danger)' }}
+          >
+            <span>Failed to send.</span>
+            <button
+              type="button"
+              data-testid={`retry-send-${msg.id}`}
+              onClick={() => actions.retrySend?.(msg.id)}
+              className="rounded border border-[var(--danger)]/40 px-2 py-0.5 font-semibold hover:bg-[var(--danger)]/10"
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              data-testid={`discard-send-${msg.id}`}
+              onClick={() => actions.discardSend?.(msg.id)}
+              className="rounded border border-[var(--border-soft)] px-2 py-0.5 font-semibold text-[var(--text-muted)] hover:bg-white/10"
+            >
+              Discard
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Hover action bar (desktop only) */}
-      {!isEditing && (
+      {!isEditing && !optimisticState && (
         <MessageActionBar
           msg={msg}
           isOwn={isOwn}

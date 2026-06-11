@@ -32,6 +32,13 @@ interface MessageInputProps {
   threadRootId?: string
   /** When provided, called instead of the default sendMessage server action. */
   sendAction?: (content: string, replyToId: string | null, attachments: Attachment[]) => Promise<{ error: string } | { ok: true; message?: MessageWithProfile }>
+  /**
+   * Optimistic echo: called synchronously at submit with the draft; returns
+   * a temp id. The composer clears immediately and reports the action result
+   * through onOptimisticSettled instead of holding the input hostage.
+   */
+  onOptimisticSend?: (draft: { content: string; attachments: Attachment[]; replyTo: MessageWithProfile | null }) => string
+  onOptimisticSettled?: (tempId: string, result: { ok: true } | { error: string }) => void
 }
 
 const SEND_FAILURE_MESSAGE = 'Message failed to send. Please try again.'
@@ -57,6 +64,8 @@ export default function MessageInput({
   mode = 'channel',
   threadRootId,
   sendAction,
+  onOptimisticSend,
+  onOptimisticSettled,
 }: MessageInputProps) {
   const draftStorageKey = providedDraftStorageKey ?? `sidebar:draft:${channelId}`
   const [content, setContent] = useState(() => readDraft(draftStorageKey))
@@ -244,27 +253,51 @@ export default function MessageInput({
     }
   }
 
+  function clearComposer() {
+    removeDraft(draftStorageKey)
+    setContent('')
+    setMirrorToChannel(false)
+    clearAll()
+    if (textareaRef.current) textareaRef.current.style.height = 'auto'
+    if (window.innerWidth < 768) {
+      textareaRef.current?.blur()
+    } else {
+      textareaRef.current?.focus()
+    }
+    onCancelReply?.()
+  }
+
   function submit() {
     const trimmed = content.trim()
     const hasContent = trimmed.length > 0 || attachments.length > 0
-    if (!hasContent || isPending || hasUploading) return
+    if (!hasContent || hasUploading) return
     setError('')
+
+    // Optimistic path: echo the message and free the composer immediately;
+    // the echo's own pending/failed state carries the outcome.
+    if (onOptimisticSend) {
+      const sentAttachments = attachments
+      const replyTo = replyingTo ?? null
+      const tempId = onOptimisticSend({ content: trimmed, attachments: sentAttachments, replyTo })
+      clearComposer()
+      startTransition(async () => {
+        const result = await sendSafely(() =>
+          sendAction
+            ? sendAction(trimmed, replyTo?.id ?? null, sentAttachments)
+            : sendMessage(channelId, trimmed, replyTo?.id, sentAttachments),
+        )
+        onOptimisticSettled?.(tempId, 'error' in result ? { error: result.error ?? SEND_FAILURE_MESSAGE } : { ok: true })
+      })
+      return
+    }
+
+    if (isPending) return
     startTransition(async () => {
       const result = await sendSafely(() => sendCurrentMessage(trimmed, attachments))
       if ('error' in result) {
         setError(result.error ?? '')
       } else {
-        removeDraft(draftStorageKey)
-        setContent('')
-        setMirrorToChannel(false)
-        clearAll()
-        if (textareaRef.current) textareaRef.current.style.height = 'auto'
-        if (window.innerWidth < 768) {
-          textareaRef.current?.blur()
-        } else {
-          textareaRef.current?.focus()
-        }
-        onCancelReply?.()
+        clearComposer()
         const sentMessage = result.message
         if (sentMessage) onSent?.(sentMessage, result.mirrorMessage ?? null)
       }
@@ -294,7 +327,8 @@ export default function MessageInput({
     return sendMessage(channelId, messageContent, replyingTo?.id, messageAttachments)
   }
 
-  const canSend = (content.trim().length > 0 || attachments.length > 0) && !isPending && !hasUploading
+  // Optimistic mode never locks the composer on in-flight sends.
+  const canSend = (content.trim().length > 0 || attachments.length > 0) && (Boolean(onOptimisticSend) || !isPending) && !hasUploading
   const inputPlaceholder = replyingTo
     ? `Reply to @${replyingTo.profiles?.username}…`
     : (placeholder ?? (mode === 'thread' ? 'Reply…' : `Message #${channelName}`))

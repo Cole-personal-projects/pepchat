@@ -10,6 +10,8 @@ interface ChannelRowProps {
   isActive: boolean
   isUnread: boolean
   unreadCount: number
+  /** Unread @mention pings — the only thing that earns the red badge. */
+  mentionCount?: number
   canManage: boolean
   isPending: boolean
   canMoveUp: boolean
@@ -66,6 +68,7 @@ export default function ChannelRow({
   isActive,
   isUnread,
   unreadCount,
+  mentionCount = 0,
   canManage,
   isPending,
   canMoveUp,
@@ -90,6 +93,7 @@ export default function ChannelRow({
   const channelLabel = [
     `${displayPrefix}${channel.name}`,
     isActive ? 'current channel' : null,
+    mentionCount > 0 ? `${mentionCount} ${mentionCount === 1 ? 'mention' : 'mentions'}` : null,
     isUnread
       ? unreadCount > 0
         ? `${unreadCount} unread ${unreadCount === 1 ? 'message' : 'messages'}`
@@ -173,15 +177,17 @@ export default function ChannelRow({
           </span>
         </span>
 
-        {isUnread && unreadCount > 0 && (
+        {/* Discord hierarchy: only @mentions earn a number badge; plain
+            unread stays a quiet dot + bold name. */}
+        {mentionCount > 0 && (
           <span
-            data-testid={`unread-count-${channel.id}`}
+            data-testid={`mention-count-${channel.id}`}
             style={{
               minWidth: 18,
               height: 18,
               borderRadius: 9,
               padding: '0 6px',
-              background: 'var(--accent)',
+              background: 'var(--danger)',
               color: '#fff',
               fontSize: 11,
               fontWeight: 700,
@@ -191,7 +197,7 @@ export default function ChannelRow({
               flexShrink: 0,
             }}
           >
-            {unreadCount > 99 ? '99+' : unreadCount}
+            {mentionCount > 99 ? '99+' : mentionCount}
           </span>
         )}
       </Link>

@@ -14,6 +14,8 @@ interface UseMessagesReturn {
   loadingMore: boolean
   loadMore: () => Promise<void>
   addMessage: (msg: MessageWithProfile) => void
+  addOptimisticMessage: (msg: MessageWithProfile) => void
+  setOptimisticState: (tempId: string, state: 'pending' | 'failed' | 'sent') => void
   removeMessage: (messageId: string) => void
   broadcastNewMessage: (msg: MessageWithProfile) => void
   toggleReactionOptimistic: (messageId: string, emoji: string, userId: string, username: string) => void
@@ -33,6 +35,26 @@ interface UseMessagesReturn {
  *
  * Reactions use Broadcast for add/remove events.
  */
+/**
+ * Appends a real message, replacing the sender's optimistic echo when one
+ * matches (same author + content, or same author + first attachment URL for
+ * attachment-only sends).
+ */
+function mergeRealMessage(prev: MessageWithProfile[], msg: MessageWithProfile): MessageWithProfile[] {
+  if (prev.some((m) => m.id === msg.id)) return prev
+  const echoIndex = prev.findIndex(
+    (m) =>
+      m.optimistic &&
+      m.user_id === msg.user_id &&
+      (m.content === msg.content ||
+        (Boolean(m.attachments?.[0]?.url) && m.attachments?.[0]?.url === msg.attachments?.[0]?.url)),
+  )
+  if (echoIndex === -1) return [...prev, msg]
+  const next = prev.slice()
+  next.splice(echoIndex, 1)
+  return [...next, msg]
+}
+
 export function useMessages(
   channelId: string,
   initialMessages: MessageWithProfile[],
@@ -50,10 +72,7 @@ export function useMessages(
         filter: { event: 'new_message' },
         handler: ({ payload }) => {
           const msg = payload.message as MessageWithProfile
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === msg.id)) return prev
-            return [...prev, msg]
-          })
+          setMessages((prev) => mergeRealMessage(prev, msg))
         },
       },
       {
@@ -124,10 +143,7 @@ export function useMessages(
           if (error || !data) return
           const msg = data as MessageWithProfile
           if (msg.channel_id !== channelId) return
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === msg.id)) return prev
-            return [...prev, msg]
-          })
+          setMessages((prev) => mergeRealMessage(prev, msg))
         },
       },
       {
@@ -171,10 +187,19 @@ export function useMessages(
 
   /** Add a message to local state immediately (used by the sender). */
   const addMessage = useCallback((msg: MessageWithProfile) => {
-    setMessages((prev) => {
-      if (prev.some((m) => m.id === msg.id)) return prev
-      return [...prev, msg]
-    })
+    setMessages((prev) => mergeRealMessage(prev, msg))
+  }, [])
+
+  /** Append the sender's optimistic echo (faded until the server acks). */
+  const addOptimisticMessage = useCallback((msg: MessageWithProfile) => {
+    setMessages((prev) => [...prev, msg])
+  }, [])
+
+  /** Move an optimistic echo between pending / failed / sent states. */
+  const setOptimisticState = useCallback((tempId: string, state: 'pending' | 'failed' | 'sent') => {
+    setMessages((prev) =>
+      prev.map((m) => (m.id === tempId ? { ...m, optimistic: state } : m)),
+    )
   }, [])
 
   /** Remove a message from local state after a successful delete. */
@@ -283,5 +308,5 @@ export function useMessages(
     setLoadingMore(false)
   }, [channelId, hasMore, loadingMore, messages])
 
-  return { messages, hasMore, loadingMore, loadMore, addMessage, removeMessage, broadcastNewMessage, toggleReactionOptimistic, broadcastReactionChange, updateMessageContent, updateMessagePinnedAt }
+  return { messages, hasMore, loadingMore, loadMore, addMessage, addOptimisticMessage, setOptimisticState, removeMessage, broadcastNewMessage, toggleReactionOptimistic, broadcastReactionChange, updateMessageContent, updateMessagePinnedAt }
 }

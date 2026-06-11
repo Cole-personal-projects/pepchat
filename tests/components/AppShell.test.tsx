@@ -56,6 +56,7 @@ vi.mock('@/lib/hooks/useUnreadChannels', () => ({
     unreadChannelIds: new Set<string>(),
     unreadGroupIds: new Set<string>(),
     unreadCountsByChannelId: new Map<string, number>(),
+    mentionCountsByChannelId: new Map<string, number>(),
   }),
 }))
 

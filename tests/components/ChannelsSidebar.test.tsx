@@ -193,7 +193,7 @@ describe('ChannelsSidebar channel rows', () => {
     expect(link).not.toHaveClass('font-medium')
   })
 
-  it('shows unread count when provided', () => {
+  it('shows a quiet dot (no number) for plain unread channels', () => {
     render(
       <ChannelsSidebar
         {...BASE_PROPS}
@@ -201,7 +201,21 @@ describe('ChannelsSidebar channel rows', () => {
         unreadCountsByChannelId={new Map([['ch-unread', 3]])}
       />
     )
-    expect(screen.getByTestId('unread-count-ch-unread')).toHaveTextContent('3')
+    // Discord hierarchy: plain unread = dot + bold name, never a number.
+    expect(screen.getByTestId('unread-dot-ch-unread')).toBeInTheDocument()
+    expect(screen.queryByTestId('mention-count-ch-unread')).not.toBeInTheDocument()
+  })
+
+  it('shows a red number badge only for @mention pings', () => {
+    render(
+      <ChannelsSidebar
+        {...BASE_PROPS}
+        unreadChannelIds={new Set(['ch-unread'])}
+        unreadCountsByChannelId={new Map([['ch-unread', 3]])}
+        mentionCountsByChannelId={new Map([['ch-unread', 2]])}
+      />
+    )
+    expect(screen.getByTestId('mention-count-ch-unread')).toHaveTextContent('2')
   })
 
   it('labels unread channel links with unread context', () => {
@@ -222,15 +236,15 @@ describe('ChannelsSidebar channel rows', () => {
     expect(screen.getByRole('link', { name: '#general, current channel' })).toHaveAttribute('href', '/channels/ch-active')
   })
 
-  it('caps unread count at 99+', () => {
+  it('caps the mention badge at 99+', () => {
     render(
       <ChannelsSidebar
         {...BASE_PROPS}
         unreadChannelIds={new Set(['ch-unread'])}
-        unreadCountsByChannelId={new Map([['ch-unread', 120]])}
+        mentionCountsByChannelId={new Map([['ch-unread', 120]])}
       />
     )
-    expect(screen.getByTestId('unread-count-ch-unread')).toHaveTextContent('99+')
+    expect(screen.getByTestId('mention-count-ch-unread')).toHaveTextContent('99+')
   })
 
   it('filters channels by name and description', () => {
