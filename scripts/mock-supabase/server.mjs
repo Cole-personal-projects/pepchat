@@ -151,6 +151,7 @@ const db = {
     messageRow({ id: uuid(), userId: U_MEMBER, content: 'Plain message, no thread', minutesAgo: 10 }),
   ],
   roles: [
+    { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', group_id: G1, name: 'Group Buy', color: '#eb459e', hoist: true, mentionable: true, position: 4, permissions: '0', is_default: false, created_at: iso(24 * HOUR) },
     { id: uuid(), group_id: G1, name: 'Admin', color: '#5865f2', hoist: true, mentionable: true, position: 3, permissions: '8', is_default: false, created_at: iso(30 * 24 * HOUR) },
     { id: uuid(), group_id: G1, name: 'Moderator', color: '#57f287', hoist: true, mentionable: true, position: 2, permissions: '0', is_default: false, created_at: iso(30 * 24 * HOUR) },
     { id: uuid(), group_id: G1, name: 'Member', color: null, hoist: false, mentionable: false, position: 1, permissions: '0', is_default: false, created_at: iso(30 * 24 * HOUR) },

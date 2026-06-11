@@ -24,8 +24,18 @@ async function login(page: Page) {
 
 async function openSidebar(page: Page) {
   const channelLink = page.locator('a.channel-row').first()
-  if (!(await channelLink.isVisible().catch(() => false))) {
+  // The closed drawer is translated offscreen, which Playwright still
+  // treats as "visible" — check actual viewport position instead.
+  const inViewport = await channelLink
+    .evaluate((el) => {
+      const rect = el.getBoundingClientRect()
+      return rect.x >= 0 && rect.x < window.innerWidth
+    })
+    .catch(() => false)
+  if (!inViewport) {
     await page.locator('.mobile-bottom-nav button', { hasText: 'Channels' }).click()
+    // Let the slide-in transition settle before interacting.
+    await page.waitForTimeout(300)
   }
   await expect(channelLink).toBeVisible()
 }
@@ -34,6 +44,15 @@ async function openGeneralChannel(page: Page) {
   await openSidebar(page)
   await page.locator('a.channel-row', { hasText: 'general' }).first().click()
   await expect(page.locator('.message-row').first()).toBeVisible({ timeout: 10000 })
+}
+
+async function openMembersSheet(page: Page) {
+  // Let the drawer's closing transition finish so its backdrop cannot
+  // swallow the header tap.
+  await page.waitForTimeout(350)
+  await page.locator('[data-testid="members-header-btn"]').click()
+  await expect(page.locator('[data-testid="members-sheet"]')).toHaveAttribute('aria-hidden', 'false')
+  await page.waitForTimeout(300)
 }
 
 test.describe('mobile chat polish', () => {
@@ -104,10 +123,9 @@ test.describe('discord-style mobile navigation', () => {
 
     // Members open from the chat header as a right-side sheet.
     await openGeneralChannel(page)
-    await page.locator('[data-testid="members-header-btn"]').click()
+    await openMembersSheet(page)
 
     const sheet = page.locator('[data-testid="members-sheet"]')
-    await expect(sheet).toHaveAttribute('aria-hidden', 'false')
     await expect(sheet.getByText('Members')).toBeVisible()
     await expect(sheet.getByTestId('member-search-input')).toBeVisible()
     // Fully on-screen once the slide-in transition settles.
@@ -153,6 +171,43 @@ test.describe('discord-style mobile navigation', () => {
     // Long-press must not have navigated away from the drawer.
     await page.locator('[data-testid="action-sheet-backdrop"]').click({ position: { x: 10, y: 10 } })
     await expect(page.locator('[data-testid="action-sheet"]')).toHaveCount(0)
+  })
+})
+
+test.describe('custom role assignment', () => {
+  test('admin assigns the Group Buy role from the members sheet', async ({ page }) => {
+    await login(page)
+    await openGeneralChannel(page)
+    await openMembersSheet(page)
+
+    const sheet = page.locator('[data-testid="members-sheet"]')
+
+    // Open the role sheet for the other member (hermes).
+    const rolesBtn = sheet.locator('[data-testid^="member-roles-btn-2222"]')
+    await expect(rolesBtn).toBeVisible()
+    await rolesBtn.click()
+
+    const roleSheet = page.locator('[data-testid="action-sheet"]')
+    await expect(roleSheet).toBeVisible()
+    await expect(page.locator('[data-testid="action-sheet-title"]')).toContainText('Roles')
+
+    // Toggle "Group Buy" on — optimistic checkmark flips immediately.
+    const groupBuyToggle = roleSheet.locator('button', { hasText: 'Group Buy' })
+    await expect(groupBuyToggle).toHaveAttribute('aria-pressed', 'false')
+    await groupBuyToggle.click()
+    await expect(groupBuyToggle).toHaveAttribute('aria-pressed', 'true')
+    await page.screenshot({ path: 'test-results/mobile-role-assign.png' })
+    await page.locator('[data-testid="member-roles-done"]').click()
+
+    // Persisted server-side: survives a full reload.
+    await page.waitForTimeout(500)
+    await page.reload()
+    await openGeneralChannel(page)
+    await openMembersSheet(page)
+    await page.locator('[data-testid="members-sheet"] [data-testid^="member-roles-btn-2222"]').click()
+    await expect(
+      page.locator('[data-testid="action-sheet"] button', { hasText: 'Group Buy' }),
+    ).toHaveAttribute('aria-pressed', 'true')
   })
 })
 
