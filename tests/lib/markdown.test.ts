@@ -121,3 +121,20 @@ describe('renderMarkdown — plain text', () => {
     expect(() => renderMarkdown('')).not.toThrow()
   })
 })
+
+describe('role mention highlighting', () => {
+  it('wraps hyphenated role slugs in mention tokens', () => {
+    const html = renderMarkdown('calling @group-buy to #general')
+    expect(html).toContain('<span class="mention-token">@group-buy</span>')
+  })
+
+  it('still wraps plain usernames', () => {
+    const html = renderMarkdown('hey @alice')
+    expect(html).toContain('<span class="mention-token">@alice</span>')
+  })
+
+  it('does not tokenize email addresses', () => {
+    const html = renderMarkdown('mail cole@example.com please')
+    expect(html).not.toContain('mention-token')
+  })
+})

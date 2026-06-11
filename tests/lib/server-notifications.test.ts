@@ -5,6 +5,8 @@ import {
   enqueueThreadReplyNotifications,
   buildThreadReplyUrl,
   extractMentionUsernames,
+  extractMentionRoleTokens,
+  enqueueRoleMentionNotifications,
   notificationBody,
 } from '@/lib/server-notifications'
 
@@ -302,5 +304,82 @@ describe('server notification helpers', () => {
         url: '/channels/ch-1?thread=root-1#reply-3',
       },
     ])
+  })
+})
+
+describe('role mention extraction', () => {
+  it('extracts hyphenated role tokens', () => {
+    expect(extractMentionRoleTokens('ping @group-buy and @Mods_2 now')).toEqual(['group-buy', 'mods_2'])
+  })
+
+  it('ignores emails and mid-word at-signs', () => {
+    expect(extractMentionRoleTokens('mail me at cole@example.com')).toEqual([])
+  })
+
+  it('dedupes case-insensitively', () => {
+    expect(extractMentionRoleTokens('@Group-Buy @group-buy')).toEqual(['group-buy'])
+  })
+})
+
+describe('enqueueRoleMentionNotifications', () => {
+  const MENTION_INPUT = {
+    senderId: 'user-a',
+    senderName: 'Alice',
+    messageId: 'msg-1',
+    channelId: 'chan-1',
+    content: 'heads up @group-buy',
+  }
+
+  function makeUpsertBuilder() {
+    const builder: Record<string, unknown> = {}
+    builder.upsert = vi.fn().mockResolvedValue({ error: null })
+    return builder
+  }
+
+  it('fans out to role holders through channel and preference gates', async () => {
+    const channel = makeBuilder({ data: { id: 'chan-1', group_id: 'grp-1', noob_access: true, name: 'general' } })
+    const roles = makeBuilder({ data: [{ id: 'role-gb', name: 'group-buy' }] })
+    const assignments = makeBuilder({ data: [
+      { user_id: 'user-b', role_id: 'role-gb' },
+      { user_id: 'user-a', role_id: 'role-gb' }, // sender excluded
+    ] })
+    const profiles = makeBuilder({ data: [{ id: 'user-b', username: 'bob', display_name: null }] })
+    const channelAccess = makeBuilder({ data: { id: 'chan-1', group_id: 'grp-1', noob_access: true, name: 'general' } })
+    const memberships = makeBuilder({ data: [{ user_id: 'user-b', role: 'user' }] })
+    const preferences = makeBuilder({ data: [] })
+    const upsert = makeUpsertBuilder()
+    const supabase = setupClient([channel, roles, assignments, profiles, channelAccess, memberships, preferences, upsert])
+
+    await enqueueRoleMentionNotifications(supabase as never, MENTION_INPUT)
+
+    expect(upsert.upsert).toHaveBeenCalledWith(
+      [expect.objectContaining({
+        user_id: 'user-b',
+        actor_id: 'user-a',
+        type: 'mention',
+        source_id: 'msg-1',
+        channel_id: 'chan-1',
+        title: 'Alice mentioned @group-buy',
+      })],
+      { onConflict: 'user_id,type,source_id', ignoreDuplicates: true },
+    )
+  })
+
+  it('does nothing when no mentionable role matches the tokens', async () => {
+    const channel = makeBuilder({ data: { id: 'chan-1', group_id: 'grp-1', noob_access: true, name: 'general' } })
+    const roles = makeBuilder({ data: [{ id: 'role-x', name: 'other-role' }] })
+    const supabase = setupClient([channel, roles])
+
+    await enqueueRoleMentionNotifications(supabase as never, MENTION_INPUT)
+
+    expect(supabase.from).toHaveBeenCalledTimes(2)
+  })
+
+  it('does nothing when the message has no role tokens', async () => {
+    const supabase = setupClient([])
+
+    await enqueueRoleMentionNotifications(supabase as never, { ...MENTION_INPUT, content: 'no mentions here' })
+
+    expect(supabase.from).not.toHaveBeenCalled()
   })
 })

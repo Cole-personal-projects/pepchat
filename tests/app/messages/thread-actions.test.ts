@@ -15,6 +15,7 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/lib/server-notifications', () => ({
   buildThreadReplyUrl: (channelId: string, rootId: string, messageId: string) => `/channels/${channelId}?thread=${rootId}#${messageId}`,
   enqueueMentionNotifications: mockEnqueueMentionNotifications,
+  enqueueRoleMentionNotifications: vi.fn().mockResolvedValue(undefined),
   dispatchNotification: mockDispatchNotification,
 }))
 

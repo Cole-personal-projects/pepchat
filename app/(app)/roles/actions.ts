@@ -20,9 +20,20 @@ export type RoleUpdateInput = {
   permissions?: string
 }
 
+/**
+ * Role names are mention slugs: "@group-buy" must tokenize in message text,
+ * so spaces become hyphens and only [A-Za-z0-9_-] survives.
+ */
 function normalizeRoleName(name: string): string {
-  return name.trim().replace(/\s+/g, ' ')
+  return name
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9_-]/g, '')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+|-+$/g, '')
 }
+
+const RESERVED_ROLE_NAMES = new Set(['everyone', 'here'])
 
 /** Creates a custom role seeded with @everyone's permissions. */
 export const createRole = withAuth(
@@ -35,7 +46,7 @@ export const createRole = withAuth(
     if (name.length > MAX_ROLE_NAME_LENGTH) {
       return { error: `Role name must be ${MAX_ROLE_NAME_LENGTH} characters or fewer.` }
     }
-    if (name === '@everyone') return { error: 'That role name is reserved.' }
+    if (RESERVED_ROLE_NAMES.has(name.toLowerCase())) return { error: 'That role name is reserved.' }
 
     const gate = await gateGroupPermission(supabase, {
       groupId,
@@ -109,7 +120,7 @@ export const updateRole = withAuth(
       if (name.length > MAX_ROLE_NAME_LENGTH) {
         return { error: `Role name must be ${MAX_ROLE_NAME_LENGTH} characters or fewer.` }
       }
-      if (name === '@everyone') return { error: 'That role name is reserved.' }
+      if (RESERVED_ROLE_NAMES.has(name.toLowerCase())) return { error: 'That role name is reserved.' }
       update.name = name
     }
 

@@ -6,6 +6,7 @@ import { sendMessage } from '@/app/(app)/messages/actions'
 import { sendThreadReply } from '@/app/(app)/messages/thread-actions'
 import { useImageUpload } from '@/lib/hooks/useImageUpload'
 import { useMentionCandidates } from '@/lib/hooks/useMentionCandidates'
+import { useGroupRoles } from '@/lib/hooks/useGroupRoles'
 import type { MessageWithProfile, Profile, GifAttachment, Attachment } from '@/lib/types'
 import { registerShare } from '@/lib/klipy'
 import type { KlipyGif } from '@/lib/klipy'
@@ -85,6 +86,10 @@ export default function MessageInput({
   useEffect(() => {
     setMentionUsers(mentionCandidates)
   }, [mentionCandidates])
+
+  // Mentionable roles join the @autocomplete (e.g. @group-buy pings holders).
+  const { roles: groupRoles } = useGroupRoles(groupId ?? null)
+  const mentionableRoles = groupRoles.filter(role => !role.is_default && role.mentionable)
 
   useEffect(() => {
     if (skipNextDraftWriteRef.current) {
@@ -294,10 +299,16 @@ export default function MessageInput({
     ? `Reply to @${replyingTo.profiles?.username}…`
     : (placeholder ?? (mode === 'thread' ? 'Reply…' : `Message #${channelName}`))
   const activeMention = findActiveMention(content)
-  const activeMentionSuggestions = activeMention
-    ? mentionUsers
-        .filter(user => user.username.toLowerCase().startsWith(activeMention.query.toLowerCase()))
-        .slice(0, 5)
+  const activeMentionSuggestions: Array<{ id: string; username: string; display_name?: string | null; isRole?: boolean; color?: string | null }> = activeMention
+    ? [
+        ...mentionUsers
+          .filter(user => user.username.toLowerCase().startsWith(activeMention.query.toLowerCase()))
+          .slice(0, 4),
+        ...mentionableRoles
+          .filter(role => role.name.toLowerCase().startsWith(activeMention.query.toLowerCase()))
+          .slice(0, 3)
+          .map(role => ({ id: role.id, username: role.name, isRole: true as const, color: role.color })),
+      ]
     : []
 
   function applyMention(user: { username: string }) {
@@ -408,8 +419,21 @@ export default function MessageInput({
                     index === mentionIndex ? 'bg-[var(--accent-soft)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:bg-white/5 hover:text-[var(--text-primary)]'
                   }`}
                 >
-                  <span>@{user.username}</span>
-                  {user.display_name && <span className="truncate pl-2 text-xs opacity-70">{user.display_name}</span>}
+                  <span className="flex items-center gap-1.5">
+                    {user.isRole && (
+                      <span
+                        aria-hidden="true"
+                        className="h-2 w-2 flex-shrink-0 rounded-full"
+                        style={{ background: user.color ?? '#99aab5' }}
+                      />
+                    )}
+                    @{user.username}
+                  </span>
+                  {user.isRole ? (
+                    <span className="truncate pl-2 text-xs opacity-70">role</span>
+                  ) : (
+                    user.display_name && <span className="truncate pl-2 text-xs opacity-70">{user.display_name}</span>
+                  )}
                 </button>
               ))}
             </div>
@@ -590,7 +614,7 @@ export default function MessageInput({
 
 function findActiveMention(content: string): { start: number; end: number; query: string } | null {
   const beforeCursor = content
-  const match = beforeCursor.match(/(^|\s)@([a-zA-Z0-9_]{0,32})$/)
+  const match = beforeCursor.match(/(^|\s)@([a-zA-Z0-9_-]{0,60})$/)
   if (!match || match.index === undefined) return null
   const prefixLength = match[1].length
   const start = match.index + prefixLength

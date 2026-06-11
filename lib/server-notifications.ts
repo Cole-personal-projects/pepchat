@@ -70,6 +70,23 @@ export function extractMentionUsernames(content: string): string[] {
   return Array.from(usernames)
 }
 
+/**
+ * Role-mention tokens. Role names are hyphenated slugs ("group-buy"), so the
+ * token charset is wider than usernames and uses a lookahead boundary.
+ */
+export function extractMentionRoleTokens(content: string): string[] {
+  const pattern = /(^|[^\w-])@([a-zA-Z0-9_][a-zA-Z0-9_-]{0,59})(?![\w-])/g
+  const tokens = new Set<string>()
+  let match = pattern.exec(content)
+
+  while (match) {
+    tokens.add(match[2].toLowerCase())
+    match = pattern.exec(content)
+  }
+
+  return Array.from(tokens)
+}
+
 export function notificationBody(content: string, attachments?: Attachment[] | null): string {
   const trimmed = content.trim()
   if (trimmed) return trimmed.slice(0, 140)
@@ -222,6 +239,100 @@ export async function enqueueMentionNotifications(
     .insert(rows)
 }
 
+/**
+ * Fans out @role-name mentions to every member holding a mentionable role.
+ * Runs after the direct-mention pass; the (user_id, type, source_id) unique
+ * constraint dedupes users hit by both, so rows are upserted ignore-style.
+ */
+export async function enqueueRoleMentionNotifications(
+  supabase: SupabaseClient,
+  input: MentionNotificationInput
+): Promise<void> {
+  const tokens = extractMentionRoleTokens(input.content)
+  if (tokens.length === 0) return
+
+  const { data: channel } = await supabase
+    .from('channels')
+    .select('id, group_id, noob_access, name')
+    .eq('id', input.channelId)
+    .maybeSingle()
+
+  if (!channel) return
+  const groupId = (channel as ChannelAccessRow).group_id
+
+  const { data: roleRows } = await supabase
+    .from('roles')
+    .select('id, name')
+    .eq('group_id', groupId)
+    .eq('mentionable', true)
+    .eq('is_default', false)
+
+  const tokenSet = new Set(tokens)
+  const mentionedRoles = ((roleRows ?? []) as Array<{ id: string; name: string }>)
+    .filter(role => tokenSet.has(role.name.toLowerCase()))
+
+  if (mentionedRoles.length === 0) return
+
+  const { data: assignments } = await supabase
+    .from('member_roles')
+    .select('user_id, role_id')
+    .in('role_id', mentionedRoles.map(role => role.id))
+
+  const roleNameById = new Map(mentionedRoles.map(role => [role.id, role.name]))
+  // First mentioned role wins for the notification title.
+  const roleNameByUserId = new Map<string, string>()
+  for (const row of (assignments ?? []) as Array<{ user_id: string; role_id: string }>) {
+    if (row.user_id === input.senderId) continue
+    if (!roleNameByUserId.has(row.user_id)) {
+      roleNameByUserId.set(row.user_id, roleNameById.get(row.role_id) ?? 'role')
+    }
+  }
+
+  if (roleNameByUserId.size === 0) return
+
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, username, display_name')
+    .in('id', Array.from(roleNameByUserId.keys()))
+
+  const authorizedProfiles = await mentionableRecipientsForChannel(
+    supabase,
+    input.channelId,
+    (profiles ?? []) as MentionProfile[]
+  )
+  if (authorizedProfiles.length === 0) return
+
+  const preferences = await mentionPreferenceMap(
+    supabase,
+    authorizedProfiles.map(profile => profile.id)
+  )
+
+  const rows = authorizedProfiles
+    .filter(profile => preferences.get(profile.id) ?? true)
+    .map(profile => ({
+      user_id: profile.id,
+      actor_id: input.senderId,
+      type: 'mention',
+      source_table: 'messages',
+      source_id: input.messageId,
+      conversation_id: null,
+      channel_id: input.channelId,
+      title: `${input.senderName} mentioned @${roleNameByUserId.get(profile.id)}`,
+      body: notificationBody(input.content),
+      url: input.urlBuilder
+        ? input.urlBuilder({ channelId: input.channelId, messageId: input.messageId })
+        : `/channels/${input.channelId}#${input.messageId}`,
+    }))
+
+  if (rows.length === 0) return
+
+  // ignoreDuplicates: a user directly @named AND in a mentioned role keeps
+  // the direct-mention row instead of erroring the whole batch.
+  await supabase
+    .from('notification_events')
+    .upsert(rows, { onConflict: 'user_id,type,source_id', ignoreDuplicates: true })
+}
+
 export async function enqueueThreadReplyNotifications(
   supabase: SupabaseClient,
   input: ThreadReplyNotificationInput
@@ -280,6 +391,7 @@ export async function dispatchNotification(
   switch (draft.type) {
     case 'mention':
       await enqueueMentionNotifications(supabase, draft.payload as MentionNotificationInput)
+      await enqueueRoleMentionNotifications(supabase, draft.payload as MentionNotificationInput)
       break
 
     case 'dm_message':

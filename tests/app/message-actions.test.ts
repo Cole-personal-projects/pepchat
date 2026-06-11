@@ -13,6 +13,7 @@ vi.mock('@/lib/supabase/server', () => ({
 
 vi.mock('@/lib/server-notifications', () => ({
   enqueueMentionNotifications: mockEnqueueMentionNotifications,
+  enqueueRoleMentionNotifications: vi.fn().mockResolvedValue(undefined),
   dispatchNotification: vi.fn().mockResolvedValue(undefined),
 }))
 

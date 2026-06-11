@@ -76,15 +76,17 @@ export const sendMessage = withAuth(
     // Notification fanout — dispatch manually after we have the resolved message
     try {
       const name = result.data.profiles.display_name ?? result.data.profiles.username
-      await import('@/lib/server-notifications').then(({ enqueueMentionNotifications }) =>
-        enqueueMentionNotifications(ctx.supabase, {
+      await import('@/lib/server-notifications').then(async ({ enqueueMentionNotifications, enqueueRoleMentionNotifications }) => {
+        const payload = {
           senderId: ctx.user.id,
           senderName: name,
           messageId: result.data.id,
           channelId,
           content: trimmed,
-        })
-      )
+        }
+        await enqueueMentionNotifications(ctx.supabase, payload)
+        await enqueueRoleMentionNotifications(ctx.supabase, payload)
+      })
     } catch {
       // Notification fanout should never block the core message send path.
     }
