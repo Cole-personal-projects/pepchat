@@ -48,14 +48,26 @@ let fetchResult = {
 
 let realtimeCb: ((payload: any) => void) | null = null
 
+// Single-row membership fetch used by MemberRolesSheet's legacy picker.
+let legacyRoleFetch: { data: { role: string } | null; error: any } = {
+  data: { role: 'user' },
+  error: null,
+}
+
+// Chainable query stub: awaiting the chain resolves the members list;
+// terminating with .single() resolves the legacy-role row.
+function makeQueryStub() {
+  const query: any = {}
+  for (const method of ['select', 'eq', 'order', 'in', 'is', 'limit']) {
+    query[method] = vi.fn(() => query)
+  }
+  query.single = vi.fn(() => Promise.resolve(legacyRoleFetch))
+  query.then = (resolve: any, reject: any) => Promise.resolve(fetchResult).then(resolve, reject)
+  return query
+}
+
 const supabaseStub = {
-  from: vi.fn(() => ({
-    select: vi.fn(() => ({
-      eq: vi.fn(() => ({
-        order: vi.fn(() => Promise.resolve(fetchResult)),
-      })),
-    })),
-  })),
+  from: vi.fn(() => makeQueryStub()),
   channel: vi.fn(() => ({
     on: vi.fn((_evt: string, _filter: any, cb: (p: any) => void) => {
       realtimeCb = cb
@@ -85,6 +97,7 @@ describe('MembersPanel — role change regression', () => {
     assignRoleMock.mockResolvedValue({ ok: true })
     kickMemberMock.mockResolvedValue({ ok: true })
     groupRolesResult = { roles: [], roleIdsByUserId: new Map() }
+    legacyRoleFetch = { data: { role: 'user' }, error: null }
     fetchResult = {
       data: [
         { user_id: 'u1', group_id: 'grp-1', role: 'moderator', profiles: { username: 'alice', avatar_url: null } },
@@ -125,11 +138,14 @@ describe('MembersPanel — role change regression', () => {
     expect(screen.getByText('bob')).toBeInTheDocument()
   })
 
-  it('renders role dropdown for non-admin members when viewer is admin', async () => {
+  it('keeps member rows clean: no selects, pills, or role buttons (Discord-style)', async () => {
     await act(async () => {
       render(<MembersPanel {...BASE_PROPS} />)
     })
-    expect(screen.getAllByRole('combobox').length).toBeGreaterThan(0)
+    // Role management moved to the profile card's Manage Roles sheet.
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('member-roles-btn-u1')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('member-roles-btn-u2')).not.toBeInTheDocument()
   })
 
   it('labels the collapsible members section state', async () => {
@@ -220,166 +236,7 @@ describe('MembersPanel — role change regression', () => {
     expect(screen.queryByRole('button', { name: 'Kick owner from group' })).not.toBeInTheDocument()
   })
 
-  it('does not throw TypeError when assignRole returns undefined (action throws)', async () => {
-    assignRoleMock.mockResolvedValueOnce(undefined)
-
-    await act(async () => {
-      render(<MembersPanel {...BASE_PROPS} />)
-    })
-
-    await act(async () => {
-      screen.getAllByRole('combobox')[0].dispatchEvent(new Event('change', { bubbles: true }))
-    })
-
-    // No crash — component stays in DOM
-    expect(screen.getByText('alice')).toBeInTheDocument()
+  
+  
+  
   })
-
-  it('confirms sensitive role changes before assigning roles', async () => {
-    await act(async () => {
-      render(<MembersPanel {...BASE_PROPS} />)
-    })
-
-    await act(async () => {
-      fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'user' } })
-    })
-
-    expect(confirm).toHaveBeenCalledWith("Change alice's role from moderator to user?")
-    expect(assignRoleMock).toHaveBeenCalled()
-  })
-
-  it('does not assign roles when confirmation is cancelled', async () => {
-    ;(confirm as ReturnType<typeof vi.fn>).mockReturnValueOnce(false)
-    assignRoleMock.mockClear()
-
-    await act(async () => {
-      render(<MembersPanel {...BASE_PROPS} />)
-    })
-
-    await act(async () => {
-      fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'user' } })
-    })
-
-    expect(assignRoleMock).not.toHaveBeenCalled()
-  })
-
-  it('handles assignRole returning { error } without crashing', async () => {
-    assignRoleMock.mockResolvedValueOnce({ error: 'Only admins can assign roles.' })
-
-    await act(async () => {
-      render(<MembersPanel {...BASE_PROPS} />)
-    })
-
-    await act(async () => {
-      screen.getAllByRole('combobox')[0].dispatchEvent(new Event('change', { bubbles: true }))
-    })
-
-    // Component stays alive — no crash
-    expect(screen.getByText('alice')).toBeInTheDocument()
-  })
-})
-
-describe('MembersPanel — custom role assignment sheet', () => {
-  const GROUP_BUY = {
-    id: 'role-gb', group_id: 'grp-1', name: 'Group Buy', color: '#57f287',
-    hoist: false, mentionable: true, position: 1, permissions: '0',
-    is_default: false, created_at: '2026-01-01T00:00:00Z',
-  }
-
-  beforeEach(() => {
-    assignMemberRoleMock.mockClear()
-    removeMemberRoleMock.mockClear()
-    assignMemberRoleMock.mockResolvedValue({ ok: true })
-    removeMemberRoleMock.mockResolvedValue({ ok: true })
-    groupRolesResult = { roles: [GROUP_BUY], roleIdsByUserId: new Map() }
-    fetchResult = {
-      data: [
-        { user_id: 'u1', group_id: 'grp-1', role: 'moderator', profiles: { username: 'alice', avatar_url: null } },
-        { user_id: 'u2', group_id: 'grp-1', role: 'user',      profiles: { username: 'bob',   avatar_url: null } },
-      ],
-      error: null,
-    }
-  })
-
-  it('opens a portaled action sheet listing custom roles', async () => {
-    await act(async () => {
-      render(<MembersPanel {...BASE_PROPS} />)
-    })
-
-    fireEvent.click(screen.getByTestId('member-roles-btn-u2'))
-
-    expect(screen.getByTestId('action-sheet')).toBeInTheDocument()
-    expect(screen.getByTestId('action-sheet-title')).toHaveTextContent('bob — Roles')
-    // Portaled to document.body so the sidebar scroll container can't clip it.
-    expect(document.body.contains(screen.getByTestId('action-sheet'))).toBe(true)
-    expect(screen.getByTestId('toggle-role-role-gb-u2')).toHaveAttribute('aria-pressed', 'false')
-  })
-
-  it('assigns a custom role with an optimistic checkmark', async () => {
-    await act(async () => {
-      render(<MembersPanel {...BASE_PROPS} />)
-    })
-
-    fireEvent.click(screen.getByTestId('member-roles-btn-u2'))
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('toggle-role-role-gb-u2'))
-    })
-
-    expect(assignMemberRoleMock).toHaveBeenCalledWith('grp-1', 'u2', 'role-gb')
-    expect(screen.getByTestId('toggle-role-role-gb-u2')).toHaveAttribute('aria-pressed', 'true')
-  })
-
-  it('removes an assigned role when toggled off', async () => {
-    groupRolesResult = {
-      roles: [GROUP_BUY],
-      roleIdsByUserId: new Map([['u2', new Set(['role-gb'])]]),
-    }
-    await act(async () => {
-      render(<MembersPanel {...BASE_PROPS} />)
-    })
-
-    fireEvent.click(screen.getByTestId('member-roles-btn-u2'))
-    expect(screen.getByTestId('toggle-role-role-gb-u2')).toHaveAttribute('aria-pressed', 'true')
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('toggle-role-role-gb-u2'))
-    })
-
-    expect(removeMemberRoleMock).toHaveBeenCalledWith('grp-1', 'u2', 'role-gb')
-    expect(screen.getByTestId('toggle-role-role-gb-u2')).toHaveAttribute('aria-pressed', 'false')
-  })
-
-  it('reverts the optimistic toggle and surfaces the error on failure', async () => {
-    assignMemberRoleMock.mockResolvedValue({ error: 'Only role managers can assign roles.' })
-    await act(async () => {
-      render(<MembersPanel {...BASE_PROPS} />)
-    })
-
-    fireEvent.click(screen.getByTestId('member-roles-btn-u2'))
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('toggle-role-role-gb-u2'))
-    })
-
-    expect(screen.getByTestId('toggle-role-role-gb-u2')).toHaveAttribute('aria-pressed', 'false')
-    expect(screen.getByText('Only role managers can assign roles.')).toBeInTheDocument()
-  })
-
-  it('closes via the Done button', async () => {
-    await act(async () => {
-      render(<MembersPanel {...BASE_PROPS} />)
-    })
-
-    fireEvent.click(screen.getByTestId('member-roles-btn-u2'))
-    fireEvent.click(screen.getByTestId('member-roles-done'))
-
-    expect(screen.queryByTestId('action-sheet')).not.toBeInTheDocument()
-  })
-
-  it('hides the roles button from non-admin viewers', async () => {
-    await act(async () => {
-      render(<MembersPanel {...BASE_PROPS} currentUserRole="moderator" />)
-    })
-
-    expect(screen.queryByTestId('member-roles-btn-u2')).not.toBeInTheDocument()
-  })
-})

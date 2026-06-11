@@ -4,8 +4,11 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import Avatar from '@/components/ui/Avatar'
+import MemberRolesSheet from '@/components/roles/MemberRolesSheet'
 import { createClient } from '@/lib/supabase/client'
 import { getProfile } from '@/app/(app)/profile/actions'
+import { useGroupRoles } from '@/lib/hooks/useGroupRoles'
+import { PERMISSIONS, type Role } from '@/lib/permissions'
 import type { Profile } from '@/lib/types'
 
 interface ProfileCardProps {
@@ -13,20 +16,36 @@ interface ProfileCardProps {
   currentUserId: string
   anchorEl: HTMLElement
   onClose: () => void
+  /** Group context — enables role management for admins when provided. */
+  groupId?: string | null
+  viewerRole?: Role | null
 }
 
 function formatMemberSince(iso: string) {
   return new Date(iso).toLocaleDateString([], { month: 'long', year: 'numeric' })
 }
 
-export default function ProfileCard({ userId, currentUserId, anchorEl, onClose }: ProfileCardProps) {
+export default function ProfileCard({ userId, currentUserId, anchorEl, onClose, groupId = null, viewerRole = null }: ProfileCardProps) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const [openingDM, setOpeningDM] = useState(false)
+  const [rolesOpen, setRolesOpen] = useState(false)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
   const cardRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const isOwn = userId === currentUserId
+  const canManageRoles = Boolean(groupId && viewerRole && PERMISSIONS.canAssignRoles(viewerRole) && !isOwn)
+
+  // Group role chips (Discord-style): visible to everyone with group context.
+  const { roles, roleIdsByUserId } = useGroupRoles(groupId ?? null)
+  const memberRoleChips = (() => {
+    if (!groupId) return []
+    const ids = roleIdsByUserId.get(userId)
+    if (!ids) return []
+    return roles
+      .filter(role => !role.is_default && ids.has(role.id))
+      .sort((a, b) => b.position - a.position)
+  })()
 
   async function handleSendMessage() {
     setOpeningDM(true)
@@ -60,10 +79,16 @@ export default function ProfileCard({ userId, currentUserId, anchorEl, onClose }
     setPos({ left: Math.max(8, left), top: Math.max(8, top) })
   }, [anchorEl, loading])
 
-  // Close on outside click / Escape
+  // Close on outside click / Escape — suspended while the roles sheet is
+  // open, since the sheet portals outside the card's DOM subtree.
+  const rolesOpenRef = useRef(rolesOpen)
+  rolesOpenRef.current = rolesOpen
   useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !rolesOpenRef.current) onClose()
+    }
     function onPointer(e: MouseEvent) {
+      if (rolesOpenRef.current) return
       if (cardRef.current && !cardRef.current.contains(e.target as Node)) onClose()
     }
     document.addEventListener('keydown', onKey)
@@ -146,6 +171,30 @@ export default function ProfileCard({ userId, currentUserId, anchorEl, onClose }
               <p>Member since {formatMemberSince(profile.member_since)}</p>
             </div>
 
+            {/* Group role chips */}
+            {memberRoleChips.length > 0 && (
+              <div data-testid="profile-role-chips">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-faint)] mb-1.5">
+                  Roles
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {memberRoleChips.map(role => (
+                    <span
+                      key={role.id}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-[var(--bg-tertiary)] px-2 py-0.5 text-xs text-[var(--text-primary)]"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className="h-2 w-2 rounded-full"
+                        style={{ background: role.color ?? '#99aab5' }}
+                      />
+                      {role.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="h-px bg-white/10" />
 
             {/* Actions */}
@@ -166,7 +215,29 @@ export default function ProfileCard({ userId, currentUserId, anchorEl, onClose }
                 ✕
               </button>
             </div>
+
+            {canManageRoles && (
+              <button
+                data-testid="profile-manage-roles"
+                className="w-full py-1.5 rounded-lg text-sm font-medium text-[var(--text-primary)] border border-white/10 hover:bg-white/5 transition-colors"
+                onClick={() => setRolesOpen(true)}
+              >
+                Manage Roles
+              </button>
+            )}
           </div>
+
+          {canManageRoles && groupId && viewerRole && (
+            <MemberRolesSheet
+              open={rolesOpen}
+              onClose={() => setRolesOpen(false)}
+              groupId={groupId}
+              userId={userId}
+              memberName={profile.display_name ?? profile.username}
+              currentUserId={currentUserId}
+              viewerRole={viewerRole}
+            />
+          )}
         </>
       )}
     </div>,

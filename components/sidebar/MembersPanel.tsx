@@ -6,19 +6,15 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useMembersList } from '@/lib/hooks/useMembersList'
 import { useGroupRoles } from '@/lib/hooks/useGroupRoles'
-import { assignRole, kickMember } from '@/app/(app)/members/actions'
-import { assignMemberRole, removeMemberRole } from '@/app/(app)/roles/actions'
+import { kickMember } from '@/app/(app)/members/actions'
 import Avatar from '@/components/ui/Avatar'
 import RolePill from '@/components/ui/RolePill'
-import ActionSheet from '@/components/ui/ActionSheet'
 import { PERMISSIONS, type Role } from '@/lib/permissions'
 import type { GroupRole, Profile } from '@/lib/types'
 
 const ProfileCard = dynamic(() => import('@/components/profile/ProfileCard'), { ssr: false })
 
 type MemberWithProfile = import('@/lib/hooks/useMembersList').MemberWithProfile
-
-const ASSIGNABLE_ROLES: Role[] = ['moderator', 'user', 'noob']
 
 interface MembersPanelProps {
   groupId: string
@@ -45,10 +41,6 @@ export default function MembersPanel({ groupId, currentUserId, currentUserRole, 
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState('')
   const [profileCard, setProfileCard] = useState<{ userId: string; anchor: HTMLElement } | null>(null)
-  const [roleMenuUserId, setRoleMenuUserId] = useState<string | null>(null)
-  // Optimistic role-toggle overrides, keyed `${userId}:${roleId}`. Cleared
-  // when the roles sheet closes; realtime refetch is the source of truth.
-  const [roleOverrides, setRoleOverrides] = useState<Record<string, boolean>>({})
 
   const canManage = PERMISSIONS.canAssignRoles(currentUserRole)
   const canKick   = PERMISSIONS.canKickMembers(currentUserRole)
@@ -69,36 +61,6 @@ export default function MembersPanel({ groupId, currentUserId, currentUserRole, 
     }
   }, [roles, roleIdsByUserId])
 
-  function handleToggleMemberRole(userId: string, role: GroupRole, hasRole: boolean) {
-    setError('')
-    const overrideKey = `${userId}:${role.id}`
-    setRoleOverrides(current => ({ ...current, [overrideKey]: !hasRole }))
-    startTransition(async () => {
-      const result = hasRole
-        ? await removeMemberRole(groupId, userId, role.id)
-        : await assignMemberRole(groupId, userId, role.id)
-      if (result && 'error' in result) {
-        // Revert the optimistic toggle on failure.
-        setRoleOverrides(current => {
-          const next = { ...current }
-          delete next[overrideKey]
-          return next
-        })
-        setError(result.error)
-      }
-    })
-  }
-
-  function memberHasRole(userId: string, roleId: string): boolean {
-    const override = roleOverrides[`${userId}:${roleId}`]
-    if (override !== undefined) return override
-    return roleIdsByUserId.get(userId)?.has(roleId) ?? false
-  }
-
-  function closeRolesSheet() {
-    setRoleMenuUserId(null)
-    setRoleOverrides({})
-  }
   const router = useRouter()
   const normalizedMemberSearch = memberSearch.trim().toLowerCase()
   const filteredMembers = normalizedMemberSearch
@@ -118,16 +80,6 @@ export default function MembersPanel({ groupId, currentUserId, currentUserRole, 
     const supabase = createClient()
     const { data: convId } = await supabase.rpc('get_or_create_dm', { other_user_id: userId })
     if (convId) router.push(`/dm/${convId}`)
-  }
-
-  function handleRoleChange(member: MemberWithProfile, newRole: Role) {
-    const memberName = (member.profiles as any)?.display_name ?? member.profiles?.username ?? member.user_id
-    if (!confirm(`Change ${memberName}'s role from ${member.role} to ${newRole}?`)) return
-    setError('')
-    startTransition(async () => {
-      const result = await assignRole(groupId, member.user_id, newRole)
-      if (result && 'error' in result) setError(result.error)
-    })
   }
 
   function handleKick(member: MemberWithProfile) {
@@ -280,39 +232,11 @@ export default function MembersPanel({ groupId, currentUserId, currentUserRole, 
                   )}
                 </div>
 
-                {/* Custom role assignment — opens a portaled action sheet
-                    (the old inline dropdown was clipped by the sidebar's
-                    scroll container, which made assignment impossible). */}
-                {canManage && customRoles.length > 0 && (
-                  <button
-                    type="button"
-                    data-testid={`member-roles-btn-${member.user_id}`}
-                    aria-label={`Manage ${memberName}'s roles`}
-                    onClick={() => setRoleMenuUserId(member.user_id)}
-                    className="flex md:hidden md:group-hover/member:flex items-center justify-center w-7 h-7 md:w-5 md:h-5 flex-shrink-0 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/10 transition-colors"
-                    title="Manage roles"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0 .656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </button>
-                )}
-
-                {/* Role badge / dropdown */}
-                {canManage && !isSelf && !isTargetAdmin ? (
-                  <select
-                    value={member.role}
-                    disabled={isPending}
-                    onChange={(e) => handleRoleChange(member, e.target.value as Role)}
-                    className="text-xs rounded px-1 py-0.5 border bg-[var(--bg-primary)] text-[var(--text-primary)] border-white/10 focus:outline-none focus:ring-1 focus:ring-[var(--accent)] disabled:opacity-50"
-                  >
-                    {ASSIGNABLE_ROLES.map((r) => (
-                      <option key={r} value={r}>{r}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <RolePill role={member.role as Role} />
-                )}
+                {/* Discord-style rows: no role pills or management buttons —
+                    colored names + hoist groups carry the role signal, and
+                    role management lives on the profile card. Admins keep a
+                    pill only to spot the server owner at a glance. */}
+                {isTargetAdmin && <RolePill role="admin" />}
 
                 {/* Message button */}
                 {!isSelf && (
@@ -360,102 +284,11 @@ export default function MembersPanel({ groupId, currentUserId, currentUserRole, 
           currentUserId={currentUserId}
           anchorEl={profileCard.anchor}
           onClose={() => setProfileCard(null)}
+          groupId={groupId}
+          viewerRole={currentUserRole}
         />
       )}
 
-      {/* Role assignment sheet — portaled so no scroll container clips it. */}
-      {(() => {
-        if (!roleMenuUserId) return null
-        const member = members.find(m => m.user_id === roleMenuUserId)
-        if (!member) return null
-        const memberName = (member.profiles as any)?.display_name ?? member.profiles?.username ?? member.user_id
-
-        return (
-          <ActionSheet open onClose={closeRolesSheet} title={`${memberName} — Roles`}>
-            <div data-testid={`member-roles-menu-${member.user_id}`} style={{ display: 'flex', flexDirection: 'column' }}>
-              {customRoles.map(role => {
-                const hasRole = memberHasRole(member.user_id, role.id)
-                return (
-                  <button
-                    key={role.id}
-                    type="button"
-                    data-testid={`toggle-role-${role.id}-${member.user_id}`}
-                    aria-pressed={hasRole}
-                    disabled={isPending}
-                    onClick={() => handleToggleMemberRole(member.user_id, role, hasRole)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      padding: '13px 20px',
-                      background: 'transparent',
-                      border: 'none',
-                      borderBottom: '1px solid var(--border-soft)',
-                      color: 'var(--text-primary)',
-                      fontSize: 15,
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      width: '100%',
-                      opacity: isPending ? 0.6 : 1,
-                    }}
-                  >
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        width: 10,
-                        height: 10,
-                        flexShrink: 0,
-                        borderRadius: '50%',
-                        background: role.color ?? '#99aab5',
-                      }}
-                    />
-                    <span style={{ minWidth: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {role.name}
-                    </span>
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        width: 20,
-                        height: 20,
-                        flexShrink: 0,
-                        borderRadius: 6,
-                        border: hasRole ? 'none' : '1.5px solid var(--border-strong)',
-                        background: hasRole ? 'var(--accent)' : 'transparent',
-                        color: '#fff',
-                        fontSize: 13,
-                        fontWeight: 700,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      {hasRole ? '✓' : ''}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-            <button
-              type="button"
-              data-testid="member-roles-done"
-              onClick={closeRolesSheet}
-              style={{
-                margin: '12px 20px 0',
-                padding: '10px 16px',
-                background: 'var(--bg-tertiary)',
-                border: '1px solid var(--border-soft)',
-                borderRadius: 8,
-                color: 'var(--text-primary)',
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Done
-            </button>
-          </ActionSheet>
-        )
-      })()}
     </div>
   )
 }

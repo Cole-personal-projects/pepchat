@@ -175,39 +175,67 @@ test.describe('discord-style mobile navigation', () => {
 })
 
 test.describe('custom role assignment', () => {
-  test('admin assigns the Group Buy role from the members sheet', async ({ page }) => {
+  async function openHermesRoleSheet(page: Page) {
+    await openMembersSheet(page)
+    // Member rows are clean (Discord-style): tap the name → profile card.
+    await page.locator('[data-testid="members-sheet"] [data-testid="member-name-22222222-2222-4222-8222-222222222222"]').click()
+    const manageButton = page.locator('[data-testid="profile-manage-roles"]')
+    await expect(manageButton).toBeVisible()
+    await manageButton.click()
+    await expect(page.locator('[data-testid="action-sheet"]')).toBeVisible()
+  }
+
+  test('admin assigns roles from the profile card; member rows stay clean', async ({ page }) => {
     await login(page)
     await openGeneralChannel(page)
     await openMembersSheet(page)
 
+    // No inline selects or role buttons on member rows anymore.
     const sheet = page.locator('[data-testid="members-sheet"]')
+    await expect(sheet.locator('select')).toHaveCount(0)
+    await expect(sheet.locator('[data-testid^="member-roles-btn-"]')).toHaveCount(0)
 
-    // Open the role sheet for the other member (hermes).
-    const rolesBtn = sheet.locator('[data-testid^="member-roles-btn-2222"]')
-    await expect(rolesBtn).toBeVisible()
-    await rolesBtn.click()
+    // Profile card → Manage Roles.
+    await page.locator('[data-testid="members-sheet"] [data-testid="member-name-22222222-2222-4222-8222-222222222222"]').click()
+    await expect(page.locator('[data-testid="profile-manage-roles"]')).toBeVisible()
+    await page.locator('[data-testid="profile-manage-roles"]').click()
 
     const roleSheet = page.locator('[data-testid="action-sheet"]')
     await expect(roleSheet).toBeVisible()
-    await expect(page.locator('[data-testid="action-sheet-title"]')).toContainText('Roles')
 
     // Toggle "Group Buy" on — optimistic checkmark flips immediately.
     const groupBuyToggle = roleSheet.locator('button', { hasText: 'Group Buy' })
     await expect(groupBuyToggle).toHaveAttribute('aria-pressed', 'false')
     await groupBuyToggle.click()
     await expect(groupBuyToggle).toHaveAttribute('aria-pressed', 'true')
+
+    // Discord-style membership level picker replaces the old <select>:
+    // promote hermes from Member to Moderator.
+    await expect(page.locator('[data-testid="legacy-role-picker"]')).toBeVisible()
+    await expect(page.locator('[data-testid="legacy-role-user"]')).toHaveAttribute('aria-pressed', 'true')
+    await page.locator('[data-testid="legacy-role-moderator"]').click()
+    await expect(page.locator('[data-testid="legacy-role-moderator"]')).toHaveAttribute('aria-pressed', 'true')
+
     await page.screenshot({ path: 'test-results/mobile-role-assign.png' })
+    // Closing the sheet keeps the profile card up, now showing the chip.
     await page.locator('[data-testid="member-roles-done"]').click()
+    await expect(page.locator('[data-testid="profile-manage-roles"]')).toBeVisible()
 
     // Persisted server-side: survives a full reload.
     await page.waitForTimeout(500)
     await page.reload()
     await openGeneralChannel(page)
-    await openMembersSheet(page)
-    await page.locator('[data-testid="members-sheet"] [data-testid^="member-roles-btn-2222"]').click()
+    await openHermesRoleSheet(page)
     await expect(
       page.locator('[data-testid="action-sheet"] button', { hasText: 'Group Buy' }),
     ).toHaveAttribute('aria-pressed', 'true')
+    // The legacy promotion also persisted.
+    await expect(page.locator('[data-testid="legacy-role-moderator"]')).toHaveAttribute('aria-pressed', 'true')
+    await page.locator('[data-testid="member-roles-done"]').click()
+
+    // The profile card displays the assigned role as a chip.
+    await expect(page.locator('[data-testid="profile-role-chips"]')).toContainText('Group Buy')
+    await page.screenshot({ path: 'test-results/mobile-profile-roles.png' })
   })
 })
 
