@@ -241,6 +241,7 @@ export default function AppShell({ profile, children }: AppShellProps) {
           groupName={activeGroup.name}
           currentUserId={profile.id}
           currentUserRole={userRole}
+          ownerId={activeGroup.owner_id}
         />
       )}
 
@@ -253,6 +254,7 @@ export default function AppShell({ profile, children }: AppShellProps) {
           onClose={() => setShowSettings(false)}
           group={activeGroup}
           isOwner={PERMISSIONS.canManageGroup(userRole ?? 'noob')}
+          currentUserId={profile.id}
           onIconChange={refetch}
         />
       )}

@@ -38,6 +38,7 @@ export default function ProfileCard({ userId, currentUserId, anchorEl, onClose, 
 
   // Group role chips (Discord-style): visible to everyone with group context.
   const { roles, roleIdsByUserId } = useGroupRoles(groupId ?? null)
+  const [groupOwnerId, setGroupOwnerId] = useState<string | null>(null)
   const memberRoleChips = (() => {
     if (!groupId) return []
     const ids = roleIdsByUserId.get(userId)
@@ -46,6 +47,23 @@ export default function ProfileCard({ userId, currentUserId, anchorEl, onClose, 
       .filter(role => !role.is_default && ids.has(role.id))
       .sort((a, b) => b.position - a.position)
   })()
+  const isGroupOwner = groupOwnerId !== null && groupOwnerId === userId
+
+  useEffect(() => {
+    if (!groupId) return
+    let cancelled = false
+    createClient()
+      .from('groups')
+      .select('owner_id')
+      .eq('id', groupId)
+      .single()
+      .then(({ data }) => {
+        if (!cancelled) setGroupOwnerId((data?.owner_id as string) ?? null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [groupId])
 
   async function handleSendMessage() {
     setOpeningDM(true)
@@ -172,12 +190,20 @@ export default function ProfileCard({ userId, currentUserId, anchorEl, onClose, 
             </div>
 
             {/* Group role chips */}
-            {memberRoleChips.length > 0 && (
+            {(memberRoleChips.length > 0 || isGroupOwner) && (
               <div data-testid="profile-role-chips">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-faint)] mb-1.5">
                   Roles
                 </p>
                 <div className="flex flex-wrap gap-1.5">
+                  {isGroupOwner && (
+                    <span
+                      data-testid="profile-owner-chip"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-[var(--accent)]/30 bg-[var(--accent)]/10 px-2 py-0.5 text-xs font-semibold text-[var(--accent)]"
+                    >
+                      ♛ Owner
+                    </span>
+                  )}
                   {memberRoleChips.map(role => (
                     <span
                       key={role.id}

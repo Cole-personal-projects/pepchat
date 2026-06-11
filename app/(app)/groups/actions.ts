@@ -209,15 +209,15 @@ export const leaveGroup = withAuth(
     { supabase, user },
     groupId: string,
   ): Promise<{ error: string } | never> {
-    const { data: membership } = await supabase
-      .from('group_members')
-      .select('role')
-      .eq('group_id', groupId)
-      .eq('user_id', user.id)
+    // The owner must hand off the server before leaving; other admins may go.
+    const { data: group } = await supabase
+      .from('groups')
+      .select('owner_id')
+      .eq('id', groupId)
       .single()
 
-    if (membership?.role === 'admin') {
-      return { error: 'Admins cannot leave. Delete the group instead.' }
+    if (group?.owner_id === user.id) {
+      return { error: 'Owners cannot leave. Transfer ownership or delete the group instead.' }
     }
 
     const { error } = await supabase
@@ -230,6 +230,72 @@ export const leaveGroup = withAuth(
     redirect('/channels')
   },
   { unauthenticated: () => redirect('/login') },
+)
+
+/**
+ * Hands the server to another member. Owner-only and irreversible from the
+ * UI: the target becomes the owner (and admin); the old owner stays an
+ * admin so they keep day-to-day management without the crown.
+ */
+export const transferOwnership = withAuth(
+  async function transferOwnershipBody(
+    { supabase, user },
+    groupId: string,
+    newOwnerId: string,
+  ): Promise<{ error: string } | { ok: true }> {
+    if (!groupId || !newOwnerId) return { error: 'Missing group or member.' }
+    if (newOwnerId === user.id) return { error: 'You already own this group.' }
+
+    const { data: group, error: groupError } = await supabase
+      .from('groups')
+      .select('owner_id')
+      .eq('id', groupId)
+      .single()
+
+    if (groupError) return { error: groupError.message }
+    if (group?.owner_id !== user.id) {
+      return { error: 'Only the owner can transfer ownership.' }
+    }
+
+    const { data: targetMembership, error: targetError } = await supabase
+      .from('group_members')
+      .select('role')
+      .eq('group_id', groupId)
+      .eq('user_id', newOwnerId)
+      .single()
+
+    if (targetError && targetError.code !== 'PGRST116') return { error: targetError.message }
+    if (!targetMembership?.role) {
+      return { error: 'The new owner must be a member of this group.' }
+    }
+
+    // Promote the new owner to the admin tier first — while the caller still
+    // holds owner privileges under RLS.
+    if (targetMembership.role !== 'admin') {
+      const { error: promoteError } = await supabase
+        .from('group_members')
+        .update({ role: 'admin' })
+        .eq('group_id', groupId)
+        .eq('user_id', newOwnerId)
+      if (promoteError) return { error: promoteError.message }
+    }
+
+    const { error: ownerError } = await supabase
+      .from('groups')
+      .update({ owner_id: newOwnerId })
+      .eq('id', groupId)
+      .eq('owner_id', user.id)
+
+    if (ownerError) return { error: ownerError.message }
+
+    await logAuditEvent(supabase, user.id, 'ownership_transferred', 'user', newOwnerId, {
+      group_id: groupId,
+      previous_owner: user.id,
+    })
+
+    return { ok: true }
+  },
+  { unauthenticated: () => ({ error: 'Not authenticated.' }) },
 )
 
 /**

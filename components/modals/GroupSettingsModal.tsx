@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useTransition } from 'react'
 import dynamic from 'next/dynamic'
 import ModalShell from '@/components/ui/ModalShell'
 import GroupIcon from '@/components/ui/GroupIcon'
-import { leaveGroup, deleteGroup, uploadGroupIcon, removeGroupIcon, updateGroupDetails, regenerateGroupInvite, listGroupInvites, revokeGroupInvite } from '@/app/(app)/groups/actions'
+import { leaveGroup, deleteGroup, transferOwnership, uploadGroupIcon, removeGroupIcon, updateGroupDetails, regenerateGroupInvite, listGroupInvites, revokeGroupInvite } from '@/app/(app)/groups/actions'
+import { useMembersList } from '@/lib/hooks/useMembersList'
 import type { Group } from '@/lib/types'
 
 const AvatarCropModal = dynamic(() => import('@/components/profile/AvatarCropModal'), { ssr: false })
@@ -36,10 +37,12 @@ interface GroupSettingsModalProps {
   onClose: () => void
   group: Group
   isOwner: boolean
+  /** Used to gate the true-ownership controls (transfer) to groups.owner_id. */
+  currentUserId?: string | null
   onIconChange?: () => void
 }
 
-export default function GroupSettingsModal({ open, onClose, group, isOwner, onIconChange }: GroupSettingsModalProps) {
+export default function GroupSettingsModal({ open, onClose, group, isOwner, currentUserId = null, onIconChange }: GroupSettingsModalProps) {
   const [nav, setNav] = useState<NavItem>('overview')
   const [error, setError] = useState('')
   const [detailsNotice, setDetailsNotice] = useState('')
@@ -50,6 +53,9 @@ export default function GroupSettingsModal({ open, onClose, group, isOwner, onIc
   const [inviteExpiresAt, setInviteExpiresAt] = useState('')
   const [copied, setCopied] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [transferTargetId, setTransferTargetId] = useState('')
+  const [confirmTransfer, setConfirmTransfer] = useState(false)
+  const [transferNotice, setTransferNotice] = useState('')
   const [isPending, startTransition] = useTransition()
   const [name, setName] = useState(group.name)
   const [description, setDescription] = useState(group.description ?? '')
@@ -204,6 +210,32 @@ export default function GroupSettingsModal({ open, onClose, group, isOwner, onIc
         setInviteNotice('Invite revoked.')
         await refreshInvites()
       }
+    })
+  }
+
+  const isTrueOwner = currentUserId !== null && currentUserId === group.owner_id
+  // Members are only needed for the transfer picker — fetch when relevant.
+  const { members } = useMembersList(open && nav === 'danger' && isTrueOwner ? group.id : '')
+  const transferCandidates = members.filter(member => member.user_id !== currentUserId)
+
+  function handleTransferOwnership() {
+    if (!transferTargetId) return
+    if (!confirmTransfer) {
+      setConfirmTransfer(true)
+      return
+    }
+    setError('')
+    setTransferNotice('')
+    startTransition(async () => {
+      const result = await transferOwnership(group.id, transferTargetId)
+      if (result && 'error' in result) {
+        setError(result.error)
+      } else {
+        setTransferNotice('Ownership transferred. You are now an admin.')
+        onIconChange?.()
+      }
+      setConfirmTransfer(false)
+      setTransferTargetId('')
     })
   }
 
@@ -534,6 +566,51 @@ export default function GroupSettingsModal({ open, onClose, group, isOwner, onIc
                 <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)] mb-1">
                   Danger Zone
                 </p>
+
+                {transferNotice && (
+                  <p data-testid="transfer-notice" className="text-xs text-[var(--success)]">{transferNotice}</p>
+                )}
+
+                {isTrueOwner && (
+                  <div data-testid="transfer-ownership" className="flex flex-col gap-2 rounded-lg border border-white/10 bg-[var(--bg-primary)] p-3">
+                    <p className="text-sm font-semibold text-[var(--text-primary)]">♛ Transfer Ownership</p>
+                    <p className="text-xs leading-relaxed text-[var(--text-muted)]">
+                      Hand this server to another member. They become the owner with full control;
+                      you stay on as an admin. This cannot be undone from the app.
+                    </p>
+                    <select
+                      data-testid="transfer-target-select"
+                      value={transferTargetId}
+                      onChange={e => { setTransferTargetId(e.target.value); setConfirmTransfer(false) }}
+                      disabled={isPending}
+                      className="w-full rounded border border-white/10 bg-[var(--bg-secondary)] px-2 py-2 text-sm text-[var(--text-primary)] outline-none disabled:opacity-60"
+                    >
+                      <option value="">Choose the new owner…</option>
+                      {transferCandidates.map(member => (
+                        <option key={member.user_id} value={member.user_id}>
+                          {(member.profiles as any)?.display_name ?? member.profiles?.username ?? member.user_id}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      data-testid="transfer-ownership-btn"
+                      onClick={handleTransferOwnership}
+                      disabled={isPending || !transferTargetId}
+                      className={`self-start px-3 py-2 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 ${
+                        confirmTransfer
+                          ? 'bg-[var(--danger)] text-white'
+                          : 'text-[var(--danger)] border border-[var(--danger)]/20 hover:bg-[var(--danger)]/10'
+                      }`}
+                    >
+                      {isPending
+                        ? 'Transferring…'
+                        : confirmTransfer
+                          ? 'Tap again to confirm — this is permanent'
+                          : 'Transfer Ownership'}
+                    </button>
+                  </div>
+                )}
 
                 {!isOwner && (
                   <button

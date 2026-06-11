@@ -8,8 +8,9 @@ import { createClient } from '@/lib/supabase/client'
 import { useGroupRoles } from '@/lib/hooks/useGroupRoles'
 import { PERMISSIONS, type Role } from '@/lib/permissions'
 
-/** Legacy membership levels an admin can hand out (admin stays unique). */
-const LEGACY_ROLE_OPTIONS: Array<{ value: Role; label: string; description: string }> = [
+/** Membership levels. Admin is grantable by the group owner only. */
+const LEGACY_ROLE_OPTIONS: Array<{ value: Role; label: string; description: string; ownerOnly?: boolean }> = [
+  { value: 'admin', label: 'Admin', description: 'Full server management — second only to the owner', ownerOnly: true },
   { value: 'moderator', label: 'Moderator', description: 'Manages channels, kicks members, reviews reports' },
   { value: 'user', label: 'Member', description: 'Full access to the server' },
   { value: 'noob', label: 'Noob', description: 'Limited to welcome channels until promoted' },
@@ -45,21 +46,34 @@ export default function MemberRolesSheet({
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState('')
   const [legacyRole, setLegacyRole] = useState<Role | null>(null)
+  const [ownerId, setOwnerId] = useState<string | null>(null)
   const [roleOverrides, setRoleOverrides] = useState<Record<string, boolean>>({})
 
   const customRoles = roles.filter(role => !role.is_default)
   const canManage = PERMISSIONS.canAssignRoles(viewerRole)
-  const canChangeLegacy = canManage && userId !== currentUserId && legacyRole !== null && legacyRole !== 'admin'
+  const viewerIsOwner = ownerId !== null && ownerId === currentUserId
+  const targetIsOwner = ownerId !== null && ownerId === userId
+  // Admin targets are only manageable by the owner; the owner's own level is
+  // immutable here (ownership transfer is a separate, deliberate flow).
+  const canChangeLegacy =
+    canManage &&
+    userId !== currentUserId &&
+    !targetIsOwner &&
+    legacyRole !== null &&
+    (legacyRole !== 'admin' || viewerIsOwner)
+  const visibleLegacyOptions = LEGACY_ROLE_OPTIONS.filter(option => !option.ownerOnly || viewerIsOwner)
 
-  // The sheet is self-sufficient: fetch the member's current legacy role so
-  // callers (like ProfileCard) don't need the membership row in hand.
+  // The sheet is self-sufficient: fetch the member's current legacy role and
+  // the group owner so callers (like ProfileCard) don't need them in hand.
   useEffect(() => {
     if (!open) return
     let cancelled = false
     setError('')
     setRoleOverrides({})
     setLegacyRole(null)
-    createClient()
+    setOwnerId(null)
+    const supabase = createClient()
+    supabase
       .from('group_members')
       .select('role')
       .eq('group_id', groupId)
@@ -67,6 +81,14 @@ export default function MemberRolesSheet({
       .single()
       .then(({ data }) => {
         if (!cancelled) setLegacyRole((data?.role as Role) ?? null)
+      })
+    supabase
+      .from('groups')
+      .select('owner_id')
+      .eq('id', groupId)
+      .single()
+      .then(({ data }) => {
+        if (!cancelled) setOwnerId((data?.owner_id as string) ?? null)
       })
     return () => {
       cancelled = true
@@ -124,11 +146,17 @@ export default function MemberRolesSheet({
         </p>
       )}
 
+      {targetIsOwner && (
+        <p data-testid="owner-note" style={{ margin: '0 20px 8px', fontSize: 13, color: 'var(--text-muted)' }}>
+          ♛ Server owner — their membership level can only change via ownership transfer.
+        </p>
+      )}
+
       {/* Membership level (legacy enum) — single select */}
       {canChangeLegacy && (
         <div data-testid="legacy-role-picker" style={{ display: 'flex', flexDirection: 'column' }}>
           <p style={sectionHeaderStyle}>Membership Level</p>
-          {LEGACY_ROLE_OPTIONS.map(option => {
+          {visibleLegacyOptions.map(option => {
             const selected = legacyRole === option.value
             return (
               <button

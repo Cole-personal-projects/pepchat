@@ -557,6 +557,7 @@ export default function ChannelsSidebar({
                   groupId={group.id}
                   currentUserId={profile.id}
                   currentUserRole={userRole}
+                  ownerId={group.owner_id}
                 />
               </div>
             )}

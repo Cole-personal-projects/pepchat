@@ -7,8 +7,9 @@ import { PERMISSIONS, type Role } from '@/lib/permissions'
 
 /**
  * Assigns a new role to a group member.
- * Only admins can call this. Cannot change another admin's role.
- * Cannot demote yourself.
+ * Admins can assign moderator/user/noob. The group owner is the super-admin:
+ * only they can grant or revoke the admin tier, and nobody can change the
+ * owner's own role here (ownership moves via transferOwnership).
  */
 export const assignRole = withAuth(
   async ({ supabase, user }, groupId: string, targetUserId: string, newRole: Role): Promise<{ error: string } | { ok: true }> => {
@@ -26,12 +27,25 @@ export const assignRole = withAuth(
       return { error: 'You cannot change your own role.' }
     }
 
-    // Enforce: cannot assign admin role (there can only be one admin — the owner)
-    if (newRole === 'admin') {
-      return { error: 'Cannot assign the admin role.' }
+    const { data: group, error: groupError } = await supabase
+      .from('groups')
+      .select('owner_id')
+      .eq('id', groupId)
+      .single()
+
+    if (groupError) return { error: groupError.message }
+    const isOwner = group?.owner_id === user.id
+
+    // The owner's membership level is immutable here — use transferOwnership.
+    if (targetUserId === group?.owner_id) {
+      return { error: "The owner's role cannot be changed. Transfer ownership instead." }
     }
 
-    // Enforce: cannot touch another admin's row
+    // Only the owner can grant the admin tier.
+    if (newRole === 'admin' && !isOwner) {
+      return { error: 'Only the owner can grant the admin role.' }
+    }
+
     const { data: targetMembership, error: targetError } = await supabase
       .from('group_members')
       .select('role')
@@ -43,8 +57,9 @@ export const assignRole = withAuth(
     if (!targetMembership?.role) {
       return { error: 'Target member was not found.' }
     }
-    if (targetMembership?.role === 'admin') {
-      return { error: 'Cannot change an admin\'s role.' }
+    // Only the owner can demote another admin.
+    if (targetMembership?.role === 'admin' && !isOwner) {
+      return { error: 'Only the owner can change an admin\'s role.' }
     }
 
     const { error } = await supabase
@@ -105,9 +120,20 @@ export const kickMember = withAuth(
       return { error: 'Moderators can only kick users and noobs.' }
     }
 
-    // Nobody can kick the admin
-    if (targetRole === 'admin') {
-      return { error: 'The group admin cannot be kicked.' }
+    const { data: group, error: groupError } = await supabase
+      .from('groups')
+      .select('owner_id')
+      .eq('id', groupId)
+      .single()
+
+    if (groupError) return { error: groupError.message }
+
+    // Nobody can kick the owner; only the owner can kick admins.
+    if (targetUserId === group?.owner_id) {
+      return { error: 'The group owner cannot be kicked.' }
+    }
+    if (targetRole === 'admin' && group?.owner_id !== user.id) {
+      return { error: 'Only the owner can kick an admin.' }
     }
 
     const { error } = await supabase

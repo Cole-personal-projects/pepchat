@@ -1,9 +1,10 @@
 interface RolePillProps {
-  role: 'admin' | 'moderator' | 'user' | 'noob'
+  role: 'owner' | 'admin' | 'moderator' | 'user' | 'noob'
   size?: 'sm' | 'md'
 }
 
 const ROLE_MAP = {
+  owner:     { label: 'owner', glyph: '♛', tone: '#e6543a', bg: 'rgba(230,84,58,0.14)' },
   admin:     { label: 'admin', glyph: '♕', tone: '#d89a3a', bg: 'rgba(216,154,58,0.14)' },
   moderator: { label: 'mod',   glyph: '⚡', tone: '#c070a0', bg: 'rgba(192,112,160,0.14)' },
   noob:      { label: 'new',   glyph: '🌱', tone: '#6aa08a', bg: 'rgba(106,160,138,0.14)' },

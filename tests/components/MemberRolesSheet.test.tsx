@@ -40,18 +40,22 @@ let legacyRoleFetch: { data: { role: string } | null; error: any } = {
   data: { role: 'user' },
   error: null,
 }
+let ownerFetch: { data: { owner_id: string } | null; error: any } = {
+  data: { owner_id: 'owner-x' },
+  error: null,
+}
 
-function makeQueryStub() {
+function makeQueryStub(table: string) {
   const query: any = {}
   for (const method of ['select', 'eq', 'order', 'in', 'is', 'limit']) {
     query[method] = vi.fn(() => query)
   }
-  query.single = vi.fn(() => Promise.resolve(legacyRoleFetch))
+  query.single = vi.fn(() => Promise.resolve(table === 'groups' ? ownerFetch : legacyRoleFetch))
   return query
 }
 
 vi.mock('@/lib/supabase/client', () => ({
-  createClient: () => ({ from: vi.fn(() => makeQueryStub()), rpc: vi.fn() }),
+  createClient: () => ({ from: vi.fn((table: string) => makeQueryStub(table)), rpc: vi.fn() }),
 }))
 
 const BASE_PROPS = {
@@ -81,6 +85,7 @@ describe('MemberRolesSheet', () => {
     removeMemberRoleMock.mockResolvedValue({ ok: true })
     groupRolesResult = { roles: [GROUP_BUY], roleIdsByUserId: new Map() }
     legacyRoleFetch = { data: { role: 'user' }, error: null }
+    ownerFetch = { data: { owner_id: 'owner-x' }, error: null }
   })
 
   it('renders both sections portaled to document.body', async () => {
@@ -134,7 +139,7 @@ describe('MemberRolesSheet', () => {
     expect(screen.getByTestId('action-sheet')).toBeInTheDocument()
   })
 
-  it('hides the membership picker for self and admin targets', async () => {
+  it('hides the membership picker for self and for admin targets unless the viewer owns the group', async () => {
     legacyRoleFetch = { data: { role: 'admin' }, error: null }
     await renderSheet()
     expect(screen.queryByTestId('legacy-role-picker')).not.toBeInTheDocument()
@@ -143,6 +148,34 @@ describe('MemberRolesSheet', () => {
     legacyRoleFetch = { data: { role: 'user' }, error: null }
     await renderSheet({ userId: 'admin-u' })
     expect(screen.queryByTestId('legacy-role-picker')).not.toBeInTheDocument()
+
+    // The owner CAN manage another admin's level — including granting Admin.
+    cleanup()
+    legacyRoleFetch = { data: { role: 'admin' }, error: null }
+    ownerFetch = { data: { owner_id: 'admin-u' }, error: null }
+    await renderSheet()
+    expect(screen.getByTestId('legacy-role-picker')).toBeInTheDocument()
+    expect(screen.getByTestId('legacy-role-admin')).toBeInTheDocument()
+  })
+
+  it('shows the Admin option only to the group owner', async () => {
+    await renderSheet()
+    expect(screen.queryByTestId('legacy-role-admin')).not.toBeInTheDocument()
+
+    cleanup()
+    ownerFetch = { data: { owner_id: 'admin-u' }, error: null }
+    await renderSheet()
+    expect(screen.getByTestId('legacy-role-admin')).toBeInTheDocument()
+  })
+
+  it('locks the owner target behind the transfer flow', async () => {
+    ownerFetch = { data: { owner_id: 'u2' }, error: null }
+    await renderSheet()
+
+    expect(screen.getByTestId('owner-note')).toBeInTheDocument()
+    expect(screen.queryByTestId('legacy-role-picker')).not.toBeInTheDocument()
+    // Custom roles remain assignable to the owner.
+    expect(screen.getByTestId('toggle-role-role-gb-u2')).toBeInTheDocument()
   })
 
   it('assigns a custom role with an optimistic checkmark', async () => {
