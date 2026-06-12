@@ -82,17 +82,9 @@ export const sendDM = withAuth(
       return msg as unknown as DirectMessageWithProfile
     }, {
       onFailure: 'silent',
-      notifications: [{
-        type: 'dm',
-        payload: {
-          recipientId,
-          senderId: ctx.user.id,
-          messageId: '',
-          conversationId,
-          content: trimmed,
-          attachments: attachments ?? [],
-        },
-      }],
+      // DM fanout happens in the manual block below once the message id is
+      // resolved; a draft here would dispatch with an empty id ('dm' wasn't
+      // even a dispatcher case — it only logged an unknown-type warning).
     })
 
     // Notification fanout — send after commit via separate enqueue
@@ -107,6 +99,9 @@ export const sendDM = withAuth(
         content: trimmed,
         attachments: attachments ?? [],
       })
+      await import('@/lib/push/delivery').then(({ deliverPushForSources }) =>
+        deliverPushForSources([sentMessage.id]),
+      )
     } catch {
       // Notification fanout should never block the core message send path.
     }
