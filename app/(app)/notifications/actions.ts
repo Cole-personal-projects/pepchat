@@ -193,6 +193,62 @@ export const getNotificationEvents = withAuth(
   }},
 )
 
+type TestNotificationResult =
+  | { error: string }
+  | { ok: true; delivered: boolean; reason: string | null }
+
+/**
+ * Creates a real notification event for the caller and runs it through the
+ * actual push delivery path, then reports what happened — so "is push
+ * working on this device?" is answerable with one tap instead of a second
+ * account and a test mention.
+ */
+export const sendTestNotification = withAuth(
+  async ({ supabase, user }): Promise<TestNotificationResult> => {
+    const sourceId = crypto.randomUUID()
+
+    const { error: insertError } = await supabase
+      .from('notification_events')
+      .insert({
+        user_id: user.id,
+        actor_id: user.id,
+        type: 'mention',
+        source_table: 'messages',
+        source_id: sourceId,
+        conversation_id: null,
+        channel_id: null,
+        title: 'Test notification',
+        body: 'Push delivery is working on this device 🎉',
+        url: '/settings/profile',
+      })
+
+    if (insertError) return { error: insertError.message }
+
+    const { deliverPushForSources, isPushDeliveryConfigured } = await import('@/lib/push/delivery')
+    if (!isPushDeliveryConfigured()) {
+      return { ok: true, delivered: false, reason: 'not_configured' }
+    }
+
+    await deliverPushForSources([sourceId])
+
+    const { data: event } = await supabase
+      .from('notification_events')
+      .select('pushed_at, push_error')
+      .eq('user_id', user.id)
+      .eq('source_id', sourceId)
+      .maybeSingle()
+
+    const row = event as { pushed_at: string | null; push_error: string | null } | null
+    if (!row?.pushed_at) {
+      return { ok: true, delivered: false, reason: 'not_attempted' }
+    }
+    return { ok: true, delivered: row.push_error === null, reason: row.push_error }
+  },
+  { unauthenticated: () => {
+    return { error: 'Not authenticated.' }
+  }},
+)
+
 export const markNotificationEventRead = withAuth(
   async ({ supabase, user }, eventId: string): Promise<SubscriptionResult> => {
     const normalizedId = eventId.trim()

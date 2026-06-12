@@ -6,13 +6,23 @@ import {
   markAllNotificationEventsRead,
   markNotificationEventRead,
   saveNotificationSubscription,
+  sendTestNotification,
   updateNotificationPreferences,
 } from '@/app/(app)/notifications/actions'
 
-const { mockCreateClient } = vi.hoisted(() => ({ mockCreateClient: vi.fn() }))
+const { mockCreateClient, mockDeliverPushForSources, mockIsPushDeliveryConfigured } = vi.hoisted(() => ({
+  mockCreateClient: vi.fn(),
+  mockDeliverPushForSources: vi.fn(),
+  mockIsPushDeliveryConfigured: vi.fn(),
+}))
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: mockCreateClient,
+}))
+
+vi.mock('@/lib/push/delivery', () => ({
+  deliverPushForSources: mockDeliverPushForSources,
+  isPushDeliveryConfigured: mockIsPushDeliveryConfigured,
 }))
 
 type QueryResult = { data?: unknown; error?: { message: string; code?: string } | null; count?: number | null }
@@ -443,5 +453,75 @@ describe('notification actions — markAllNotificationEventsRead', () => {
     expect(builder.update).toHaveBeenCalledWith({ read_at: expect.any(String) })
     expect(builder.eq).toHaveBeenCalledWith('user_id', 'user-1')
     expect(builder.is).toHaveBeenCalledWith('read_at', null)
+  })
+})
+
+describe('notification actions — sendTestNotification', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockDeliverPushForSources.mockReset()
+    mockIsPushDeliveryConfigured.mockReset()
+  })
+
+  function makeInsertBuilder(result: QueryResult = {}) {
+    const builder: Record<string, unknown> = {}
+    builder.insert = vi.fn().mockResolvedValue({
+      data: result.data ?? null,
+      error: result.error ?? null,
+    })
+    return builder
+  }
+
+  function makeMaybeSingleBuilder(result: QueryResult) {
+    const builder: Record<string, unknown> = {}
+    builder.select = vi.fn(() => builder)
+    builder.eq = vi.fn(() => builder)
+    builder.maybeSingle = vi.fn().mockResolvedValue({
+      data: result.data ?? null,
+      error: result.error ?? null,
+    })
+    return builder
+  }
+
+  it('inserts a self-event, runs delivery, and reports a delivered push', async () => {
+    mockIsPushDeliveryConfigured.mockReturnValue(true)
+    mockDeliverPushForSources.mockResolvedValue(undefined)
+    const insert = makeInsertBuilder()
+    const readBack = makeMaybeSingleBuilder({ data: { pushed_at: '2026-06-12T00:00:00Z', push_error: null } })
+    setupClientSequence([insert, readBack])
+
+    await expect(sendTestNotification()).resolves.toEqual({ ok: true, delivered: true, reason: null })
+
+    const inserted = (insert.insert as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(inserted.user_id).toBe('user-1')
+    expect(inserted.actor_id).toBe('user-1')
+    expect(inserted.title).toBe('Test notification')
+    expect(mockDeliverPushForSources).toHaveBeenCalledWith([inserted.source_id])
+  })
+
+  it('reports no_subscriptions when no device is registered', async () => {
+    mockIsPushDeliveryConfigured.mockReturnValue(true)
+    mockDeliverPushForSources.mockResolvedValue(undefined)
+    const insert = makeInsertBuilder()
+    const readBack = makeMaybeSingleBuilder({ data: { pushed_at: '2026-06-12T00:00:00Z', push_error: 'no_subscriptions' } })
+    setupClientSequence([insert, readBack])
+
+    await expect(sendTestNotification()).resolves.toEqual({ ok: true, delivered: false, reason: 'no_subscriptions' })
+  })
+
+  it('short-circuits when push delivery is not configured', async () => {
+    mockIsPushDeliveryConfigured.mockReturnValue(false)
+    const insert = makeInsertBuilder()
+    setupClientSequence([insert])
+
+    await expect(sendTestNotification()).resolves.toEqual({ ok: true, delivered: false, reason: 'not_configured' })
+    expect(mockDeliverPushForSources).not.toHaveBeenCalled()
+  })
+
+  it('surfaces insert errors', async () => {
+    const insert = makeInsertBuilder({ error: { message: 'insert denied' } })
+    setupClientSequence([insert])
+
+    await expect(sendTestNotification()).resolves.toEqual({ error: 'insert denied' })
   })
 })
