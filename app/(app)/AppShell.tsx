@@ -17,6 +17,7 @@ import InstallBanner from '@/components/ui/InstallBanner'
 import NetworkStatusBanner from '@/components/ui/NetworkStatusBanner'
 import MotionSurface from '@/components/ui/MotionSurface'
 import { useGroups } from '@/lib/hooks/useGroups'
+import { useHorizontalSwipe } from '@/lib/hooks/useHorizontalSwipe'
 import { useChannels } from '@/lib/hooks/useChannels'
 import { useChannelCategories } from '@/lib/hooks/useChannelCategories'
 import { useUnreadChannels } from '@/lib/hooks/useUnreadChannels'
@@ -160,6 +161,24 @@ export default function AppShell({ profile, children }: AppShellProps) {
     await markChannelUnread(channelId, profile.id)
   }
 
+  // Discord-style swipe navigation (mobile): swipe right on the chat to
+  // open the channel drawer, swipe left to peek the member list; swipe
+  // left on the open drawer to dismiss it. Touch-only by nature — these
+  // handlers never fire from mouse input, and on md+ the drawer is a
+  // static column so opening it is a no-op visually.
+  const onChannelView = pathname.startsWith('/channels/')
+  const contentSwipeRef = useHorizontalSwipe({
+    onSwipeRight: () => setMobileSidebarOpen(true),
+    onSwipeLeft: () => {
+      if (onChannelView && activeGroup && userRole) setMembersSheetOpen(true)
+    },
+    enabled: !mobileSidebarOpen && !membersSheetOpen,
+  })
+  const drawerSwipeRef = useHorizontalSwipe({
+    onSwipeLeft: () => setMobileSidebarOpen(false),
+    enabled: mobileSidebarOpen,
+  })
+
   return (
     <MobileSidebarContext.Provider
       value={{
@@ -184,6 +203,7 @@ export default function AppShell({ profile, children }: AppShellProps) {
             ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
             md:relative md:translate-x-0 md:z-auto md:flex md:shadow-none
           `}
+          ref={drawerSwipeRef}
         >
           <GroupsSidebar
             groups={groups}
@@ -217,6 +237,7 @@ export default function AppShell({ profile, children }: AppShellProps) {
 
         <main
           className="flex flex-col flex-1 min-w-0 overflow-hidden"
+          ref={contentSwipeRef}
         >
           <InstallBanner />
           <NetworkStatusBanner />
