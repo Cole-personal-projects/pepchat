@@ -161,7 +161,7 @@ export default function ChannelRow({
 
         {/* Channel name */}
         <span style={{
-          fontSize: 14,
+          fontSize: 15,
           flex: 1,
           minWidth: 0,
           overflow: 'hidden',

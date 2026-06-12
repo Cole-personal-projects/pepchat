@@ -816,7 +816,7 @@ export default function MessageList({
     : null
   return (
     <ChannelMessageActionsProvider value={messageActions}>
-      <div style={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column', background: 'var(--bg-chat)' }}>
+      <div style={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column', background: 'var(--bg-chat-surface)' }}>
       <div
         style={{
           flexShrink: 0,
@@ -826,7 +826,7 @@ export default function MessageList({
           gap: 8,
           flexWrap: 'wrap',
           padding: isSearchExpanded ? '8px 16px 10px' : '8px 16px',
-          background: 'var(--bg-chat)',
+          background: 'transparent',
           borderBottom: isSearchExpanded ? '1px solid var(--border-soft)' : 'none',
           boxShadow: isSearchExpanded ? '0 8px 18px rgba(0, 0, 0, 0.24)' : 'none',
         }}

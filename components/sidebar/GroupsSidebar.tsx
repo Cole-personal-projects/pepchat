@@ -41,7 +41,7 @@ export default function GroupsSidebar({
       style={{
         width: 72,
         flexShrink: 0,
-        background: 'var(--bg-deepest)',
+        background: 'var(--bg-rail)',
         display: 'flex',
         flexDirection: 'column',
         padding: '12px 0',

@@ -325,10 +325,9 @@ export default function ChannelsSidebar({
 
   return (
     <div
+      className="channels-sidebar"
       style={{
-        width: 236,
-        flexShrink: 0,
-        background: 'var(--bg-secondary)',
+        background: 'var(--bg-sidebar)',
         display: 'flex',
         flexDirection: 'column',
         borderRight: '1px solid var(--border-soft)',
@@ -367,7 +366,7 @@ export default function ChannelsSidebar({
               <div
                 data-testid="group-header-desc"
                 style={{
-                  fontSize: 11,
+                  fontSize: 12,
                   color: 'var(--text-faint)',
                   marginTop: 1,
                   fontStyle: 'italic',
@@ -418,7 +417,7 @@ export default function ChannelsSidebar({
               padding: '4px 10px 6px',
             }}>
               <span style={{
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: 700,
                 color: 'var(--text-faint)',
                 textTransform: 'uppercase',
@@ -460,7 +459,7 @@ export default function ChannelsSidebar({
             </div>
 
             {userRole === 'noob' && visibleChannels.length === 0 && (
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', padding: '4px 10px 8px', lineHeight: 1.5 }}>
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', padding: '4px 10px 8px', lineHeight: 1.5 }}>
                 You don&apos;t have access to any channels yet. Ask an admin to promote your role.
               </p>
             )}
@@ -566,7 +565,7 @@ export default function ChannelsSidebar({
             )}
           </>
         ) : (
-          <p style={{ fontSize: 12, color: 'var(--text-muted)', padding: '8px 10px' }}>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', padding: '8px 10px' }}>
             Select a group to see its channels.
           </p>
         )}
@@ -586,7 +585,7 @@ export default function ChannelsSidebar({
             gap: 8,
             textDecoration: 'none',
             color: 'var(--text-muted)',
-            fontSize: 14,
+            fontSize: 15,
           }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -820,7 +819,7 @@ export default function ChannelsSidebar({
               data-testid="user-footer-name"
               style={{
                 display: 'block',
-                fontSize: 13,
+                fontSize: 14,
                 fontWeight: 600,
                 color: 'var(--text-primary)',
                 overflow: 'hidden',

@@ -139,7 +139,7 @@ export default function EventsPanel({ groupId, currentUserId, voiceChannels, can
           background: 'transparent',
           border: 'none',
           color: 'var(--text-muted)',
-          fontSize: 14,
+          fontSize: 15,
           cursor: 'pointer',
           textAlign: 'left',
         }}
