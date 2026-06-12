@@ -6,6 +6,13 @@ import { useRealtimeChannel } from '@/lib/realtime/useRealtimeChannel'
 import { MESSAGE_SELECT } from '@/lib/queries'
 import type { MessageWithProfile, Reaction } from '@/lib/types'
 
+/** Poll attachments carry no url; only media attachments participate in echo matching. */
+function firstAttachmentUrl(message: { attachments?: unknown[] | null }): string | undefined {
+  const attachment = message.attachments?.[0] as { url?: string } | undefined
+  return attachment && typeof attachment === 'object' && 'url' in attachment ? attachment.url : undefined
+}
+
+
 const PAGE_SIZE = 50
 
 interface UseMessagesReturn {
@@ -47,7 +54,7 @@ function mergeRealMessage(prev: MessageWithProfile[], msg: MessageWithProfile): 
       m.optimistic &&
       m.user_id === msg.user_id &&
       (m.content === msg.content ||
-        (Boolean(m.attachments?.[0]?.url) && m.attachments?.[0]?.url === msg.attachments?.[0]?.url)),
+        (Boolean(firstAttachmentUrl(m)) && firstAttachmentUrl(m) === firstAttachmentUrl(msg))),
   )
   if (echoIndex === -1) return [...prev, msg]
   const next = prev.slice()

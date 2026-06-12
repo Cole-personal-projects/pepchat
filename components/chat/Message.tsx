@@ -289,7 +289,7 @@ export default function Message({
               </div>
             )}
             {msg.attachments && msg.attachments.length > 0 && (
-              <MessageAttachments attachments={msg.attachments} />
+              <MessageAttachments attachments={msg.attachments} currentUserId={currentUserId} />
             )}
             {/* Rich link preview. Renders on optimistic echoes too — the
                 embed derives from content alone, so your own pasted links

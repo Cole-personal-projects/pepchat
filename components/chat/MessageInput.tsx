@@ -12,6 +12,7 @@ import { registerShare } from '@/lib/klipy'
 import type { KlipyGif } from '@/lib/klipy'
 
 const GifPicker = dynamic(() => import('./GifPicker'), { ssr: false })
+const PollComposer = dynamic(() => import('./PollComposer'), { ssr: false })
 
 const KLIPY_ENABLED = !!process.env.NEXT_PUBLIC_KLIPY_API_KEY
 const TYPING_BROADCAST_INTERVAL_MS = 1500
@@ -28,6 +29,8 @@ interface MessageInputProps {
   placeholder?: string
   draftStorageKey?: string
   allowVideoUpload?: boolean
+  /** Channel-only: shows the poll composer button. */
+  allowPolls?: boolean
   mode?: 'channel' | 'thread'
   threadRootId?: string
   /** When provided, called instead of the default sendMessage server action. */
@@ -61,6 +64,7 @@ export default function MessageInput({
   placeholder,
   draftStorageKey: providedDraftStorageKey,
   allowVideoUpload = true,
+  allowPolls = false,
   mode = 'channel',
   threadRootId,
   sendAction,
@@ -74,6 +78,7 @@ export default function MessageInput({
   const [isDragging, setIsDragging] = useState(false)
   const [mirrorToChannel, setMirrorToChannel] = useState(false)
   const [gifPickerOpen, setGifPickerOpen] = useState(false)
+  const [pollComposerOpen, setPollComposerOpen] = useState(false)
   const [mentionUsers, setMentionUsers] = useState<Array<{ id: string; username: string; display_name?: string | null }>>([])
   const [mentionIndex, setMentionIndex] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -511,6 +516,30 @@ export default function MessageInput({
                 <GifPicker onSelect={handleGifSelect} onClose={() => setGifPickerOpen(false)} />
               )}
             </div>
+          )}
+
+          {/* Poll composer button (channels only) */}
+          {allowPolls && (
+            <>
+              <button
+                type="button"
+                data-testid="poll-composer-btn"
+                onClick={() => setPollComposerOpen(true)}
+                title="Create a poll"
+                className="p-1.5 rounded text-xs font-bold leading-none transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/10 flex-shrink-0"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="6" y1="20" x2="6" y2="10" />
+                  <line x1="12" y1="20" x2="12" y2="4" />
+                  <line x1="18" y1="20" x2="18" y2="14" />
+                </svg>
+              </button>
+              <PollComposer
+                open={pollComposerOpen}
+                onClose={() => setPollComposerOpen(false)}
+                channelId={channelId}
+              />
+            </>
           )}
 
           <textarea

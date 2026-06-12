@@ -28,7 +28,38 @@ export interface VideoAttachment {
   mime_type: string
 }
 
-export type Attachment = ImageAttachment | GifAttachment | VideoAttachment
+export interface PollAttachment {
+  type: 'poll'
+  poll_id: string
+}
+
+export type Attachment = ImageAttachment | GifAttachment | VideoAttachment | PollAttachment
+
+export interface PollOption {
+  id: string
+  label: string
+}
+
+export interface Poll {
+  id: string
+  group_id: string
+  channel_id: string
+  message_id: string | null
+  creator_id: string
+  question: string
+  options: PollOption[]
+  closed_at: string | null
+  created_at: string
+}
+
+export interface PollResults {
+  poll: Poll
+  /** option_id → vote count */
+  counts: Record<string, number>
+  totalVotes: number
+  /** The caller's current vote, if any. */
+  ownVote: string | null
+}
 
 export interface Profile {
   id: string

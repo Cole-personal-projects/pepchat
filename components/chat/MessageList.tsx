@@ -307,7 +307,7 @@ export default function MessageList({
       const currentChannelName = channelName?.toLowerCase() ?? ''
       const messageDate = new Date(msg.created_at).toISOString().slice(0, 10)
       const attachmentText = (msg.attachments ?? [])
-        .map(attachment => `${attachment.type} ${attachment.name}`)
+        .map(attachment => `${attachment.type} ${'name' in attachment ? attachment.name : ''}`)
         .join(' ')
         .toLowerCase()
       const replyText = msg.replied_to
