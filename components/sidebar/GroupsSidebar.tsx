@@ -55,8 +55,8 @@ export default function GroupsSidebar({
         role="button"
         tabIndex={0}
         aria-label="Direct Messages"
-        onMouseEnter={() => setHovered('home')}
-        onMouseLeave={() => setHovered(null)}
+        onPointerEnter={(e) => { if (e.pointerType !== 'touch') setHovered('home') }}
+        onPointerLeave={() => setHovered(null)}
         onClick={onDMsHome}
         onKeyDown={(e) => handleKeyboardActivate(e, () => onDMsHome?.())}
         onPointerDown={(e) => { if (e.pointerType === 'touch') { e.preventDefault(); onDMsHome?.() } }}
@@ -101,8 +101,8 @@ export default function GroupsSidebar({
           <div
             key={group.id}
             data-testid={`group-tile-${group.id}`}
-            onMouseEnter={() => setHovered(group.id)}
-            onMouseLeave={() => setHovered(null)}
+            onPointerEnter={(e) => { if (e.pointerType !== 'touch') setHovered(group.id) }}
+            onPointerLeave={() => setHovered(null)}
             style={{
               position: 'relative',
               display: 'flex',
@@ -147,8 +147,8 @@ export default function GroupsSidebar({
         role="button"
         tabIndex={0}
         aria-label="Create Group"
-        onMouseEnter={() => setHovered('create')}
-        onMouseLeave={() => setHovered(null)}
+        onPointerEnter={(e) => { if (e.pointerType !== 'touch') setHovered('create') }}
+        onPointerLeave={() => setHovered(null)}
         onClick={onCreateGroup}
         onKeyDown={(e) => handleKeyboardActivate(e, onCreateGroup)}
         onPointerDown={(e) => { if (e.pointerType === 'touch') { e.preventDefault(); onCreateGroup() } }}
@@ -185,8 +185,8 @@ export default function GroupsSidebar({
         role="button"
         tabIndex={0}
         aria-label="Join Group"
-        onMouseEnter={() => setHovered('join')}
-        onMouseLeave={() => setHovered(null)}
+        onPointerEnter={(e) => { if (e.pointerType !== 'touch') setHovered('join') }}
+        onPointerLeave={() => setHovered(null)}
         onClick={onJoinGroup}
         onKeyDown={(e) => handleKeyboardActivate(e, onJoinGroup)}
         onPointerDown={(e) => { if (e.pointerType === 'touch') { e.preventDefault(); onJoinGroup() } }}

@@ -1,6 +1,13 @@
 import type { Config } from 'tailwindcss'
 
 const config: Config = {
+  future: {
+    // Wrap hover:/group-hover: styles in @media (hover: hover). Touch
+    // devices that emulate hover (iPad) otherwise reveal hover-only
+    // controls on the first tap, and Safari swallows that tap as "hover
+    // intent" — making channel rows take two taps to open.
+    hoverOnlyWhenSupported: true,
+  },
   content: [
     './pages/**/*.{js,ts,jsx,tsx,mdx}',
     './components/**/*.{js,ts,jsx,tsx,mdx}',
@@ -12,17 +19,17 @@ const config: Config = {
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
       colors: {
-        'bg-deepest':   '#14110e',
-        'bg-primary':   '#1a1613',
-        'bg-secondary': '#221d18',
-        'bg-tertiary':  '#2b2520',
-        'bg-elevated':  '#2f2822',
-        'accent':       '#e6543a',
-        'accent-hover': '#ff6b4a',
-        'text-primary': '#f4ebdd',
-        'text-muted':   '#b8a896',
-        'text-faint':   '#8a7b6c',
-        'text-link':    '#e8a273',
+        'bg-deepest':   '#120d0a',
+        'bg-primary':   '#191310',
+        'bg-secondary': '#211a15',
+        'bg-tertiary':  '#2b221b',
+        'bg-elevated':  '#312721',
+        'accent':       '#f25c3d',
+        'accent-hover': '#ff7150',
+        'text-primary': '#f6ede0',
+        'text-muted':   '#bcab98',
+        'text-faint':   '#8f8071',
+        'text-link':    '#f0a878',
         'online':       '#6aa08a',
         'typing':       '#d89a3a',
         // Keep legacy tokens for any components using var()-based Tailwind classes

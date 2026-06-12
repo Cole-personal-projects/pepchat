@@ -150,11 +150,10 @@ const db = {
     messageRow({ id: uuid(), userId: U_ADMIN, content: 'This one has a thread', minutesAgo: 20, replyCount: 2 }),
     messageRow({ id: uuid(), userId: U_MEMBER, content: 'Plain message, no thread', minutesAgo: 10 }),
   ],
+  // Mirrors post-cleanup seeding: @everyone plus genuinely custom roles only
+  // (the tier-mirror Admin/Moderator/Member starter roles are gone).
   roles: [
-    { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', group_id: G1, name: 'group-buy', color: '#eb459e', hoist: true, mentionable: true, position: 4, permissions: '0', is_default: false, created_at: iso(24 * HOUR) },
-    { id: uuid(), group_id: G1, name: 'Admin', color: '#5865f2', hoist: true, mentionable: true, position: 3, permissions: '8', is_default: false, created_at: iso(30 * 24 * HOUR) },
-    { id: uuid(), group_id: G1, name: 'Moderator', color: '#57f287', hoist: true, mentionable: true, position: 2, permissions: '0', is_default: false, created_at: iso(30 * 24 * HOUR) },
-    { id: uuid(), group_id: G1, name: 'Member', color: null, hoist: false, mentionable: false, position: 1, permissions: '0', is_default: false, created_at: iso(30 * 24 * HOUR) },
+    { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', group_id: G1, name: 'group-buy', color: '#eb459e', hoist: true, mentionable: true, position: 1, permissions: '0', is_default: false, created_at: iso(24 * HOUR) },
     { id: uuid(), group_id: G1, name: '@everyone', color: null, hoist: false, mentionable: false, position: 0, permissions: '0', is_default: true, created_at: iso(60 * 24 * HOUR) },
   ],
   member_roles: [],

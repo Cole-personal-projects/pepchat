@@ -156,6 +156,7 @@ export default function MemberRolesSheet({
       {canChangeLegacy && (
         <div data-testid="legacy-role-picker" style={{ display: 'flex', flexDirection: 'column' }}>
           <p style={sectionHeaderStyle}>Membership Level</p>
+          <p style={sectionHintStyle}>What they&apos;re allowed to do in this server.</p>
           {visibleLegacyOptions.map(option => {
             const selected = legacyRole === option.value
             return (
@@ -187,7 +188,8 @@ export default function MemberRolesSheet({
       {/* Custom roles — multi select */}
       {customRoles.length > 0 && (
         <div data-testid={`member-roles-menu-${userId}`} style={{ display: 'flex', flexDirection: 'column' }}>
-          <p style={sectionHeaderStyle}>Roles</p>
+          <p style={sectionHeaderStyle}>Custom Roles</p>
+          <p style={sectionHintStyle}>Tags for @mentions, colors, and flair — they don&apos;t change permissions.</p>
           {customRoles.map(role => {
             const hasRole = memberHasRole(role.id)
             return (
@@ -252,12 +254,18 @@ export default function MemberRolesSheet({
 }
 
 const sectionHeaderStyle: React.CSSProperties = {
-  margin: '6px 20px 4px',
+  margin: '6px 20px 0',
   fontSize: 11,
   fontWeight: 700,
   letterSpacing: '0.06em',
   textTransform: 'uppercase',
   color: 'var(--text-faint)',
+}
+
+const sectionHintStyle: React.CSSProperties = {
+  margin: '2px 20px 4px',
+  fontSize: 12,
+  color: 'var(--text-muted)',
 }
 
 function rowStyle(pending: boolean): React.CSSProperties {

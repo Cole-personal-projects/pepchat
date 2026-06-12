@@ -55,8 +55,10 @@ export default function ReactionPills({ reactions, currentUserId, onToggle }: Re
         <div key={g.emoji} className="relative inline-block">
           <button
             onClick={() => onToggle(g.emoji)}
-            onMouseEnter={() => setTooltip(g.emoji)}
-            onMouseLeave={() => setTooltip(null)}
+            // Hover-only tooltip: on touch the simulated mouseenter would
+            // mutate the DOM and make Safari swallow the tap (iPad double-tap).
+            onPointerEnter={(e) => { if (e.pointerType !== 'touch') setTooltip(g.emoji) }}
+            onPointerLeave={() => setTooltip(null)}
             data-reacted={g.reacted ? 'true' : undefined}
             className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[13px] transition-colors"
             style={g.reacted ? {
