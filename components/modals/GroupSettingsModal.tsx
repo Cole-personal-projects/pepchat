@@ -4,8 +4,9 @@ import { useState, useEffect, useRef, useTransition } from 'react'
 import dynamic from 'next/dynamic'
 import ModalShell from '@/components/ui/ModalShell'
 import GroupIcon from '@/components/ui/GroupIcon'
-import { leaveGroup, deleteGroup, transferOwnership, uploadGroupIcon, removeGroupIcon, updateGroupDetails, regenerateGroupInvite, listGroupInvites, revokeGroupInvite } from '@/app/(app)/groups/actions'
+import { leaveGroup, deleteGroup, transferOwnership, uploadGroupIcon, removeGroupIcon, updateGroupDetails, updateStarboardSettings, regenerateGroupInvite, listGroupInvites, revokeGroupInvite } from '@/app/(app)/groups/actions'
 import { useMembersList } from '@/lib/hooks/useMembersList'
+import { useChannels } from '@/lib/hooks/useChannels'
 import type { Group } from '@/lib/types'
 
 const AvatarCropModal = dynamic(() => import('@/components/profile/AvatarCropModal'), { ssr: false })
@@ -67,6 +68,29 @@ export default function GroupSettingsModal({ open, onClose, group, isOwner, curr
   const [iconError, setIconError] = useState('')
   const [iconSaving, setIconSaving] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // Starboard config (overview pane, owner-editable)
+  const { channels: groupChannels } = useChannels(open ? group.id : null)
+  const starboardChannelOptions = groupChannels.filter(channel => (channel.kind ?? 'text') !== 'voice')
+  const [starboardChannelId, setStarboardChannelId] = useState(group.starboard_channel_id ?? '')
+  const [starboardThreshold, setStarboardThreshold] = useState(group.starboard_threshold ?? 3)
+  const [starboardNotice, setStarboardNotice] = useState('')
+  const [starboardSaving, setStarboardSaving] = useState(false)
+
+  useEffect(() => {
+    setStarboardChannelId(group.starboard_channel_id ?? '')
+    setStarboardThreshold(group.starboard_threshold ?? 3)
+  }, [group.starboard_channel_id, group.starboard_threshold])
+
+  async function handleSaveStarboard() {
+    setError('')
+    setStarboardNotice('')
+    setStarboardSaving(true)
+    const result = await updateStarboardSettings(group.id, starboardChannelId || null, starboardThreshold)
+    if (result && 'error' in result) setError(result.error)
+    else setStarboardNotice(starboardChannelId ? 'Starboard saved.' : 'Starboard turned off.')
+    setStarboardSaving(false)
+  }
 
   const [inviteCode, setInviteCode] = useState(group.invite_code)
   const [inviteOrigin, setInviteOrigin] = useState('')
@@ -408,6 +432,63 @@ export default function GroupSettingsModal({ open, onClose, group, isOwner, curr
                   {iconError && (
                     <p className="text-xs text-[var(--danger)] mt-2">{iconError}</p>
                   )}
+                </div>
+
+                <div data-testid="starboard-settings">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)] mb-1">
+                    Starboard
+                  </p>
+                  <p className="text-xs text-[var(--text-faint)] mb-3">
+                    Messages that collect enough ⭐ reactions get reposted to a highlights channel.
+                  </p>
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div>
+                      <label htmlFor="starboard-channel" className="block text-[10px] font-semibold uppercase tracking-wide text-[var(--text-faint)] mb-1">
+                        Highlights channel
+                      </label>
+                      <select
+                        id="starboard-channel"
+                        data-testid="starboard-channel-select"
+                        value={starboardChannelId}
+                        onChange={e => setStarboardChannelId(e.target.value)}
+                        disabled={!isOwner || starboardSaving}
+                        className="rounded-lg border border-white/10 bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none disabled:opacity-60"
+                      >
+                        <option value="">Off</option>
+                        {starboardChannelOptions.map(channel => (
+                          <option key={channel.id} value={channel.id}>#{channel.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="starboard-threshold" className="block text-[10px] font-semibold uppercase tracking-wide text-[var(--text-faint)] mb-1">
+                        Stars needed
+                      </label>
+                      <input
+                        id="starboard-threshold"
+                        data-testid="starboard-threshold-input"
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={starboardThreshold}
+                        onChange={e => setStarboardThreshold(Number(e.target.value))}
+                        disabled={!isOwner || starboardSaving}
+                        className="w-20 rounded-lg border border-white/10 bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none disabled:opacity-60"
+                      />
+                    </div>
+                    {isOwner && (
+                      <button
+                        type="button"
+                        data-testid="starboard-save"
+                        onClick={handleSaveStarboard}
+                        disabled={starboardSaving}
+                        className="px-3 py-2 text-xs font-semibold rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white transition-colors disabled:opacity-60"
+                      >
+                        {starboardSaving ? 'Saving...' : 'Save starboard'}
+                      </button>
+                    )}
+                  </div>
+                  {starboardNotice && <p className="mt-2 text-xs text-[var(--success)]" data-testid="starboard-notice">{starboardNotice}</p>}
                 </div>
               </div>
             )}

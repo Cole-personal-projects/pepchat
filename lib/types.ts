@@ -57,6 +57,9 @@ export interface Group {
   owner_id: string
   invite_code: string
   created_at: string
+  /** Channel ⭐-boarded messages repost into; null disables the starboard. */
+  starboard_channel_id?: string | null
+  starboard_threshold?: number
 }
 
 export interface GroupMember {
