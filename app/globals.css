@@ -3,27 +3,37 @@
 @tailwind utilities;
 
 :root {
-  --bg-deepest:    #14110e;
-  --bg-primary:    #1a1613;
-  --bg-secondary:  #221d18;
-  --bg-tertiary:   #2b2520;
-  --bg-elevated:   #2f2822;
-  --bg-chat:       #1a1613;
-  --bg-chat-header: #1d1916;
-  --bg-composer:   #221d18;
-  --bg-hover:      rgba(255, 240, 220, 0.04);
-  --channel-active-bg: rgba(255, 240, 220, 0.06);
+  --bg-deepest:    #120d0a;
+  --bg-primary:    #191310;
+  --bg-secondary:  #211a15;
+  --bg-tertiary:   #2b221b;
+  --bg-elevated:   #312721;
+  --bg-chat:       #1a1411;
+  --bg-chat-header: #1d1613;
+  --bg-composer:   #211a15;
+  --bg-hover:      rgba(255, 240, 220, 0.05);
+  --channel-active-bg: rgba(242, 92, 61, 0.13);
 
-  --border-soft:   rgba(255, 240, 220, 0.06);
-  --border-strong: rgba(255, 240, 220, 0.14);
+  /* Layered ambient surfaces — a faint ember wash up top and a warm
+     undertone at the base so large panels don't read as flat slabs. */
+  --bg-chat-surface:
+    radial-gradient(140% 90% at 100% 0%, rgba(242, 92, 61, 0.055) 0%, transparent 52%),
+    radial-gradient(120% 80% at 0% 100%, rgba(150, 92, 60, 0.05) 0%, transparent 55%),
+    linear-gradient(180deg, #1c1512 0%, #181210 100%);
+  --bg-sidebar: linear-gradient(180deg, #251c16 0%, #1e1713 65%, #1a1410 100%);
+  --bg-rail:    linear-gradient(180deg, #17110d 0%, #110c09 100%);
 
-  --text-primary:  #f4ebdd;
-  --text-muted:    #b8a896;
-  --text-faint:    #8a7b6c;
-  --text-link:     #e8a273;
+  --border-soft:   rgba(255, 240, 220, 0.07);
+  --border-strong: rgba(255, 240, 220, 0.15);
 
-  --accent:        #e6543a;
-  --accent-hover:  #ff6b4a;
+  --text-primary:  #f6ede0;
+  --text-muted:    #bcab98;
+  --text-faint:    #8f8071;
+  --text-link:     #f0a878;
+
+  --accent:        #f25c3d;
+  --accent-hover:  #ff7150;
+  --accent-soft:   rgba(242, 92, 61, 0.15);
 
   --danger:        #ed4245;
   --success:       #6aa08a;
@@ -70,7 +80,10 @@
 * { box-sizing: border-box; }
 
 body {
-  background: var(--bg-primary);
+  /* Subtle ember glow keeps bare screens (empty states, auth) from feeling flat. */
+  background:
+    radial-gradient(120% 70% at 80% -10%, rgba(242, 92, 61, 0.06), transparent 55%),
+    var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-inter), system-ui, sans-serif;
   font-size: var(--text-base);
@@ -431,6 +444,26 @@ a, button, [role="button"], .channel-row, .dm-entry {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Channel panel: fixed column on desktop; on mobile the drawer takes
+   (almost) the full screen Discord-style — just a sliver of chat peeks
+   through on the right as the tap-to-close affordance — and the channel
+   panel flexes to fill whatever the rail doesn't use. */
+.channels-sidebar {
+  width: 236px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 767px) {
+  .app-sidebar {
+    width: min(100vw - 48px, 400px);
+  }
+  .channels-sidebar {
+    width: auto;
+    flex: 1;
+    min-width: 0;
+  }
+}
+
 .mention-token {
   color: var(--accent);
   background: var(--accent-soft);
@@ -494,6 +527,13 @@ a, button, [role="button"], .channel-row, .dm-entry {
     font-weight: 700;
     text-align: center;
     text-decoration: none;
+  }
+
+  .mobile-bottom-nav button[aria-current='page'],
+  .mobile-bottom-nav a[aria-current='page'] {
+    border-color: rgba(242, 92, 61, 0.35);
+    background: var(--accent-soft);
+    color: var(--accent);
   }
 }
 /* Admin dashboard nav — desktop sidebar */

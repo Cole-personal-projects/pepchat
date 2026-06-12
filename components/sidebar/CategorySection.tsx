@@ -56,7 +56,7 @@ export default function CategorySection({
           onClick={() => onToggle(categoryId)}
           className="flex min-w-0 flex-1 items-center gap-1 rounded px-1 py-0.5 text-left transition-colors hover:text-[var(--text-primary)]"
           style={{
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 700,
             color: 'var(--text-faint)',
             textTransform: 'uppercase',

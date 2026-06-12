@@ -41,7 +41,7 @@ export default function DMSection({ currentUserId }: DMSectionProps) {
 
       {/* Section header */}
       <div className="flex items-center justify-between px-3 py-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
           Direct Messages
         </span>
         {visibleTotalUnread > 0 && (

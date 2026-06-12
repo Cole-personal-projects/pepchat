@@ -211,7 +211,7 @@ export default function ChannelShell({
       {/* Main column */}
       <div
         className="flex flex-col flex-1 min-w-0 min-h-0"
-        style={{ background: 'var(--bg-chat)' }}
+        style={{ background: 'var(--bg-chat-surface)' }}
       >
         <ChatHeader
           channelName={channelName}

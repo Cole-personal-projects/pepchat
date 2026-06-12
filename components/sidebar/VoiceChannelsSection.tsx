@@ -224,7 +224,7 @@ export default function VoiceChannelsSection({ channels, groupId, canCreateRoom 
     {voiceBar}
     <section aria-label="Voice Channels" className="mt-3 border-t border-[var(--border-soft)] pt-3">
       <div className="flex items-center justify-between px-3 pb-1">
-        <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--text-faint)]">
+        <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--text-faint)]">
           Voice Channels
         </span>
         <span className="text-[10px] text-[var(--text-faint)]" aria-hidden="true">●</span>
@@ -238,7 +238,7 @@ export default function VoiceChannelsSection({ channels, groupId, canCreateRoom 
             aria-label="Create voice room"
             onClick={handleCreateRoom}
             disabled={busy}
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[var(--text-muted)] transition-colors hover:bg-white/5 hover:text-[var(--text-primary)] disabled:cursor-default disabled:opacity-70"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[15px] text-[var(--text-muted)] transition-colors hover:bg-white/5 hover:text-[var(--text-primary)] disabled:cursor-default disabled:opacity-70"
           >
             <span aria-hidden="true" className="text-[var(--text-faint)]">➕</span>
             <span className="min-w-0 flex-1 truncate">{creatingRoom ? 'Creating room…' : 'Create Room'}</span>
@@ -271,7 +271,7 @@ export default function VoiceChannelsSection({ channels, groupId, canCreateRoom 
                   data-testid={`voice-channel-${channel.id}`}
                   onClick={() => handleJoin(channel)}
                   disabled={busy || isLoading || isConnected}
-                  className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors disabled:cursor-default disabled:opacity-70 ${isConnected ? 'bg-[var(--channel-active-bg)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:bg-white/5 hover:text-[var(--text-primary)]'}`}
+                  className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-[15px] transition-colors disabled:cursor-default disabled:opacity-70 ${isConnected ? 'bg-[var(--channel-active-bg)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:bg-white/5 hover:text-[var(--text-primary)]'}`}
                 >
                   <span aria-hidden="true" className="text-[var(--text-faint)]">🔊</span>
                   <span className="min-w-0 flex-1 truncate">{channel.name}</span>

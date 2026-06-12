@@ -102,10 +102,10 @@ const BASE_PROPS = {
 afterEach(() => cleanup())
 
 describe('ChannelsSidebar layout', () => {
-  it('renders at 236px width', () => {
+  it('uses the channels-sidebar layout class (236px desktop, flexes on mobile)', () => {
     const { container } = render(<ChannelsSidebar {...BASE_PROPS} />)
     const sidebar = container.firstElementChild as HTMLElement
-    expect(sidebar).toHaveStyle({ width: '236px' })
+    expect(sidebar).toHaveClass('channels-sidebar')
   })
 
   it('shows group name in header', () => {

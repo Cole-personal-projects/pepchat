@@ -58,7 +58,7 @@ export default function DMEntry({ conversation, isActive }: DMEntryProps) {
       </div>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
-          <span className={`min-w-0 flex-1 text-sm truncate ${hasUnread ? 'font-semibold text-[var(--text-primary)]' : ''}`}>
+          <span className={`min-w-0 flex-1 text-[15px] truncate ${hasUnread ? 'font-semibold text-[var(--text-primary)]' : ''}`}>
             {displayName}
           </span>
           {lastMessageTime && (
