@@ -62,13 +62,19 @@ export const assignRole = withAuth(
       return { error: 'Only the owner can change an admin\'s role.' }
     }
 
-    const { error } = await supabase
+    const { data: updatedRows, error } = await supabase
       .from('group_members')
       .update({ role: newRole })
       .eq('group_id', groupId)
       .eq('user_id', targetUserId)
+      .select('user_id')
 
     if (error) return { error: error.message }
+    // RLS rejections surface as zero matched rows, not errors — without this
+    // check a blocked change reports success while the role stays put.
+    if (!updatedRows || updatedRows.length === 0) {
+      return { error: 'The role change was blocked. No changes were made.' }
+    }
     await logAuditEvent(supabase, user.id, 'member_role_changed', 'user', targetUserId, {
       group_id: groupId,
       from_role: targetMembership.role,

@@ -103,18 +103,25 @@ describe('GroupsSidebar layout', () => {
     expect(onJoinGroup).toHaveBeenCalled()
   })
 
-  it('shows tooltip for group on hover', () => {
+  it('shows tooltip for group on mouse hover', () => {
     render(<GroupsSidebar {...BASE_PROPS} />)
     const tile = screen.getByTestId('group-tile-grp-1')
-    fireEvent.mouseEnter(tile)
+    fireEvent.pointerEnter(tile, { pointerType: 'mouse' })
     expect(screen.getByTestId('tooltip-grp-1')).toHaveTextContent('Alpha')
   })
 
-  it('hides tooltip after mouse leaves', () => {
+  it('does not show tooltip for touch (tap must not mutate the DOM)', () => {
     render(<GroupsSidebar {...BASE_PROPS} />)
     const tile = screen.getByTestId('group-tile-grp-1')
-    fireEvent.mouseEnter(tile)
-    fireEvent.mouseLeave(tile)
+    fireEvent.pointerEnter(tile, { pointerType: 'touch' })
+    expect(screen.queryByTestId('tooltip-grp-1')).not.toBeInTheDocument()
+  })
+
+  it('hides tooltip after pointer leaves', () => {
+    render(<GroupsSidebar {...BASE_PROPS} />)
+    const tile = screen.getByTestId('group-tile-grp-1')
+    fireEvent.pointerEnter(tile, { pointerType: 'mouse' })
+    fireEvent.pointerLeave(tile)
     expect(screen.queryByTestId('tooltip-grp-1')).not.toBeInTheDocument()
   })
 

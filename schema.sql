@@ -245,6 +245,16 @@ set search_path = public as $$
   )
 $$;
 
+-- True if the current user owns a group (the super-admin tier).
+create or replace function public.is_group_owner(gid uuid)
+returns boolean language sql security definer stable
+set search_path = public as $$
+  select exists (
+    select 1 from public.groups
+    where id = gid and owner_id = auth.uid()
+  )
+$$;
+
 -- True if the current user can manage channels (admin or moderator).
 create or replace function public.can_manage_channels(gid uuid)
 returns boolean language sql security definer stable
@@ -547,17 +557,20 @@ create policy "Authenticated users can record their invite usage"
   on public.group_invite_uses for insert to authenticated
   with check (user_id = auth.uid());
 
--- Admins can update roles; cannot change their own role or another admin's role
+-- Role updates: the owner manages everyone (incl. the admin tier); admins
+-- manage non-admins. Nobody updates their own row through this policy.
 create policy "Admins can update member roles"
   on public.group_members for update to authenticated
   using (
-    public.is_group_admin(group_id)
-    and user_id <> auth.uid()
-    and role <> 'admin'
+    user_id <> auth.uid()
+    and (
+      public.is_group_owner(group_id)
+      or (public.is_group_admin(group_id) and role <> 'admin')
+    )
   )
   with check (
-    public.is_group_admin(group_id)
-    and role <> 'admin'
+    public.is_group_owner(group_id)
+    or (public.is_group_admin(group_id) and role <> 'admin')
   );
 
 -- Users can leave; admins can kick non-admins; moderators can kick user/noob

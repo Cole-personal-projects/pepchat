@@ -25,8 +25,14 @@ function makeMutationBuilder(result: QueryResult = {}) {
   builder.update = vi.fn(() => builder)
   builder.delete = vi.fn(() => builder)
   builder.eq = vi.fn(() => builder)
+  builder.select = vi.fn(() => builder)
   builder.then = (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) =>
-    Promise.resolve({ data: result.data ?? null, error: result.error ?? null }).then(resolve, reject)
+    // Updates report the matched rows ([{...}] by default) so actions can
+    // distinguish a real change from an RLS-silenced zero-row update.
+    Promise.resolve({
+      data: result.data !== undefined ? result.data : [{ user_id: 'target' }],
+      error: result.error ?? null,
+    }).then(resolve, reject)
   return builder
 }
 
@@ -188,6 +194,18 @@ describe('member actions — membership guards', () => {
 
     await expect(assignRole('group-1', 'target-admin-1', 'moderator')).resolves.toEqual({ ok: true })
     expect(mutation.update).toHaveBeenCalledWith({ role: 'moderator' })
+  })
+
+  it('reports an error when the update matches zero rows (RLS block)', async () => {
+    const caller = makeSingleBuilder({ data: { role: 'admin' } })
+    const ownerLookup = makeSingleBuilder({ data: { owner_id: 'admin-1' } })
+    const target = makeSingleBuilder({ data: { role: 'admin' } })
+    const mutation = makeMutationBuilder({ data: [] })
+    setupClient([caller, ownerLookup, target, mutation])
+
+    await expect(assignRole('group-1', 'target-admin-1', 'user')).resolves.toEqual({
+      error: 'The role change was blocked. No changes were made.',
+    })
   })
 
   it('updates a member role using group and user filters', async () => {
