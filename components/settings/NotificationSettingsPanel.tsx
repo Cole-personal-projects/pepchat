@@ -11,6 +11,7 @@ import {
 import {
   getNotificationPreferences,
   saveNotificationSubscription,
+  sendTestNotification,
   updateNotificationPreferences,
 } from '@/app/(app)/notifications/actions'
 import type { NotificationPreferences, NotificationPreferenceUpdate } from '@/lib/types'
@@ -37,6 +38,8 @@ export default function NotificationSettingsPanel() {
   const [deliveryCheck, setDeliveryCheck] = useState<DeliveryCheckStatus>('idle')
   const [isPending, startTransition] = useTransition()
   const [savingKey, setSavingKey] = useState<keyof NotificationPreferenceUpdate | null>(null)
+  const [testStatus, setTestStatus] = useState<string>('')
+  const [testSending, setTestSending] = useState(false)
 
   useEffect(() => {
     setStatus(getNotificationStatus())
@@ -120,6 +123,29 @@ export default function NotificationSettingsPanel() {
       setDeliveryCheck('error')
       setError('Could not check push registration on this device.')
     }
+  }
+
+  async function handleSendTest() {
+    setError('')
+    setTestStatus('')
+    setTestSending(true)
+    try {
+      const result = await sendTestNotification()
+      if ('error' in result) {
+        setTestStatus(result.error)
+      } else if (result.delivered) {
+        setTestStatus('Test push handed to your push service — it should appear on this device any second. (Close or background the app if nothing shows; some platforms suppress notifications for the focused tab.)')
+      } else if (result.reason === 'no_subscriptions') {
+        setTestStatus('No registered device found — use "Register this device" first, then try again.')
+      } else if (result.reason === 'not_configured') {
+        setTestStatus('Push delivery is not configured on this deployment (missing VAPID keys).')
+      } else {
+        setTestStatus(`Push delivery failed: ${result.reason ?? 'unknown error'}.`)
+      }
+    } catch {
+      setTestStatus('Could not send a test notification.')
+    }
+    setTestSending(false)
   }
 
   async function handlePreferenceChange(key: keyof NotificationPreferenceUpdate, value: boolean) {
@@ -216,7 +242,21 @@ export default function NotificationSettingsPanel() {
               >
                 {deliveryCheck === 'checking' ? 'Checking...' : 'Check delivery setup'}
               </button>
+              <button
+                type="button"
+                data-testid="send-test-notification"
+                onClick={handleSendTest}
+                disabled={testSending}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium border border-white/10 text-[var(--text-primary)] hover:bg-white/5 disabled:opacity-40 disabled:cursor-default transition-colors"
+              >
+                {testSending ? 'Sending...' : 'Send test notification'}
+              </button>
             </div>
+          )}
+          {testStatus && (
+            <p className="text-xs text-[var(--text-faint)]" data-testid="test-notification-status">
+              {testStatus}
+            </p>
           )}
           {deliveryCheck !== 'idle' && (
             <p className="text-xs text-[var(--text-faint)]" data-testid="notification-delivery-check">
