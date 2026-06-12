@@ -9,6 +9,7 @@ import {
   type NotificationStatus,
 } from '@/lib/notifications'
 import {
+  deleteNotificationSubscription,
   getNotificationPreferences,
   saveNotificationSubscription,
   sendTestNotification,
@@ -16,8 +17,7 @@ import {
 } from '@/app/(app)/notifications/actions'
 import type { NotificationPreferences, NotificationPreferenceUpdate } from '@/lib/types'
 
-type DeviceStatus = 'idle' | 'saving' | 'saved' | 'unconfigured' | 'error'
-type DeliveryCheckStatus = 'idle' | 'checking' | 'ok' | 'missing' | 'error'
+type DeviceStatus = 'idle' | 'saving' | 'saved' | 'disabled' | 'unconfigured' | 'error'
 
 function statusCopy(status: NotificationStatus | null) {
   if (!status) return 'Checking this device...'
@@ -35,7 +35,7 @@ export default function NotificationSettingsPanel() {
   const [preferencesUnavailable, setPreferencesUnavailable] = useState('')
   const [error, setError] = useState('')
   const [deviceStatus, setDeviceStatus] = useState<DeviceStatus>('idle')
-  const [deliveryCheck, setDeliveryCheck] = useState<DeliveryCheckStatus>('idle')
+  const [deviceRegistered, setDeviceRegistered] = useState<boolean | null>(null)
   const [isPending, startTransition] = useTransition()
   const [savingKey, setSavingKey] = useState<keyof NotificationPreferenceUpdate | null>(null)
   const [testStatus, setTestStatus] = useState<string>('')
@@ -44,6 +44,23 @@ export default function NotificationSettingsPanel() {
   useEffect(() => {
     setStatus(getNotificationStatus())
   }, [])
+
+  // Detect an existing registration so the device button renders as the
+  // truthful toggle state without a manual "check" step.
+  useEffect(() => {
+    if (status?.permission !== 'granted' || !status.pushSupported) return
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return
+    let ignore = false
+    navigator.serviceWorker.getRegistration('/sw.js')
+      .then(registration => registration?.pushManager.getSubscription())
+      .then(subscription => {
+        if (!ignore) setDeviceRegistered(Boolean(subscription))
+      })
+      .catch(() => {
+        if (!ignore) setDeviceRegistered(null)
+      })
+    return () => { ignore = true }
+  }, [status?.permission, status?.pushSupported])
 
   useEffect(() => {
     if (status?.permission !== 'granted') return
@@ -104,24 +121,35 @@ export default function NotificationSettingsPanel() {
     }
 
     setDeviceStatus('saved')
-    setDeliveryCheck('ok')
+    setDeviceRegistered(true)
   }
 
-  async function checkPushReliability() {
+  /**
+   * Browser permission cannot be revoked from page script, but the device's
+   * push registration can: drop the browser subscription and delete the
+   * stored endpoint so this device stops receiving pushes.
+   */
+  async function disableOnThisDevice() {
     setError('')
-    setDeliveryCheck('checking')
+    setDeviceStatus('saving')
     try {
-      if (!status?.pushSupported || !isPushConfigured()) {
-        setDeliveryCheck('missing')
-        return
-      }
-
-      const registration = await navigator.serviceWorker.getRegistration('/sw.js')
+      const registration = await navigator.serviceWorker?.getRegistration('/sw.js')
       const subscription = await registration?.pushManager.getSubscription()
-      setDeliveryCheck(subscription ? 'ok' : 'missing')
+      if (subscription) {
+        const endpoint = subscription.endpoint
+        await subscription.unsubscribe()
+        const result = await deleteNotificationSubscription(endpoint)
+        if ('error' in result) {
+          setDeviceStatus('error')
+          setError(result.error)
+          return
+        }
+      }
+      setDeviceRegistered(false)
+      setDeviceStatus('disabled')
     } catch {
-      setDeliveryCheck('error')
-      setError('Could not check push registration on this device.')
+      setDeviceStatus('error')
+      setError('Could not disable push on this device.')
     }
   }
 
@@ -219,29 +247,38 @@ export default function NotificationSettingsPanel() {
       {status?.permission === 'granted' && status.pushSupported && (
         <div className="rounded-lg border border-white/10 p-3 space-y-2">
           <p className="text-xs text-[var(--text-muted)]" data-testid="notification-subscription-status">
-            {deviceStatus === 'saved' && 'This device is registered for push notifications.'}
-            {deviceStatus === 'saving' && 'Registering this device...'}
+            {deviceStatus === 'saving' && 'Updating this device...'}
             {deviceStatus === 'unconfigured' && 'Push subscription is not configured for this deployment.'}
-            {(deviceStatus === 'idle' || deviceStatus === 'error') && 'Register this device to receive browser push notifications when delivery is available.'}
+            {deviceStatus === 'disabled' && 'Push is off on this device. Re-register any time.'}
+            {deviceStatus !== 'saving' && deviceStatus !== 'unconfigured' && deviceStatus !== 'disabled' && (
+              deviceRegistered
+                ? 'This device is registered for push notifications.'
+                : 'Register this device to receive push notifications when the app is closed.'
+            )}
           </p>
           {isPushConfigured() && (
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={syncPushSubscription}
-                disabled={deviceStatus === 'saving'}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium border border-white/10 text-[var(--text-primary)] hover:bg-white/5 disabled:opacity-40 disabled:cursor-default transition-colors"
-              >
-                {deviceStatus === 'saving' ? 'Registering...' : 'Register this device'}
-              </button>
-              <button
-                type="button"
-                onClick={checkPushReliability}
-                disabled={deliveryCheck === 'checking'}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium border border-white/10 text-[var(--text-primary)] hover:bg-white/5 disabled:opacity-40 disabled:cursor-default transition-colors"
-              >
-                {deliveryCheck === 'checking' ? 'Checking...' : 'Check delivery setup'}
-              </button>
+              {deviceRegistered ? (
+                <button
+                  type="button"
+                  data-testid="disable-device-push"
+                  onClick={disableOnThisDevice}
+                  disabled={deviceStatus === 'saving'}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-[var(--danger)]/40 text-[var(--danger)] hover:bg-[var(--danger)]/10 disabled:opacity-40 disabled:cursor-default transition-colors"
+                >
+                  {deviceStatus === 'saving' ? 'Disabling...' : 'Disable on this device'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  data-testid="register-device-push"
+                  onClick={syncPushSubscription}
+                  disabled={deviceStatus === 'saving'}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-white/10 text-[var(--text-primary)] hover:bg-white/5 disabled:opacity-40 disabled:cursor-default transition-colors"
+                >
+                  {deviceStatus === 'saving' ? 'Registering...' : 'Register this device'}
+                </button>
+              )}
               <button
                 type="button"
                 data-testid="send-test-notification"
@@ -258,14 +295,6 @@ export default function NotificationSettingsPanel() {
               {testStatus}
             </p>
           )}
-          {deliveryCheck !== 'idle' && (
-            <p className="text-xs text-[var(--text-faint)]" data-testid="notification-delivery-check">
-              {deliveryCheck === 'ok' && 'Push registration is present on this device.'}
-              {deliveryCheck === 'missing' && 'No active push registration was found for this device.'}
-              {deliveryCheck === 'error' && 'Delivery setup check failed.'}
-              {deliveryCheck === 'checking' && 'Checking browser push registration...'}
-            </p>
-          )}
         </div>
       )}
 
@@ -275,14 +304,19 @@ export default function NotificationSettingsPanel() {
         </p>
       )}
 
-      <button
-        type="button"
-        onClick={handleEnable}
-        disabled={!status?.canRequest || isPending}
-        className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[var(--accent)] hover:bg-[var(--accent)]/90 disabled:opacity-40 disabled:cursor-default transition-colors"
-      >
-        {isPending ? 'Enabling...' : 'Enable notifications'}
-      </button>
+      {/* Permission request only makes sense before it's granted — once
+          granted it can't be revoked from page script, so the device
+          toggle above is the on/off control. */}
+      {status?.permission !== 'granted' && (
+        <button
+          type="button"
+          onClick={handleEnable}
+          disabled={!status?.canRequest || isPending}
+          className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[var(--accent)] hover:bg-[var(--accent)]/90 disabled:opacity-40 disabled:cursor-default transition-colors"
+        >
+          {isPending ? 'Enabling...' : 'Enable notifications'}
+        </button>
+      )}
     </section>
   )
 }
