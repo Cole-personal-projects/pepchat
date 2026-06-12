@@ -1,6 +1,7 @@
 'use client'
 
 import MembersPanel from '@/components/sidebar/MembersPanel'
+import { useHorizontalSwipe } from '@/lib/hooks/useHorizontalSwipe'
 import type { Role } from '@/lib/permissions'
 
 interface MembersSheetProps {
@@ -27,6 +28,10 @@ export default function MembersSheet({
   currentUserRole,
   ownerId = null,
 }: MembersSheetProps) {
+  // Swiping the sheet toward the right edge dismisses it, mirroring the
+  // swipe-left-on-chat gesture that opens it.
+  const sheetSwipeRef = useHorizontalSwipe({ onSwipeRight: onClose, enabled: open })
+
   return (
     <>
       {open && (
@@ -47,6 +52,7 @@ export default function MembersSheet({
           ${open ? 'translate-x-0' : 'translate-x-full pointer-events-none'}
           md:hidden
         `}
+        ref={sheetSwipeRef}
       >
         {/* Header */}
         <div className="flex h-14 flex-shrink-0 items-center justify-between border-b border-[var(--border-soft)] px-4">

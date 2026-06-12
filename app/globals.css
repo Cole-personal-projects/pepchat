@@ -79,6 +79,12 @@
 /* ── Global resets ───────────────────────────────────────── */
 * { box-sizing: border-box; }
 
+/* Horizontal swipes are app navigation (drawer / members sheet) — they
+   must never trigger the browser's swipe-back history gesture. */
+html, body {
+  overscroll-behavior-x: none;
+}
+
 body {
   /* Subtle ember glow keeps bare screens (empty states, auth) from feeling flat. */
   background:
@@ -431,6 +437,9 @@ a, button, [role="button"], .channel-row, .dm-entry {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+  /* The panels own horizontal touch gestures (swipe-to-dismiss); only
+     vertical panning and pinch belong to the browser here. */
+  touch-action: pan-y pinch-zoom;
 }
 
 .app-sidebar input,
