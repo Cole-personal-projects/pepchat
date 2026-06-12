@@ -31,6 +31,15 @@ export const toggleReaction = withAuth(
         .from('message_reactions')
         .insert({ message_id: messageId, user_id: user.id, emoji })
       if (error) return { error: error.message }
+
+      // Starboard check rides the add path; it must never block the reaction.
+      try {
+        const { maybeStarboardMessage } = await import('@/lib/starboard')
+        await maybeStarboardMessage(supabase, messageId, user.id, emoji)
+      } catch {
+        // Best-effort only.
+      }
+
       return { ok: true, action: 'added' }
     }
   },

@@ -11,7 +11,8 @@ const EmojiPickerPopover = dynamic(
   { ssr: false }
 )
 
-const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '💯', '➕']
+// ⭐ stays in the quick row: it feeds the starboard.
+const QUICK_EMOJIS = ['👍', '❤️', '😂', '⭐', '😮', '🔥', '💯', '➕']
 
 export interface MessageContextMenuProps {
   message: MessageWithProfile

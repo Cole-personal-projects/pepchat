@@ -125,6 +125,57 @@ export const updateGroupDetails = withAuth(
 )
 
 /**
+ * Configures the starboard: which channel ⭐-boarded messages repost into
+ * (null disables) and how many stars it takes. Owner-only via groups RLS.
+ */
+export const updateStarboardSettings = withAuth(
+  async (
+    { supabase, user },
+    groupId: string,
+    starboardChannelId: string | null,
+    threshold: number,
+  ): Promise<{ error: string } | { ok: true }> => {
+    const gateResult = await gateGroupRole(supabase, { groupId, userId: user.id, predicate: PERMISSIONS.canManageGroup, deniedMessage: 'Only group admins can update the starboard.' })
+    if ('error' in gateResult) return { error: gateResult.error }
+
+    const bounded = Math.trunc(threshold)
+    if (!Number.isFinite(bounded) || bounded < 1 || bounded > 50) {
+      return { error: 'Star threshold must be between 1 and 50.' }
+    }
+
+    if (starboardChannelId) {
+      const { data: channel } = await supabase
+        .from('channels')
+        .select('id, group_id, kind')
+        .eq('id', starboardChannelId)
+        .maybeSingle()
+      const row = channel as { id: string; group_id: string; kind: string | null } | null
+      if (!row || row.group_id !== groupId) return { error: 'Pick a channel in this group.' }
+      if (row.kind === 'voice') return { error: 'The starboard channel must be a text channel.' }
+    }
+
+    const { data: updated, error } = await supabase
+      .from('groups')
+      .update({ starboard_channel_id: starboardChannelId, starboard_threshold: bounded })
+      .eq('id', groupId)
+      .eq('owner_id', user.id)
+      .select('id')
+
+    if (error) return { error: error.message }
+    if (!updated || updated.length === 0) {
+      return { error: 'Only the group owner can change starboard settings.' }
+    }
+
+    await logAuditEvent(supabase, user.id, 'group_starboard_updated', 'group', groupId, {
+      starboard_channel_id: starboardChannelId,
+      starboard_threshold: bounded,
+    })
+    return { ok: true }
+  },
+  { unauthenticated: () => ({ error: 'Not authenticated.' }) },
+)
+
+/**
  * Rotates a group's invite code. Group admins only.
  */
 export const regenerateGroupInvite = withAuth(
