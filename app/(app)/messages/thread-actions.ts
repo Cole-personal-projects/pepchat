@@ -166,6 +166,9 @@ export const sendThreadReply = withAuth(
         await enqueueMentionNotifications(ctx.supabase, payload)
         await enqueueRoleMentionNotifications(ctx.supabase, payload)
       })
+      await import('@/lib/push/delivery').then(({ deliverPushForSources }) =>
+        deliverPushForSources([result.data.message.id]),
+      )
     } catch {
       // Mention notification fanout should never block the core thread reply path.
     }

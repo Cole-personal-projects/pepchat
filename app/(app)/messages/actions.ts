@@ -48,26 +48,9 @@ export const sendMessage = withAuth(
         return message as MessageWithProfile
       }, {
         onFailure: 'silent',
-        notifications: [{
-          type: 'mention',
-          payload: {
-            senderId: ctx.user.id,
-            senderName: '', // filled in afterCommit
-            messageId: '',
-            channelId,
-            content: trimmed,
-          },
-        }],
-        afterCommit(message) {
-          // Patch notification payload with actual message id and resolved name
-          const name = message.profiles.display_name ?? message.profiles.username
-          return (async () => {
-            // Update the notification payload in-place isn't feasible here since
-            // afterCommit runs after side-effects. So we dispatch directly.
-            // The notification was sent with empty senderName/messageId — we'll
-            // use the direct enqueue approach instead.
-          })()
-        },
+        // Mention fanout happens in the manual block below once the message id
+        // and sender name are resolved — a draft here would dispatch with
+        // empty values (its insert fails the uuid cast and goes nowhere).
       })
     } catch (err) {
       return { error: err instanceof Error ? err.message : 'Failed to send message.' }
@@ -87,6 +70,11 @@ export const sendMessage = withAuth(
         await enqueueMentionNotifications(ctx.supabase, payload)
         await enqueueRoleMentionNotifications(ctx.supabase, payload)
       })
+      // Web push rides the same fire-and-forget block: deliver whatever the
+      // enqueue pass just created for this message.
+      await import('@/lib/push/delivery').then(({ deliverPushForSources }) =>
+        deliverPushForSources([result.data.id]),
+      )
     } catch {
       // Notification fanout should never block the core message send path.
     }
