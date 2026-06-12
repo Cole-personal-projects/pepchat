@@ -18,6 +18,9 @@ const {
 }))
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: mockCreateClient }))
+vi.mock('next/headers', () => ({
+  headers: vi.fn().mockResolvedValue({ get: (key: string) => (key === 'origin' ? 'https://sidebar.test' : null) }),
+}))
 vi.mock('@/lib/invites/lookupClient', () => ({ inviteLookupClient: mockInviteLookupClient }))
 vi.mock('@/lib/invites/accountClaims', () => ({
   userHasPendingAccountInviteClaim: mockHasPendingClaim,
@@ -178,5 +181,86 @@ describe('auth actions — invite-only gate', () => {
     setupClient([makeSelectBuilder({ data: null })])
 
     await expect(setupProfile(profileForm('alice'))).rejects.toThrow('redirect:/groups/group-1')
+  })
+})
+
+describe('password reset actions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  function resetForm(email: string) {
+    const form = new FormData()
+    form.set('email', email)
+    return form
+  }
+
+  function passwordForm(password: string, confirm: string) {
+    const form = new FormData()
+    form.set('password', password)
+    form.set('confirm', confirm)
+    return form
+  }
+
+  it('requestPasswordReset sends a recovery email pointing at the reset page', async () => {
+    const resetPasswordForEmail = vi.fn().mockResolvedValue({ error: null })
+    mockCreateClient.mockResolvedValue({ auth: { resetPasswordForEmail } } as never)
+
+    const { requestPasswordReset } = await import('@/app/(auth)/actions')
+    await expect(requestPasswordReset(resetForm('cole@example.com'))).resolves.toEqual({ ok: true })
+
+    const [email, options] = resetPasswordForEmail.mock.calls[0]
+    expect(email).toBe('cole@example.com')
+    expect(options.redirectTo).toContain('/auth/confirm?next=%2Freset-password')
+  })
+
+  it('requestPasswordReset gives the same answer for unknown emails (no enumeration)', async () => {
+    const resetPasswordForEmail = vi.fn().mockResolvedValue({ error: { message: 'user not found' } })
+    mockCreateClient.mockResolvedValue({ auth: { resetPasswordForEmail } } as never)
+
+    const { requestPasswordReset } = await import('@/app/(auth)/actions')
+    await expect(requestPasswordReset(resetForm('nobody@example.com'))).resolves.toEqual({ ok: true })
+  })
+
+  it('requestPasswordReset rejects malformed emails', async () => {
+    const { requestPasswordReset } = await import('@/app/(auth)/actions')
+    await expect(requestPasswordReset(resetForm('not-an-email'))).resolves.toEqual({
+      error: 'Enter the email you signed up with.',
+    })
+  })
+
+  it('updatePassword enforces length and match', async () => {
+    const { updatePassword } = await import('@/app/(auth)/actions')
+    await expect(updatePassword(passwordForm('short', 'short'))).resolves.toEqual({
+      error: 'Password must be at least 8 characters.',
+    })
+    await expect(updatePassword(passwordForm('longenough1', 'different1'))).resolves.toEqual({
+      error: 'Passwords do not match.',
+    })
+  })
+
+  it('updatePassword rejects expired recovery sessions', async () => {
+    mockCreateClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
+    } as never)
+
+    const { updatePassword } = await import('@/app/(auth)/actions')
+    await expect(updatePassword(passwordForm('longenough1', 'longenough1'))).resolves.toEqual({
+      error: 'This reset link has expired. Request a new one from the login page.',
+    })
+  })
+
+  it('updatePassword saves and enters the app', async () => {
+    const updateUser = vi.fn().mockResolvedValue({ error: null })
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }),
+        updateUser,
+      },
+    } as never)
+
+    const { updatePassword } = await import('@/app/(auth)/actions')
+    await expect(updatePassword(passwordForm('longenough1', 'longenough1'))).rejects.toThrow('redirect:/channels')
+    expect(updateUser).toHaveBeenCalledWith({ password: 'longenough1' })
   })
 })

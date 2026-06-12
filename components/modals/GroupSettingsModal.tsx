@@ -186,9 +186,26 @@ export default function GroupSettingsModal({ open, onClose, group, isOwner, curr
   }
 
   async function handleCopy() {
-    await navigator.clipboard.writeText(inviteLink)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    try {
+      await navigator.clipboard.writeText(inviteLink)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setError('Could not copy — long-press the link to copy it manually.')
+    }
+  }
+
+  /** Native share sheet where available (mobile); falls back to copy. */
+  async function handleShare() {
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({ title: `Join ${group.name} on SideBar`, url: inviteLink })
+      } catch {
+        // User dismissed the sheet — not an error.
+      }
+      return
+    }
+    await handleCopy()
   }
 
   function handleRegenerateInvite() {
@@ -510,6 +527,14 @@ export default function GroupSettingsModal({ open, onClose, group, isOwner, curr
                       className="px-3 py-2 text-xs font-semibold rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white transition-colors whitespace-nowrap"
                     >
                       {copied ? 'Copied!' : 'Copy'}
+                    </button>
+                    <button
+                      onClick={handleShare}
+                      data-testid="invite-share-btn"
+                      title="Share invite link"
+                      className="px-3 py-2 text-xs font-semibold rounded-lg border border-white/10 text-[var(--text-primary)] hover:bg-white/5 transition-colors whitespace-nowrap"
+                    >
+                      Share
                     </button>
                   </div>
                   <p className="text-xs text-[var(--text-muted)] mt-2">

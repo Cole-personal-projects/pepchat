@@ -96,3 +96,34 @@ describe('/auth/confirm invite gating', () => {
     expect(response.headers.get('location')).toBe('https://sidebar.test/login?error=invalid_link')
   })
 })
+
+describe('/auth/confirm recovery links', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockHasPendingClaim.mockResolvedValue(false)
+  })
+
+  it('routes recovery verifications to the set-new-password page', async () => {
+    setupSupabase({ profile: { id: 'user-1' } })
+
+    const response = await GET(makeRequest('/auth/confirm?token_hash=hash&type=recovery&next=/channels'))
+
+    expect(response.headers.get('location')).toBe('https://sidebar.test/reset-password')
+  })
+
+  it('routes recovery to reset-password even with an unsafe next', async () => {
+    setupSupabase({ profile: { id: 'user-1' } })
+
+    const response = await GET(makeRequest('/auth/confirm?token_hash=hash&type=recovery&next=https://evil.example'))
+
+    expect(response.headers.get('location')).toBe('https://sidebar.test/reset-password')
+  })
+
+  it('failed recovery verifications land on the login error', async () => {
+    setupSupabase({ verifyError: { message: 'expired' } })
+
+    const response = await GET(makeRequest('/auth/confirm?token_hash=hash&type=recovery'))
+
+    expect(response.headers.get('location')).toBe('https://sidebar.test/login?error=invalid_link')
+  })
+})
