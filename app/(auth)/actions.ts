@@ -157,3 +157,55 @@ export async function logout(): Promise<never> {
   await supabase.auth.signOut()
   redirect('/login')
 }
+
+/**
+ * Sends a password-recovery email. The reply is intentionally identical
+ * whether or not the address has an account — no email enumeration.
+ */
+export async function requestPasswordReset(
+  formData: FormData
+): Promise<{ ok: true } | { error: string }> {
+  const email = (formData.get('email') as string | null)?.trim() ?? ''
+  if (!email || !email.includes('@')) return { error: 'Enter the email you signed up with.' }
+
+  const { headers } = await import('next/headers')
+  const origin = (await headers()).get('origin') ?? ''
+
+  const supabase = await createClient()
+  // redirectTo covers {{ .RedirectTo }}-style email templates; token_hash
+  // templates land on /auth/confirm, which routes recovery to /reset-password.
+  await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${origin}/auth/confirm?next=${encodeURIComponent('/reset-password')}`,
+  })
+
+  // Errors (rate limits aside) are not surfaced: same response either way.
+  return { ok: true }
+}
+
+/**
+ * Sets a new password for the recovery-authenticated user, then sends
+ * them into the app.
+ */
+export async function updatePassword(
+  formData: FormData
+): Promise<{ error: string } | never> {
+  const password = (formData.get('password') as string | null) ?? ''
+  const confirm = (formData.get('confirm') as string | null) ?? ''
+
+  if (password.length < 8) return { error: 'Password must be at least 8 characters.' }
+  if (password !== confirm) return { error: 'Passwords do not match.' }
+
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: 'This reset link has expired. Request a new one from the login page.' }
+  }
+
+  const { error } = await supabase.auth.updateUser({ password })
+  if (error) return { error: error.message }
+
+  redirect('/channels')
+}

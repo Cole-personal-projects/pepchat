@@ -196,7 +196,12 @@ export async function resetPassword(userId: string, targetUsername: string): Pro
   if (!email) return { error: 'No email address found for this user.' }
 
   const supabase = await createClient()
-  const { error } = await supabase.auth.resetPasswordForEmail(email)
+  const { headers } = await import('next/headers')
+  const origin = (await headers()).get('origin') ?? ''
+  // Recovery links must land on the set-new-password page, not the app.
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${origin}/auth/confirm?next=${encodeURIComponent('/reset-password')}`,
+  })
   if (error) return { error: error.message }
 
   await logAudit(adminId, 'reset_password', 'user', userId, { target_username: targetUsername })

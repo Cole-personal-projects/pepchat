@@ -27,6 +27,12 @@ export async function GET(request: NextRequest) {
 
       if (!user) return NextResponse.redirect(`${origin}/login?error=invalid_link`)
 
+      // Recovery links exist to change the password — never dump the user
+      // into the app silently with their old password still in place.
+      if (type === 'recovery') {
+        return NextResponse.redirect(`${origin}/reset-password`)
+      }
+
       const { data: profile } = await supabase
         .from('profiles')
         .select('id')
