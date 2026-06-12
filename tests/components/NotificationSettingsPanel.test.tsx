@@ -12,6 +12,8 @@ const mockEnsurePushSubscription = vi.fn()
 const mockGetNotificationPreferences = vi.fn()
 const mockUpdateNotificationPreferences = vi.fn()
 const mockSaveNotificationSubscription = vi.fn()
+const mockDeleteNotificationSubscription = vi.fn()
+const mockSendTestNotification = vi.fn()
 
 vi.mock('@/lib/notifications', () => ({
   ensurePushSubscription: () => mockEnsurePushSubscription(),
@@ -21,8 +23,10 @@ vi.mock('@/lib/notifications', () => ({
 }))
 
 vi.mock('@/app/(app)/notifications/actions', () => ({
+  deleteNotificationSubscription: (endpoint: unknown) => mockDeleteNotificationSubscription(endpoint),
   getNotificationPreferences: () => mockGetNotificationPreferences(),
   saveNotificationSubscription: (subscription: unknown) => mockSaveNotificationSubscription(subscription),
+  sendTestNotification: () => mockSendTestNotification(),
   updateNotificationPreferences: (update: unknown) => mockUpdateNotificationPreferences(update),
 }))
 
@@ -76,7 +80,22 @@ describe('NotificationSettingsPanel', () => {
     mockGetNotificationPreferences.mockResolvedValue({ ok: true, preferences: PREFERENCES })
     mockUpdateNotificationPreferences.mockResolvedValue({ ok: true, preferences: PREFERENCES })
     mockSaveNotificationSubscription.mockResolvedValue({ ok: true })
+    mockDeleteNotificationSubscription.mockReset()
+    mockDeleteNotificationSubscription.mockResolvedValue({ ok: true })
+    mockSendTestNotification.mockReset()
+    delete (navigator as { serviceWorker?: unknown }).serviceWorker
   })
+
+  function mockServiceWorker(subscription: { endpoint: string; unsubscribe: ReturnType<typeof vi.fn> } | null) {
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: {
+        getRegistration: vi.fn().mockResolvedValue({
+          pushManager: { getSubscription: vi.fn().mockResolvedValue(subscription) },
+        }),
+      },
+    })
+  }
 
   it('shows available notification status and enables the request action', async () => {
     render(<NotificationSettingsPanel />)
@@ -225,5 +244,50 @@ describe('NotificationSettingsPanel', () => {
     await user.click(await screen.findByRole('checkbox', { name: /mentions/i }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Save failed')
+  })
+
+  it('hides the enable button once permission is granted', async () => {
+    mockGetNotificationStatus.mockReturnValue(ENABLED_STATUS)
+
+    render(<NotificationSettingsPanel />)
+
+    await screen.findByTestId('notification-subscription-status')
+    expect(screen.queryByRole('button', { name: /enable notifications/i })).not.toBeInTheDocument()
+  })
+
+  it('renders the device toggle as Disable when a registration exists', async () => {
+    mockGetNotificationStatus.mockReturnValue(ENABLED_STATUS)
+    mockServiceWorker({ endpoint: 'https://push.example/device-1', unsubscribe: vi.fn().mockResolvedValue(true) })
+
+    render(<NotificationSettingsPanel />)
+
+    expect(await screen.findByTestId('disable-device-push')).toHaveTextContent('Disable on this device')
+    expect(screen.getByTestId('notification-subscription-status')).toHaveTextContent(
+      'This device is registered for push notifications.'
+    )
+  })
+
+  it('disables push on this device: unsubscribes, deletes the endpoint, flips the toggle', async () => {
+    const user = userEvent.setup()
+    const unsubscribe = vi.fn().mockResolvedValue(true)
+    mockGetNotificationStatus.mockReturnValue(ENABLED_STATUS)
+    mockServiceWorker({ endpoint: 'https://push.example/device-1', unsubscribe })
+
+    render(<NotificationSettingsPanel />)
+    await user.click(await screen.findByTestId('disable-device-push'))
+
+    await waitFor(() => expect(unsubscribe).toHaveBeenCalled())
+    expect(mockDeleteNotificationSubscription).toHaveBeenCalledWith('https://push.example/device-1')
+    expect(await screen.findByTestId('register-device-push')).toHaveTextContent('Register this device')
+    expect(screen.getByTestId('notification-subscription-status')).toHaveTextContent('Push is off on this device.')
+  })
+
+  it('renders the device toggle as Register when no registration exists', async () => {
+    mockGetNotificationStatus.mockReturnValue(ENABLED_STATUS)
+    mockServiceWorker(null)
+
+    render(<NotificationSettingsPanel />)
+
+    expect(await screen.findByTestId('register-device-push')).toHaveTextContent('Register this device')
   })
 })
