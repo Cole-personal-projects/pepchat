@@ -278,6 +278,7 @@ export default function ChannelShell({
         )}
         <TypingIndicator typingUsernames={typingUsernames} />
         <MessageInput
+          allowPolls
           channelId={channelId}
           groupId={groupId}
           channelName={channelName}

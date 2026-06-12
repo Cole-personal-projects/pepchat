@@ -3,23 +3,27 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import dynamic from 'next/dynamic'
-import type { Attachment, ImageAttachment, GifAttachment, VideoAttachment } from '@/lib/types'
+import type { Attachment, ImageAttachment, GifAttachment, VideoAttachment, PollAttachment } from '@/lib/types'
 
 const Lightbox = dynamic(() => import('./Lightbox'), { ssr: false })
+const PollCard = dynamic(() => import('./PollCard'), { ssr: false })
 
 interface MessageAttachmentsProps {
   attachments: Attachment[]
+  /** Needed by poll attachments for the creator-only close control. */
+  currentUserId?: string
 }
 
-export default function MessageAttachments({ attachments }: MessageAttachmentsProps) {
+export default function MessageAttachments({ attachments, currentUserId }: MessageAttachmentsProps) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [gifLightboxIndex, setGifLightboxIndex] = useState<number | null>(null)
 
   const images = (attachments ?? []).filter((a): a is ImageAttachment => a.type === 'image')
   const gifs = (attachments ?? []).filter((a): a is GifAttachment => a.type === 'gif')
   const videos = (attachments ?? []).filter((a): a is VideoAttachment => a.type === 'video')
+  const polls = (attachments ?? []).filter((a): a is PollAttachment => a.type === 'poll')
 
-  if (images.length === 0 && gifs.length === 0 && videos.length === 0) return null
+  if (images.length === 0 && gifs.length === 0 && videos.length === 0 && polls.length === 0) return null
 
   return (
     <div className="mt-1.5">
@@ -134,6 +138,10 @@ export default function MessageAttachments({ attachments }: MessageAttachmentsPr
           onClose={() => setGifLightboxIndex(null)}
         />
       )}
+
+      {polls.map(poll => (
+        <PollCard key={poll.poll_id} pollId={poll.poll_id} currentUserId={currentUserId ?? ''} />
+      ))}
 
       {videos.map((video, i) => (
         <div key={i} className={images.length > 0 || gifs.length > 0 ? 'mt-2' : ''}>

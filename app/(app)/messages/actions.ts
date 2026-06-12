@@ -134,7 +134,7 @@ export const searchMessages = withAuth(
       const author = `${message.profiles?.display_name ?? ''} ${message.profiles?.username ?? ''}`.toLowerCase()
       const channel = message.channels?.name?.toLowerCase() ?? ''
       const attachments = (message.attachments ?? [])
-        .map(attachment => `${attachment.type} ${attachment.name}`)
+        .map(attachment => `${attachment.type} ${'name' in attachment ? attachment.name : ''}`)
         .join(' ')
         .toLowerCase()
       const replyText = message.replied_to
