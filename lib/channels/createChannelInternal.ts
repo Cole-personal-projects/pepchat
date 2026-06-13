@@ -1,5 +1,4 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { createAdminClient } from '@/lib/supabase/admin'
 
 export const CHANNEL_MANAGE_DENIED = 'You do not have permission to manage channels.'
 
@@ -89,50 +88,51 @@ export async function validateChannelInput(
   }
 }
 
+type ChannelRow = {
+  id: string
+  group_id: string
+  name: string
+  description: string | null
+  noob_access: boolean
+  position: number
+}
+
 export async function createChannelInternal(
-  supabase: Pick<SupabaseClient, 'from'>,
+  supabase: Pick<SupabaseClient, 'rpc' | 'from'>,
   input: ChannelInput,
 ): Promise<CreateChannelInternalResult> {
+  // App-side validation (friendly errors). The create_channel function
+  // re-validates and re-authorizes server-side, so this is for UX only.
   const validation = await validateChannelInput(supabase, input)
   if ('error' in validation) return validation
   const { groupId, name, description, noobAccess, kind, categoryId } = validation.value
 
-  // The write goes through the service-role client. Every caller authorizes
-  // the user against their own session before reaching here (channel
-  // managers only), so this is a trusted server-side insert. We bypass the
-  // channels INSERT RLS policy deliberately: on the production runtime it
-  // rejects authorized owner/admin inserts even though the same session
-  // resolves auth.uid() correctly for message inserts and for the
-  // permission gate's own reads — an RLS evaluation quirk we route around
-  // rather than depend on. Falls back to the caller's client when no
-  // service-role key is configured (local/dev without admin creds).
-  const writeClient: Pick<SupabaseClient, 'from'> = process.env.SUPABASE_SERVICE_ROLE_KEY
-    ? createAdminClient()
-    : supabase
+  // The insert runs inside a SECURITY DEFINER function: authorization is
+  // enforced there against auth.uid() (owner or admin/moderator), and the
+  // definer-owned INSERT bypasses the channels WITH CHECK that rejects
+  // authorized inserts on the production runtime. No service-role key.
+  const { data, error } = await supabase.rpc('create_channel', {
+    p_group_id: groupId,
+    p_name: name,
+    p_description: description,
+    p_noob_access: noobAccess,
+    p_kind: kind,
+    p_category_id: categoryId,
+  })
 
-  const { data: existingPositions } = await writeClient
-    .from('channels')
-    .select('position')
-    .eq('group_id', groupId)
-    .order('position', { ascending: false })
-    .limit(1)
+  if (error) return { error: error.message }
+  const channel = (Array.isArray(data) ? data[0] : data) as ChannelRow | null
+  if (!channel) return { error: 'Failed to create channel.' }
 
-  const nextPosition = existingPositions && existingPositions.length > 0 ? existingPositions[0].position + 1 : 0
-
-  const { data: channel, error } = await writeClient
-    .from('channels')
-    .insert({
-      group_id: groupId,
-      name,
-      description,
-      noob_access: noobAccess,
-      position: nextPosition,
-      kind,
-      category_id: categoryId,
-    })
-    .select('id, group_id, name, description, noob_access, position')
-    .single()
-
-  if (error || !channel) return { error: error?.message ?? 'Failed to create channel.' }
-  return { ok: true, channel: channel as CreateChannelInternalResult extends { ok: true; channel: infer C } ? C : never }
+  return {
+    ok: true,
+    channel: {
+      id: channel.id,
+      group_id: channel.group_id,
+      name: channel.name,
+      description: channel.description,
+      noob_access: channel.noob_access,
+      position: channel.position,
+    },
+  }
 }

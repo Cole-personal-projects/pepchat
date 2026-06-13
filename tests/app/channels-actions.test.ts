@@ -1,32 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createChannel, deleteChannel, moveChannel, updateChannelSettings } from '@/app/(app)/channels/actions'
 
-const { mockCreateClient, mockRedirect, mockCreateAdminClient } = vi.hoisted(() => ({
+const { mockCreateClient, mockRedirect } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockRedirect: vi.fn((path: string) => {
     throw new Error(`redirect:${path}`)
   }),
-  mockCreateAdminClient: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: mockCreateClient,
 }))
-
-// Channel creation inserts via the service-role client; point it at the
-// same mock builder sequence so the read/write order is unchanged.
-vi.mock('@/lib/supabase/admin', () => ({
-  createAdminClient: mockCreateAdminClient,
-}))
-
-const ORIGINAL_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
-beforeEach(() => {
-  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key'
-})
-afterEach(() => {
-  if (ORIGINAL_SERVICE_ROLE_KEY === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY
-  else process.env.SUPABASE_SERVICE_ROLE_KEY = ORIGINAL_SERVICE_ROLE_KEY
-})
 
 vi.mock('next/navigation', () => ({
   redirect: mockRedirect,
@@ -121,7 +105,7 @@ function makeGateBuilder(role: 'admin' | 'moderator' | 'user' | 'noob' | null = 
   })
 }
 
-function setupClient(builders: Builder[], userId: string | null = 'user-1') {
+function setupClient(builders: Builder[], userId: string | null = 'user-1', rpcResult?: QueryResult) {
   let index = 0
   const tableCalls: string[] = []
   const from = vi.fn((table: string) => {
@@ -137,14 +121,19 @@ function setupClient(builders: Builder[], userId: string | null = 'user-1') {
     error: null,
   })
 
+  // create_channel runs the insert; its result is the new channel row.
+  const rpc = vi.fn().mockResolvedValue({
+    data: rpcResult?.data ?? null,
+    error: rpcResult?.error ?? null,
+  })
+
   mockCreateClient.mockResolvedValue({
     auth: { getUser },
     from,
+    rpc,
   })
-  // The service-role insert path draws from the same builder sequence.
-  mockCreateAdminClient.mockReturnValue({ from })
 
-  return { from, getUser, tableCalls }
+  return { from, getUser, rpc, tableCalls }
 }
 
 const CHANNEL_DENIED = 'You do not have permission to manage channels.'
@@ -192,11 +181,9 @@ describe('channel actions — createChannel', () => {
     vi.clearAllMocks()
   })
 
-  it('rejects insufficient roles before reading existing channel positions', async () => {
+  it('rejects insufficient roles before validating or creating the channel', async () => {
     const gate = makeGateBuilder('user')
-    const duplicate = makeSelectBuilder({ data: null })
-    const existing = makeListBuilder({ data: [{ position: 0 }] })
-    setupClient([gate, duplicate, existing])
+    const { rpc } = setupClient([gate])
 
     await expect(createChannel(makeFormData({ name: 'General', groupId: 'group-1' }))).resolves.toEqual({
       error: CHANNEL_DENIED,
@@ -205,15 +192,22 @@ describe('channel actions — createChannel', () => {
     expect(gate.select).toHaveBeenCalledWith('role')
     expect(gate.eq).toHaveBeenCalledWith('group_id', 'group-1')
     expect(gate.eq).toHaveBeenCalledWith('user_id', 'user-1')
-    expect(existing.select).not.toHaveBeenCalled()
+    expect(rpc).not.toHaveBeenCalled()
   })
 
-  it('allows managers while preserving normalization, position, noob access, and redirect behavior', async () => {
+  it('creates via the create_channel function with normalized inputs and redirects', async () => {
     const gate = makeGateBuilder('moderator')
     const duplicate = makeSelectBuilder({ data: null })
-    const existing = makeListBuilder({ data: [{ position: 2 }] })
-    const insert = makeInsertBuilder({ data: { id: 'ch-new' } })
-    setupClient([gate, duplicate, existing, insert])
+    const { rpc } = setupClient([gate, duplicate], 'user-1', {
+      data: {
+        id: 'ch-new',
+        group_id: 'group-1',
+        name: 'welcome-chat',
+        description: 'Start here',
+        noob_access: true,
+        position: 3,
+      },
+    })
 
     await expect(createChannel(makeFormData({
       name: ' Welcome Chat ',
@@ -222,34 +216,31 @@ describe('channel actions — createChannel', () => {
       noobAccess: true,
     }))).rejects.toThrow('redirect:/channels/ch-new')
 
-    expect(insert.insert).toHaveBeenCalledWith({
-      group_id: 'group-1',
-      name: 'welcome-chat',
-      description: 'Start here',
-      noob_access: true,
-      position: 3,
-      kind: 'text',
-      category_id: null,
+    // The authorized write goes through the SECURITY DEFINER function, which
+    // enforces permission in-database and bypasses the channels WITH CHECK.
+    expect(rpc).toHaveBeenCalledWith('create_channel', {
+      p_group_id: 'group-1',
+      p_name: 'welcome-chat',
+      p_description: 'Start here',
+      p_noob_access: true,
+      p_kind: 'text',
+      p_category_id: null,
     })
-    // The authorized insert runs through the service-role client, bypassing
-    // the channels INSERT RLS policy.
-    expect(mockCreateAdminClient).toHaveBeenCalled()
     expect(mockRedirect).toHaveBeenCalledWith('/channels/ch-new')
   })
 
-  it('falls back to the caller client for the insert when no service-role key is set', async () => {
-    delete process.env.SUPABASE_SERVICE_ROLE_KEY
+  it('surfaces a create_channel function error to the caller', async () => {
     const gate = makeGateBuilder('admin')
     const duplicate = makeSelectBuilder({ data: null })
-    const existing = makeListBuilder({ data: [] })
-    const insert = makeInsertBuilder({ data: { id: 'ch-2' } })
-    setupClient([gate, duplicate, existing, insert])
+    const { rpc } = setupClient([gate, duplicate], 'user-1', {
+      error: { message: 'You do not have permission to manage channels' },
+    })
 
-    await expect(createChannel(makeFormData({ name: 'general', groupId: 'group-1' })))
-      .rejects.toThrow('redirect:/channels/ch-2')
-
-    expect(mockCreateAdminClient).not.toHaveBeenCalled()
-    expect(insert.insert).toHaveBeenCalled()
+    await expect(createChannel(makeFormData({ name: 'general', groupId: 'group-1' }))).resolves.toEqual({
+      error: 'You do not have permission to manage channels',
+    })
+    expect(rpc).toHaveBeenCalled()
+    expect(mockRedirect).not.toHaveBeenCalled()
   })
 })
 
