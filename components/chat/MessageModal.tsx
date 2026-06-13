@@ -12,7 +12,7 @@ const EmojiPickerPopover = dynamic(
   { ssr: false }
 )
 
-const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢']
+const QUICK_EMOJIS = ['👍', '❤️', '😂', '⭐', '😮', '😢']
 
 export interface MessageModalProps {
   open: boolean
@@ -141,6 +141,7 @@ export default function MessageModal({
             data-testid="quick-reactions"
             style={{
               display: 'flex',
+              flexWrap: 'wrap',
               justifyContent: 'center',
               gap: 8,
               padding: '8px 16px 12px',
