@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import Avatar from '@/components/ui/Avatar'
 import NotificationSettingsPanel from '@/components/settings/NotificationSettingsPanel'
+import ReplayTipsButton from '@/components/onboarding/ReplayTipsButton'
 import ColorPicker from './ColorPicker'
 import BadgeSelector from './BadgeSelector'
 import { updateProfile, removeAvatar } from '@/app/(app)/profile/actions'
@@ -231,6 +232,8 @@ export default function EditProfilePage({ profile, userRole }: EditProfilePagePr
             </Field>
 
             <NotificationSettingsPanel />
+
+            <ReplayTipsButton />
 
             {/* Actions */}
             <div className="flex flex-col md:flex-row md:items-center gap-3 pt-2 pb-10 md:pb-2">

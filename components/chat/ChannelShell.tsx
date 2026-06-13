@@ -11,6 +11,7 @@ import MessageInput from '@/components/chat/MessageInput'
 import TypingIndicator from '@/components/chat/TypingIndicator'
 import PresencePanel from '@/components/chat/PresencePanel'
 import PinnedMessagesPanel from '@/components/chat/PinnedMessagesPanel'
+import FeatureHint from '@/components/onboarding/FeatureHint'
 import ThreadPanel from '@/components/chat/ThreadPanel'
 import { toggleReaction } from '@/app/(app)/reactions/actions'
 import { pinMessage, unpinMessage } from '@/app/(app)/messages/actions'
@@ -213,13 +214,21 @@ export default function ChannelShell({
         className="flex flex-col flex-1 min-w-0 min-h-0"
         style={{ background: 'var(--bg-chat-surface)' }}
       >
-        <ChatHeader
-          channelName={channelName}
-          channelTopic={channelTopic}
-          pinnedCount={pinnedCount}
-          pinnedPanelOpen={pinnedPanelOpen && !threadPanelOpen}
-          onTogglePinnedPanel={handleTogglePinnedPanel}
-        />
+        <FeatureHint
+          id="messages-starboard"
+          priority={10}
+          placement="bottom"
+          title="React, reply & star ⭐"
+          body="Long-press any message to react or reply. Tap ⭐ on a great one to send it to the highlights board."
+        >
+          <ChatHeader
+            channelName={channelName}
+            channelTopic={channelTopic}
+            pinnedCount={pinnedCount}
+            pinnedPanelOpen={pinnedPanelOpen && !threadPanelOpen}
+            onTogglePinnedPanel={handleTogglePinnedPanel}
+          />
+        </FeatureHint>
         <MessageList
           messages={messages}
           hasMore={hasMore}
