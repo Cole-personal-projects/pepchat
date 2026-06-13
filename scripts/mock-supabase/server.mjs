@@ -285,6 +285,32 @@ const RPC_HANDLERS = {
   has_permission: () => true,
   get_or_create_dm: () => uuid(),
   set_message_pinned_at: () => null,
+  // Mirrors the SECURITY DEFINER create_channel function: inserts a channel
+  // and returns the row. Authorization is enforced in real Postgres; the
+  // mock trusts the caller (dev/E2E only).
+  create_channel: (body = {}) => {
+    const groupId = body.p_group_id
+    const name = String(body.p_name ?? '').trim().toLowerCase().replace(/\s+/g, '-')
+    const rows = tableRows('channels')
+    const maxPosition = rows
+      .filter((c) => c.group_id === groupId)
+      .reduce((max, c) => Math.max(max, c.position ?? 0), -1)
+    const channel = {
+      id: uuid(),
+      group_id: groupId,
+      name,
+      description: body.p_description ? String(body.p_description).trim() || null : null,
+      noob_access: Boolean(body.p_noob_access),
+      position: maxPosition + 1,
+      kind: body.p_kind ?? 'text',
+      category_id: body.p_category_id ?? null,
+      is_ephemeral: false,
+      created_by: null,
+      created_at: iso(),
+    }
+    rows.push(channel)
+    return channel
+  },
 }
 
 // ── HTTP plumbing ────────────────────────────────────────────

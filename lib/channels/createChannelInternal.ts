@@ -88,37 +88,51 @@ export async function validateChannelInput(
   }
 }
 
+type ChannelRow = {
+  id: string
+  group_id: string
+  name: string
+  description: string | null
+  noob_access: boolean
+  position: number
+}
+
 export async function createChannelInternal(
-  supabase: Pick<SupabaseClient, 'from'>,
+  supabase: Pick<SupabaseClient, 'rpc' | 'from'>,
   input: ChannelInput,
 ): Promise<CreateChannelInternalResult> {
+  // App-side validation (friendly errors). The create_channel function
+  // re-validates and re-authorizes server-side, so this is for UX only.
   const validation = await validateChannelInput(supabase, input)
   if ('error' in validation) return validation
   const { groupId, name, description, noobAccess, kind, categoryId } = validation.value
 
-  const { data: existingPositions } = await supabase
-    .from('channels')
-    .select('position')
-    .eq('group_id', groupId)
-    .order('position', { ascending: false })
-    .limit(1)
+  // The insert runs inside a SECURITY DEFINER function: authorization is
+  // enforced there against auth.uid() (owner or admin/moderator), and the
+  // definer-owned INSERT bypasses the channels WITH CHECK that rejects
+  // authorized inserts on the production runtime. No service-role key.
+  const { data, error } = await supabase.rpc('create_channel', {
+    p_group_id: groupId,
+    p_name: name,
+    p_description: description,
+    p_noob_access: noobAccess,
+    p_kind: kind,
+    p_category_id: categoryId,
+  })
 
-  const nextPosition = existingPositions && existingPositions.length > 0 ? existingPositions[0].position + 1 : 0
+  if (error) return { error: error.message }
+  const channel = (Array.isArray(data) ? data[0] : data) as ChannelRow | null
+  if (!channel) return { error: 'Failed to create channel.' }
 
-  const { data: channel, error } = await supabase
-    .from('channels')
-    .insert({
-      group_id: groupId,
-      name,
-      description,
-      noob_access: noobAccess,
-      position: nextPosition,
-      kind,
-      category_id: categoryId,
-    })
-    .select('id, group_id, name, description, noob_access, position')
-    .single()
-
-  if (error || !channel) return { error: error?.message ?? 'Failed to create channel.' }
-  return { ok: true, channel: channel as CreateChannelInternalResult extends { ok: true; channel: infer C } ? C : never }
+  return {
+    ok: true,
+    channel: {
+      id: channel.id,
+      group_id: channel.group_id,
+      name: channel.name,
+      description: channel.description,
+      noob_access: channel.noob_access,
+      position: channel.position,
+    },
+  }
 }
