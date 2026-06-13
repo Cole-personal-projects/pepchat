@@ -1,16 +1,32 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createChannel, deleteChannel, moveChannel, updateChannelSettings } from '@/app/(app)/channels/actions'
 
-const { mockCreateClient, mockRedirect } = vi.hoisted(() => ({
+const { mockCreateClient, mockRedirect, mockCreateAdminClient } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockRedirect: vi.fn((path: string) => {
     throw new Error(`redirect:${path}`)
   }),
+  mockCreateAdminClient: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: mockCreateClient,
 }))
+
+// Channel creation inserts via the service-role client; point it at the
+// same mock builder sequence so the read/write order is unchanged.
+vi.mock('@/lib/supabase/admin', () => ({
+  createAdminClient: mockCreateAdminClient,
+}))
+
+const ORIGINAL_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+beforeEach(() => {
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key'
+})
+afterEach(() => {
+  if (ORIGINAL_SERVICE_ROLE_KEY === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY
+  else process.env.SUPABASE_SERVICE_ROLE_KEY = ORIGINAL_SERVICE_ROLE_KEY
+})
 
 vi.mock('next/navigation', () => ({
   redirect: mockRedirect,
@@ -125,6 +141,8 @@ function setupClient(builders: Builder[], userId: string | null = 'user-1') {
     auth: { getUser },
     from,
   })
+  // The service-role insert path draws from the same builder sequence.
+  mockCreateAdminClient.mockReturnValue({ from })
 
   return { from, getUser, tableCalls }
 }
@@ -213,7 +231,25 @@ describe('channel actions — createChannel', () => {
       kind: 'text',
       category_id: null,
     })
+    // The authorized insert runs through the service-role client, bypassing
+    // the channels INSERT RLS policy.
+    expect(mockCreateAdminClient).toHaveBeenCalled()
     expect(mockRedirect).toHaveBeenCalledWith('/channels/ch-new')
+  })
+
+  it('falls back to the caller client for the insert when no service-role key is set', async () => {
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY
+    const gate = makeGateBuilder('admin')
+    const duplicate = makeSelectBuilder({ data: null })
+    const existing = makeListBuilder({ data: [] })
+    const insert = makeInsertBuilder({ data: { id: 'ch-2' } })
+    setupClient([gate, duplicate, existing, insert])
+
+    await expect(createChannel(makeFormData({ name: 'general', groupId: 'group-1' })))
+      .rejects.toThrow('redirect:/channels/ch-2')
+
+    expect(mockCreateAdminClient).not.toHaveBeenCalled()
+    expect(insert.insert).toHaveBeenCalled()
   })
 })
 
