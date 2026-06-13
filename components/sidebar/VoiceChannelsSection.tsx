@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { closeVoiceChannel, createTempVoiceRoom, getCurrentVoiceRoom, joinVoiceChannel, leaveVoiceRoom, sweepVoiceRooms } from '@/app/(app)/voice/actions'
 import { useVoiceRoomConnection } from '@/components/voice/useVoiceRoomConnection'
 import VoiceBar from '@/components/voice/VoiceBar'
+import FeatureHint from '@/components/onboarding/FeatureHint'
 import type { Channel } from '@/lib/types'
 
 type VoiceRoomSummary = {
@@ -222,6 +223,14 @@ export default function VoiceChannelsSection({ channels, groupId, canCreateRoom 
   return (
     <>
     {voiceBar}
+    <FeatureHint
+      id="voice-channels"
+      priority={30}
+      placement="right"
+      enabled={channels.length > 0 || Boolean(canCreateRoom)}
+      title="Hop into voice"
+      body="Tap a voice channel to join instantly, or create a temporary room that disappears once everyone leaves."
+    >
     <section aria-label="Voice Channels" className="mt-3 border-t border-[var(--border-soft)] pt-3">
       <div className="flex items-center justify-between px-3 pb-1">
         <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--text-faint)]">
@@ -344,6 +353,7 @@ export default function VoiceChannelsSection({ channels, groupId, canCreateRoom 
         })}
       </div>
     </section>
+    </FeatureHint>
     </>
   )
 }

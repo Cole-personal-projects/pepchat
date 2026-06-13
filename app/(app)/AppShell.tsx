@@ -11,6 +11,7 @@ import GroupSettingsModal from '@/components/modals/GroupSettingsModal'
 import CreateChannelModal from '@/components/modals/CreateChannelModal'
 import NotificationTray from '@/components/notifications/NotificationTray'
 import { MobileSidebarContext } from '@/lib/context/MobileSidebarContext'
+import { FeatureHintProvider } from '@/lib/context/FeatureHintContext'
 import OnboardingGate from '@/components/onboarding/OnboardingGate'
 import WelcomeTour, { hasSeenWelcomeTour } from '@/components/onboarding/WelcomeTour'
 import InstallBanner from '@/components/ui/InstallBanner'
@@ -180,6 +181,7 @@ export default function AppShell({ profile, children }: AppShellProps) {
   })
 
   return (
+    <FeatureHintProvider>
     <MobileSidebarContext.Provider
       value={{
         open: () => setMobileSidebarOpen(true),
@@ -305,5 +307,6 @@ export default function AppShell({ profile, children }: AppShellProps) {
         />
       )}
     </MobileSidebarContext.Provider>
+    </FeatureHintProvider>
   )
 }

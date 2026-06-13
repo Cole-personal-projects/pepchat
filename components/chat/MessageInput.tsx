@@ -11,6 +11,8 @@ import type { MessageWithProfile, Profile, GifAttachment, Attachment } from '@/l
 import { registerShare } from '@/lib/klipy'
 import type { KlipyGif } from '@/lib/klipy'
 
+import FeatureHint from '@/components/onboarding/FeatureHint'
+
 const GifPicker = dynamic(() => import('./GifPicker'), { ssr: false })
 const PollComposer = dynamic(() => import('./PollComposer'), { ssr: false })
 
@@ -521,19 +523,27 @@ export default function MessageInput({
           {/* Poll composer button (channels only) */}
           {allowPolls && (
             <>
-              <button
-                type="button"
-                data-testid="poll-composer-btn"
-                onClick={() => setPollComposerOpen(true)}
-                title="Create a poll"
-                className="p-1.5 rounded text-xs font-bold leading-none transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/10 flex-shrink-0"
+              <FeatureHint
+                id="composer-tools"
+                priority={20}
+                placement="top"
+                title="Polls, GIFs & files"
+                body="Tap here to start a poll. The clip and GIF buttons add images, video, and GIFs to your message."
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <line x1="6" y1="20" x2="6" y2="10" />
-                  <line x1="12" y1="20" x2="12" y2="4" />
-                  <line x1="18" y1="20" x2="18" y2="14" />
-                </svg>
-              </button>
+                <button
+                  type="button"
+                  data-testid="poll-composer-btn"
+                  onClick={() => setPollComposerOpen(true)}
+                  title="Create a poll"
+                  className="p-1.5 rounded text-xs font-bold leading-none transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/10 flex-shrink-0"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <line x1="6" y1="20" x2="6" y2="10" />
+                    <line x1="12" y1="20" x2="12" y2="4" />
+                    <line x1="18" y1="20" x2="18" y2="14" />
+                  </svg>
+                </button>
+              </FeatureHint>
               <PollComposer
                 open={pollComposerOpen}
                 onClose={() => setPollComposerOpen(false)}

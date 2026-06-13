@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic'
 import Avatar from '@/components/ui/Avatar'
 import MembersPanel from '@/components/sidebar/MembersPanel'
 import ChannelRow from '@/components/sidebar/ChannelRow'
+import FeatureHint from '@/components/onboarding/FeatureHint'
 import CategorySection from '@/components/sidebar/CategorySection'
 import VoiceChannelsSection from '@/components/sidebar/VoiceChannelsSection'
 import UserStatusMenu from '@/components/status/UserStatusMenu'
@@ -443,17 +444,26 @@ export default function ChannelsSidebar({
                       <path d="M12 11v6M9 14h6" />
                     </svg>
                   </button>
-                  <button
-                    data-testid="create-channel-btn"
-                    onClick={() => onCreateChannel?.()}
-                    className="icon-btn"
-                    title="Create channel"
-                    style={{ padding: 2 }}
+                  <FeatureHint
+                    id="admin-channels"
+                    priority={40}
+                    placement="bottom"
+                    enabled={canManageGrp}
+                    title="Build out your server"
+                    body="Create channels and categories here. Manage roles, the starboard, and invites in Group Settings (gear icon up top)."
                   >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                      <path d="M12 5v14M5 12h14" />
-                    </svg>
-                  </button>
+                    <button
+                      data-testid="create-channel-btn"
+                      onClick={() => onCreateChannel?.()}
+                      className="icon-btn"
+                      title="Create channel"
+                      style={{ padding: 2 }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                        <path d="M12 5v14M5 12h14" />
+                      </svg>
+                    </button>
+                  </FeatureHint>
                 </span>
               )}
             </div>
